@@ -84,13 +84,13 @@ export async function initDashboard() {
     else greeting = 'مساء النور';
     
     document.getElementById('dashWelcome').innerHTML = `
-      <div style="background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%); border-radius: var(--radius-xl); padding: 28px 32px; color: white; display: flex; align-items: center; gap: 24px; box-shadow: var(--shadow-lg); position: relative; overflow: hidden;">
+      <div style="background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%); border-radius: var(--radius-xl); padding: clamp(16px, 3.5vw, 28px) clamp(16px, 4vw, 32px); color: white; display: flex; align-items: center; gap: clamp(12px, 3vw, 24px); box-shadow: var(--shadow-lg); position: relative; overflow: hidden; flex-wrap: wrap;">
         <div style="position: absolute; left: 0; top: 0; bottom: 0; width: 30%; background: radial-gradient(circle at center left, rgba(255,255,255,0.08) 0%, transparent 70%); pointer-events: none;"></div>
-        <div style="width: 64px; height: 64px; border-radius: 50%; background: rgba(255,255,255,0.18); backdrop-filter: blur(8px); display: flex; align-items: center; justify-content: center; font-size: 1.5rem; font-weight: 800; border: 2px solid rgba(255,255,255,0.3); flex-shrink: 0;">
+        <div style="width: clamp(48px, 6vw, 64px); height: clamp(48px, 6vw, 64px); border-radius: 50%; background: rgba(255,255,255,0.18); backdrop-filter: blur(8px); display: flex; align-items: center; justify-content: center; font-size: clamp(1.2rem, 2.5vw, 1.5rem); font-weight: 800; border: 2px solid rgba(255,255,255,0.3); flex-shrink: 0;">
           ${getInitials(data.user?.name || user.name)}
         </div>
-        <div>
-          <h1 style="font-size: 1.55rem; font-weight: 900; line-height: 1.3;">${greeting}، ${data.user?.name || user.name}</h1>
+        <div style="min-width: 0; flex: 1;">
+          <h1 style="font-size: clamp(1.2rem, 3vw, 1.55rem); font-weight: 900; line-height: 1.3;">${greeting}، ${data.user?.name || user.name}</h1>
           <p style="opacity: 0.9; font-size: 0.85rem; margin-top: 4px; font-weight: 600;">
             <span class="badge" style="background: rgba(255,255,255,0.15); color: white;">${data.user?.grade || user.grade}</span> 
             · مستعد لحصة جديدة من المتعة والتعلم؟

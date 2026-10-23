@@ -72,7 +72,7 @@ export async function initCourseDetail(id) {
 
       <!-- Course Hero Header -->
       <div class="course-detail-header">
-        <h1 style="font-size: 1.7rem; font-weight: 900; line-height: 1.4; color: var(--text-primary); margin-bottom: 8px;">${course.title}</h1>
+        <h1 style="font-size: clamp(1.25rem, 3.5vw, 1.7rem); font-weight: 900; line-height: 1.4; color: var(--text-primary); margin-bottom: 8px;">${course.title}</h1>
         <p style="color: var(--text-secondary); font-size: 0.92rem; line-height: 1.7; margin-bottom: 20px; max-width: 800px;">${course.description || 'لا يوجد وصف متاح لهذا الكورس حالياً. شرح شامل ومبسط لمادة الكيمياء.'}</p>
         
         <div style="display: flex; gap: 16px; flex-wrap: wrap; font-size: 0.8rem; color: var(--text-secondary); font-weight: 600;">

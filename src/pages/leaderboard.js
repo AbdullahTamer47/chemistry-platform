@@ -33,11 +33,15 @@ export async function initLeaderboard() {
       ]);
 
       document.getElementById('lbMyRank').innerHTML = `
-        <div style="display:flex;align-items:center;gap:16px">
-          <div class="stat-icon gold" style="width:56px;height:56px;font-size:1.5rem"><span class="material-symbols-rounded">workspace_premium</span></div>
-          <div><div style="font-size:0.85rem;color:var(--text-muted)">ترتيبك</div><div style="font-size:2rem;font-weight:900;color:var(--accent)">#${myRank.rank || '-'}</div></div>
-          <div style="margin-right:30px"><div style="font-size:0.85rem;color:var(--text-muted)">المعدل</div><div style="font-size:1.5rem;font-weight:800;color:var(--primary)">${myRank.avg_score || 0}%</div></div>
-          <div><div style="font-size:0.85rem;color:var(--text-muted)">الامتحانات</div><div style="font-size:1.5rem;font-weight:800">${myRank.total_exams || 0}</div></div>
+        <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;justify-content:space-between;">
+          <div style="display:flex;align-items:center;gap:12px;">
+            <div class="stat-icon gold" style="width:52px;height:52px;font-size:1.4rem"><span class="material-symbols-rounded">workspace_premium</span></div>
+            <div><div style="font-size:0.82rem;color:var(--text-muted)">ترتيبك</div><div style="font-size:1.8rem;font-weight:900;color:var(--accent)">#${myRank.rank || '-'}</div></div>
+          </div>
+          <div style="display:flex;gap:20px;flex-wrap:wrap;">
+            <div><div style="font-size:0.82rem;color:var(--text-muted)">المعدل</div><div style="font-size:1.4rem;font-weight:800;color:var(--primary)">${myRank.avg_score || 0}%</div></div>
+            <div><div style="font-size:0.82rem;color:var(--text-muted)">الامتحانات</div><div style="font-size:1.4rem;font-weight:800">${myRank.total_exams || 0}</div></div>
+          </div>
         </div>
       `;
 

@@ -110,10 +110,10 @@ export async function initMyResults() {
       const progressOffset = circumference - (circumference * (c.percent / 100));
 
       analyticsEl.innerHTML = `
-        <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(320px, 1fr));gap:20px;">
+        <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(min(100%, 280px), 1fr));gap:16px;">
 
           <!-- 1. CURRICULUM DONUT CHART -->
-          <div class="card" style="padding:24px;display:flex;flex-direction:column;justify-content:space-between;">
+          <div class="card" style="padding:clamp(16px, 3vw, 24px);display:flex;flex-direction:column;justify-content:space-between;">
             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
               <h3 style="font-size:1.05rem;font-weight:800;margin:0;display:flex;align-items:center;gap:8px;">
                 <span class="material-symbols-rounded" style="color:var(--primary);">pie_chart</span>

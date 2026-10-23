@@ -37,8 +37,8 @@ export function renderCourses() {
           </div>
 
           <!-- DURATION / BUNDLE SCOPE FILTER PILLS -->
-          <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center; padding:12px 16px; background:var(--bg-secondary); border-radius:12px; border:1px solid var(--border-light);">
-            <span style="font-size:0.85rem; font-weight:800; color:var(--text-primary); margin-left:8px; display:flex; align-items:center; gap:4px;">
+          <div class="filter-pills" style="display:flex; gap:8px; flex-wrap:wrap; align-items:center; padding:12px 16px; background:var(--bg-secondary); border-radius:12px; border:1px solid var(--border-light); overflow-x:auto; -webkit-overflow-scrolling:touch;">
+            <span style="font-size:0.85rem; font-weight:800; color:var(--text-primary); margin-left:8px; display:flex; align-items:center; gap:4px; flex-shrink:0;">
               <span class="material-symbols-rounded" style="font-size:1.1rem; color:var(--primary);">tune</span> نطاق المحتوى:
             </span>
             <button type="button" class="btn btn-sm type-filter-btn btn-primary" data-type="all" style="border-radius:20px; font-weight:700;">الكل</button>
@@ -130,7 +130,7 @@ export async function initCourses() {
           </a>
         </div>
 
-        <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 20px;">
+        <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); gap: 18px;">
           ${filteredPkgs.map(pkg => {
             const discountPercent = pkg.discount_percent || 0;
             const savings = (pkg.original_price || pkg.price) - pkg.price;

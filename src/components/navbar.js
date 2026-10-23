@@ -94,8 +94,11 @@ export function renderNavbar(currentPage) {
     </div>
     
     <aside class="sidebar" id="sidebar">
-      <div class="sidebar-header">
-        <div class="sidebar-logo" style="display: flex; align-items: center; gap: 8px;">
+      <div class="sidebar-header" style="position:relative;">
+        <button class="sidebar-close-btn" id="sidebarCloseBtn" aria-label="إغلاق القائمة">
+          <span class="material-symbols-rounded">close</span>
+        </button>
+        <div class="sidebar-logo" style="display: flex; align-items: center; justify-content: center; gap: 8px;">
           <img src="${zraLogoFace}" alt="Z.R.A" class="logo-face-img" style="height: 36px;" />
           <img src="${zraLogoText}" alt="Z.R.A" class="logo-text-img" style="height: 26px;" />
         </div>
@@ -134,21 +137,49 @@ export function initNavbar() {
   const btn = document.getElementById('mobileMenuBtn');
   const sidebar = document.getElementById('sidebar');
   const overlay = document.getElementById('sidebarOverlay');
+  const closeBtn = document.getElementById('sidebarCloseBtn');
   const logoutBtn = document.getElementById('logoutBtn');
+
+  function closeMobileSidebar() {
+    if (sidebar) sidebar.classList.remove('open');
+    if (overlay) overlay.classList.remove('active');
+  }
 
   if (btn && sidebar && overlay) {
     btn.addEventListener('click', () => {
       sidebar.classList.toggle('open');
       overlay.classList.toggle('active');
     });
-    overlay.addEventListener('click', () => {
-      sidebar.classList.remove('open');
-      overlay.classList.remove('active');
+    overlay.addEventListener('click', closeMobileSidebar);
+  }
+
+  if (closeBtn) {
+    closeBtn.addEventListener('click', closeMobileSidebar);
+  }
+
+  // Close sidebar on link click on mobile/tablet (<= 1024px)
+  if (sidebar) {
+    sidebar.querySelectorAll('.sidebar-nav a, .sidebar-user, #darkModeToggle').forEach(el => {
+      el.addEventListener('click', () => {
+        if (window.innerWidth <= 1024) {
+          closeMobileSidebar();
+        }
+      });
     });
   }
 
+  // Close on Escape key
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && sidebar?.classList.contains('open')) {
+      closeMobileSidebar();
+    }
+  });
+
   if (logoutBtn) {
-    logoutBtn.addEventListener('click', logout);
+    logoutBtn.addEventListener('click', () => {
+      closeMobileSidebar();
+      logout();
+    });
   }
 
   // Dark mode toggle in-place (no re-renders!)

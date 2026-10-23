@@ -883,17 +883,43 @@
   background: rgba(52,211,153,0.1);
 }
 
-/* Responsive */
+/* Responsive System for Pages */
+@media (max-width: 1024px) {
+  .course-detail-grid { grid-template-columns: 1fr; gap: 20px; }
+  #dashGrid { grid-template-columns: 1fr !important; }
+  #adminGrid { grid-template-columns: 1fr !important; }
+  .courses-grid { grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr)); }
+}
+
 @media (max-width: 768px) {
   .courses-grid { grid-template-columns: 1fr; gap: 16px; }
-  .course-detail-grid { grid-template-columns: 1fr; gap: 20px; }
+  .course-detail-header { padding: 20px 16px; border-radius: var(--radius-lg); }
+  .course-thumb { height: 160px; }
   .exam-timer { flex-direction: column; gap: 12px; align-items: stretch; text-align: center; }
   .timer-label { justify-content: center; }
   .hero-stats { grid-template-columns: repeat(2, 1fr); }
-  .question-card { padding: 18px; }
-  .option-item { padding: 12px 14px; }
-  #dashGrid { grid-template-columns: 1fr !important; }
-  #adminGrid { grid-template-columns: 1fr !important; }
+  .question-card { padding: 16px; }
+  .option-item { padding: 12px 14px; min-height: 48px; }
+  .video-container { border-radius: var(--radius-lg); margin-bottom: 16px; }
+  .video-watermark { font-size: 0.78rem; padding: 3px 10px; }
+  .chapter-header { padding: 12px 14px; font-size: 0.88rem; }
+  .lesson-item { padding: 10px 12px; }
+  .filter-pills { overflow-x: auto; -webkit-overflow-scrolling: touch; flex-wrap: nowrap; padding-bottom: 6px; }
+  .filter-pills .chip { flex-shrink: 0; }
+  .search-wrapper { max-width: 100% !important; }
+  .modal-form-grid { grid-template-columns: 1fr !important; gap: 8px !important; }
+  .code-item { flex-direction: column; align-items: flex-start; gap: 8px; }
+}
+
+@media (max-width: 480px) {
+  .course-detail-header h1 { font-size: 1.3rem !important; }
+  .hero-stats { grid-template-columns: 1fr; }
+  .auth-form-col { padding: 22px 16px !important; }
+  .auth-form-title { font-size: 1.25rem !important; }
+  .sakr-input-field { height: 44px; font-size: 0.88rem; }
+  .btn-sakr-submit { height: 44px; font-size: 0.92rem; }
+  .q-dot { width: 32px; height: 32px; font-size: 0.75rem; }
+  .question-nav { gap: 6px; }
 }
 
 /* ======================================================== */

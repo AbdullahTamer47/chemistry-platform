@@ -203,7 +203,7 @@ export function renderAdminCourses() {
   return `<div class="app-layout">
     ${renderNavbar('admin-courses')}
     <main class="main-content">
-      <div class="page-header" style="display:flex;justify-content:space-between;align-items:center"><div><h1 class="page-title"><span class="material-symbols-rounded" style="color:var(--primary)">book</span> إدارة الكورسات</h1></div>
+      <div class="page-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px"><div><h1 class="page-title"><span class="material-symbols-rounded" style="color:var(--primary)">book</span> إدارة الكورسات</h1></div>
       <button class="btn btn-primary" id="addCourseBtn"><span class="material-symbols-rounded">add</span> كورس جديد</button></div>
       <div id="adminCoursesList"><div class="loading-spinner"><div class="spinner"></div></div></div>
     </main>
@@ -453,7 +453,7 @@ export function renderAdminCodes() {
   return `<div class="app-layout">
     ${renderNavbar('admin-codes')}
     <main class="main-content">
-      <div class="page-header" style="display:flex;justify-content:space-between;align-items:center"><div><h1 class="page-title"><span class="material-symbols-rounded" style="color:var(--accent)">key</span> أكواد التفعيل</h1></div>
+      <div class="page-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px"><div><h1 class="page-title"><span class="material-symbols-rounded" style="color:var(--accent)">key</span> أكواد التفعيل</h1></div>
       <button class="btn btn-primary" id="genCodesBtn"><span class="material-symbols-rounded">add</span> إنشاء أكواد</button></div>
       <div id="codesList"><div class="loading-spinner"><div class="spinner"></div></div></div>
     </main>
@@ -509,7 +509,7 @@ export async function initAdminCodes() {
     filterFn: (c, search) => !search || c.code.toLowerCase().includes(search) || (c.course_title && c.course_title.toLowerCase().includes(search)),
     renderList: (items, totalFiltered) => {
       if (totalFiltered === 0) return '<div class="empty-state"><span class="material-symbols-rounded">key</span><h3>لا توجد أكواد مطابقة</h3></div>';
-      return `<div class="table-wrapper"><table><thead><tr><th>الكود</th><th>الكورس</th><th>النوع</th><th>الاستخدام</th><th>الانتهاء</th><th>الحالة</th><th>إجراءات</th></tr></thead><tbody>
+      return `<div class="mobile-swipe-hint"><span class="material-symbols-rounded">swipe</span> اسحب أفقياً لعرض باقي بيانات الأكواد</div><div class="table-wrapper"><table><thead><tr><th>الكود</th><th>الكورس</th><th>النوع</th><th>الاستخدام</th><th>الانتهاء</th><th>الحالة</th><th>إجراءات</th></tr></thead><tbody>
         ${items.map(c => {
           const uses = c.max_uses === -1 ? 'غير محدود' : `${c.used_count}/${c.max_uses}`;
           const expiry = c.expires_at ? formatDate(c.expires_at) : 'لا ينتهي';
@@ -735,7 +735,7 @@ export async function initAdminStudents() {
       filterFn: (s, search) => !search || s.name.toLowerCase().includes(search) || s.phone.includes(search),
       renderList: (items, totalFiltered) => {
         if (totalFiltered === 0) return '<div class="empty-state"><span class="material-symbols-rounded">group</span><h3>لا يوجد طلاب مطابقين</h3></div>';
-        return `<div class="table-wrapper"><table><thead><tr><th>الاسم</th><th>الهاتف</th><th>المرحلة</th><th>الكورسات</th><th>المعدل</th><th>إجراءات</th></tr></thead><tbody>
+        return `<div class="mobile-swipe-hint"><span class="material-symbols-rounded">swipe</span> اسحب أفقياً لعرض باقي سجلات الطلاب</div><div class="table-wrapper"><table><thead><tr><th>الاسم</th><th>الهاتف</th><th>المرحلة</th><th>الكورسات</th><th>المعدل</th><th>إجراءات</th></tr></thead><tbody>
           ${items.map(s => `<tr><td style="font-weight:600">${s.name}</td><td dir="ltr">${s.phone}</td><td>${s.grade || '-'}</td><td>${s.enrolled_courses}</td><td><span class="badge ${(s.avg_score || 0) >= 60 ? 'badge-success' : 'badge-danger'}">${s.avg_score || 0}%</span></td>
           <td><div style="display:flex;gap:4px">
             <button class="btn btn-ghost btn-sm report-st-btn" data-id="${s.id}" title="تقرير الطالب"><span class="material-symbols-rounded" style="color:var(--info)">analytics</span></button>
@@ -781,7 +781,7 @@ export function renderAdminExams() {
   return `<div class="app-layout">
     ${renderNavbar('admin-exams')}
     <main class="main-content">
-      <div class="page-header" style="display:flex;justify-content:space-between;align-items:center"><div><h1 class="page-title"><span class="material-symbols-rounded" style="color:var(--accent)">assignment</span> إدارة الامتحانات</h1></div>
+      <div class="page-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px"><div><h1 class="page-title"><span class="material-symbols-rounded" style="color:var(--accent)">assignment</span> إدارة الامتحانات</h1></div>
       <button class="btn btn-primary" id="addExamBtn"><span class="material-symbols-rounded">add</span> امتحان جديد</button></div>
       <div id="adminExamsList"><div class="loading-spinner"><div class="spinner"></div></div></div>
     </main>
@@ -938,7 +938,7 @@ export async function initAdminExams() {
 // Admin Live & Notifications (simplified)
 export function renderAdminLive() {
   return `<div class="app-layout">${renderNavbar('admin-live')}<main class="main-content">
-    <div class="page-header" style="display:flex;justify-content:space-between;align-items:center"><div><h1 class="page-title"><span class="material-symbols-rounded" style="color:var(--error)">live_tv</span> إدارة الحصص اللايف</h1></div>
+    <div class="page-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px"><div><h1 class="page-title"><span class="material-symbols-rounded" style="color:var(--error)">live_tv</span> إدارة الحصص اللايف</h1></div>
     <button class="btn btn-primary" id="addLiveBtn"><span class="material-symbols-rounded">add</span> حصة جديدة</button></div>
     <div id="adminLiveList"><div class="loading-spinner"><div class="spinner"></div></div></div>
   </main></div>`;

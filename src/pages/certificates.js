@@ -77,7 +77,7 @@ export async function initCertificates() {
     }
 
     container.innerHTML = `
-      <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(420px, 1fr));gap:24px;">
+      <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(min(100%, 320px), 1fr));gap:20px;">
         ${certs.map((c, idx) => {
           const isGold = c.tier === 'gold';
           const isSilver = c.tier === 'silver';
@@ -89,7 +89,7 @@ export async function initCertificates() {
             <div class="card certificate-card" style="padding:0;border:2px solid ${borderColor};overflow:hidden;border-radius:16px;background:var(--bg-primary);box-shadow:0 10px 28px rgba(0,0,0,0.15);">
               
               <!-- CERTIFICATE CANVAS RENDER -->
-              <div id="cert_box_${c.id}" style="padding:32px 24px;text-align:center;position:relative;background:radial-gradient(circle at center, rgba(245,158,11,0.05), transparent 70%);border-bottom:1px solid var(--border-light);">
+              <div id="cert_box_${c.id}" style="padding:clamp(18px, 4vw, 32px) clamp(12px, 3vw, 24px);text-align:center;position:relative;background:radial-gradient(circle at center, rgba(245,158,11,0.05), transparent 70%);border-bottom:1px solid var(--border-light);">
                 
                 <!-- Ornamental Header -->
                 <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">

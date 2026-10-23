@@ -461,8 +461,9 @@ export async function initAdminExamDetail(id) {
           </button>
         </div>
 
-        <div style="overflow-x:auto;">
-          <table style="width:100%;border-collapse:collapse;font-size:0.9rem;text-align:right;">
+        <div class="mobile-swipe-hint"><span class="material-symbols-rounded">swipe</span> اسحب أفقياً لعرض باقي تفاصيل الطلاب ونتائجهم</div>
+        <div class="table-wrapper">
+          <table style="width:100%;min-width:650px;border-collapse:collapse;font-size:0.9rem;text-align:right;">
             <thead>
               <tr style="border-bottom:2px solid var(--border);color:var(--text-secondary);font-size:0.82rem;">
                 <th style="padding:10px 12px;">الطالب</th>
