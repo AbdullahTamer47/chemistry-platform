@@ -5,7 +5,25 @@ import { showToast } from '../components/toast.js';
 import { showModal } from '../components/modal.js';
 import { renderPublicHeader, initPublicHeader } from '../components/publicHeader.js';
 
+import drZiadThumbs from '../assets/dr-ziad-pose-thumbs.jpg';
+import drZiadFlask from '../assets/dr-ziad-pose-flask.jpg';
+import drZiadBook from '../assets/dr-ziad-pose-book.jpg';
+import drZiadPortrait from '../assets/dr-ziad-portrait.jpg';
+import drZiadFace from '../assets/zra-logo-face.png';
+import chemCurriculum from '../assets/chem-curriculum-3d.jpg';
+import chemLab from '../assets/chem-lab-reaction-3d.jpg';
+import chemExam from '../assets/chem-exam-mastery-3d.jpg';
+
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+function getCourseCover(c) {
+  if (c.thumbnail && c.thumbnail.startsWith('/')) return c.thumbnail;
+  if (c.course_type === 'quarterly' || (c.title && c.title.includes('3 شهور'))) return chemCurriculum;
+  if (c.course_type === 'term' || (c.title && c.title.includes('ترم'))) return chemExam;
+  if (c.is_free || c.price === 0 || (c.title && c.title.includes('مجاني'))) return drZiadPortrait;
+  if (c.title && c.title.includes('انتقالية')) return drZiadFlask;
+  return drZiadThumbs;
+}
 
 export function renderCourses() {
   const logged = isLoggedIn();
@@ -346,68 +364,100 @@ export async function initCourses() {
       const typeBadgeColor = isQuarterly ? '#f59e0b' : isTerm ? 'var(--primary)' : isAnnual ? '#8b5cf6' : 'var(--text-muted)';
       const scopeLabel = isQuarterly ? 'محتوى 3 شهور منهج' : isTerm ? 'محتوى ترم دراسي كامل' : isAnnual ? 'منهج العام كاملاً' : 'محتوى شهر دراسي';
 
-      return `
-        <div class="course-card" onclick="location.hash='#/courses/${c.id}'" style="border-radius:18px; overflow:hidden; display:flex; flex-direction:column; justify-content:space-between; cursor:pointer;">
-          <div>
-            <div class="course-thumb" style="position:relative;">
-              <div class="course-thumb-inner" style="background: linear-gradient(135deg, ${isFree ? 'var(--green-400),var(--green-600)' : isQuarterly ? '#f59e0b, #d97706' : isTerm ? '#0284c7, #0369a1' : 'var(--emerald-600),var(--emerald-800)'})">
-                <span class="material-symbols-rounded" style="font-size:3.5rem;color:rgba(255,255,255,0.3)">${isQuarterly || isTerm ? 'view_carousel' : 'science'}</span>
-              </div>
+      const coverImg = getCourseCover(c);
 
-              <!-- Badges -->
-              <div style="position:absolute; top:12px; right:12px; display:flex; flex-direction:column; gap:6px; align-items:flex-end; z-index:2;">
-                ${c.badge_text ? `
-                  <span class="badge" style="background:#ef4444; color:#fff; font-weight:800; font-size:0.75rem; box-shadow:0 2px 6px rgba(0,0,0,0.2);">
-                    ${c.badge_text}
-                  </span>
-                ` : ''}
-                <span class="badge" style="background:${typeBadgeColor}; color:#fff; font-weight:800; font-size:0.75rem; box-shadow:0 2px 6px rgba(0,0,0,0.15);">
+      return `
+        <div class="course-card-bassthalk" onclick="location.hash='#/courses/${c.id}'">
+          <div>
+            <!-- Thumbnail & Floating Badges -->
+            <div class="course-card-cover">
+              <img src="${coverImg}" alt="${esc(c.title)}" loading="lazy">
+              <div class="course-card-cover-overlay"></div>
+
+              <div class="course-card-badges-top">
+                <span class="course-card-stage-pill">
+                  <span class="material-symbols-rounded" style="font-size:0.95rem;color:var(--primary);">school</span> ${c.grade || 'ثانوية عامة'}
+                </span>
+                <span class="course-card-type-pill" style="${typeBadgeColor}">
                   ${typeLabel}
                 </span>
               </div>
 
-              <div style="position:absolute; bottom:12px; right:12px; display:flex; gap:6px; z-index:2;">
-                <span class="course-grade-badge" style="font-weight:700;">${c.grade}</span>
-                <span class="badge" style="background:rgba(0,0,0,0.72); color:#fff; font-size:0.74rem; font-weight:800; backdrop-filter:blur(4px); display:inline-flex; align-items:center; gap:4px;">
-                  <span class="material-symbols-rounded" style="font-size:0.95rem; color:#fde047;">menu_book</span> ${scopeLabel}
+              <div class="course-card-cover-bottom">
+                <span class="course-card-stats-pill">
+                  <span class="material-symbols-rounded" style="font-size:0.95rem;color:#fde047;">play_circle</span> ${c.lesson_count || 0} محاضرة
+                  <span style="opacity:0.6;">•</span>
+                  <span class="material-symbols-rounded" style="font-size:0.95rem;color:#38bdf8;">assignment</span> ${c.exam_count || 0} امتحان
+                </span>
+                <span class="badge" style="background:rgba(0,0,0,0.7);color:#fef08a;font-size:0.7rem;font-weight:800;border:1px solid rgba(254,240,138,0.3);">
+                  ${scopeLabel}
                 </span>
               </div>
             </div>
 
-            <div class="course-body" style="padding:18px;">
-              <h3 class="course-title" style="font-size:1.15rem; font-weight:900; margin:0 0 8px 0; line-height:1.4;">${c.title}</h3>
-              <p class="course-desc" style="font-size:0.85rem; color:var(--text-secondary); line-height:1.6; margin-bottom:10px;">
-                ${c.description || 'شرح تفصيلي شامل لكافة أجزاء المنهج مع حل أسئلة الربط والتدريبات التفاعلية.'}
-              </p>
-
-              <!-- Permanent Access Guarantee -->
-              <div style="display:flex; align-items:center; gap:6px; font-size:0.75rem; color:var(--emerald-700); font-weight:800; background:rgba(5, 150, 105, 0.08); padding:5px 9px; border-radius:8px; margin-bottom:12px; border:1px solid rgba(5, 150, 105, 0.2);">
-                <span class="material-symbols-rounded" style="font-size:0.95rem; color:var(--emerald-600);">all_inclusive</span> متاح طوال العام الدراسي حتى الامتحانات (بدون انتهاء صلاحية)
+            <!-- Card Content Body -->
+            <div class="course-card-content">
+              <!-- Teacher Identity -->
+              <div class="course-card-teacher-row">
+                <img src="${drZiadFace}" alt="د. زياد رمزي عياد" class="course-card-teacher-avatar">
+                <div>
+                  <span style="font-weight:800;color:var(--text-primary);display:inline-flex;align-items:center;gap:4px;">
+                    د. زياد رمزي عياد
+                    <span class="material-symbols-rounded" style="font-size:0.95rem;color:#0ea5e9;">verified</span>
+                  </span>
+                  <div style="font-size:0.7rem;color:var(--text-muted);">خبير ومعد الكيمياء للثانوية العامة</div>
+                </div>
               </div>
 
-              <div class="course-meta" style="margin-bottom:14px; font-size:0.8rem;">
-                <span><span class="material-symbols-rounded">play_circle</span> ${c.lesson_count || 0} محاضرة</span>
-                <span><span class="material-symbols-rounded">assignment</span> ${c.exam_count || 0} امتحان</span>
-                <span><span class="material-symbols-rounded">group</span> ${c.student_count || 0} طالب</span>
+              <!-- Title -->
+              <h3 class="course-card-title-bassthalk">${esc(c.title)}</h3>
+
+              <!-- Bassthalk Signature Checklist -->
+              <div class="course-card-checklist">
+                <div class="course-card-check-item">
+                  <span class="material-symbols-rounded">check_circle</span>
+                  <span>شرح تفصيلي مع تطبيقات ونواتج التعلم</span>
+                </div>
+                <div class="course-card-check-item">
+                  <span class="material-symbols-rounded">picture_as_pdf</span>
+                  <span>مذكرات وملخصات الواجب والشرح PDF</span>
+                </div>
+                <div class="course-card-check-item">
+                  <span class="material-symbols-rounded">quiz</span>
+                  <span>اختبارات وتدريبات إلكترونية دورية</span>
+                </div>
+              </div>
+
+              <!-- Open Academic Year Guarantee Ribbon -->
+              <div class="course-card-guarantee-ribbon">
+                <span class="material-symbols-rounded" style="font-size:1rem;">all_inclusive</span>
+                <span>متاح طوال العام الدراسي حتى امتحانات الثانوية</span>
               </div>
             </div>
           </div>
 
-          <!-- Price & Action Footer -->
-          <div style="padding:14px 18px; border-top:1px solid var(--border-light); background:var(--bg-secondary); display:flex; align-items:center; justify-content:space-between;">
-            <div>
+          <!-- Price & Bassthalk CTA Footer -->
+          <div class="course-card-footer-bassthalk">
+            <div class="course-card-price-wrap">
               ${isFree ? `
-                <span style="font-size:1.1rem; font-weight:900; color:var(--success);">مجاناً بالكامل</span>
+                <span style="font-size:1.15rem;font-weight:900;color:var(--success);">مجاناً بالكامل</span>
+                <small style="font-size:0.68rem;color:var(--text-muted);font-weight:700;">محاضرة تأسيسية</small>
               ` : `
-                <div style="display:flex; align-items:baseline; gap:6px;">
-                  <span style="font-size:1.25rem; font-weight:900; color:var(--primary);">${c.price} <small style="font-size:0.75rem;">ج.م</small></span>
-                  ${hasDiscount ? `<s style="font-size:0.8rem; color:var(--text-muted);">${c.original_price} ج</s>` : ''}
+                <div class="course-card-price-main">
+                  ${c.price} <small style="font-size:0.75rem;">ج.م</small>
                 </div>
-                ${hasDiscount ? `<div style="font-size:0.7rem; font-weight:800; color:var(--success);">وفرت ${savings} ج.م!</div>` : ''}
+                ${hasDiscount ? `
+                  <div style="display:flex;align-items:center;gap:4px;">
+                    <span class="course-card-price-orig">${c.original_price} ج</span>
+                    <span style="font-size:0.68rem;font-weight:800;color:var(--success);">وفر ${savings} ج</span>
+                  </div>
+                ` : `<small style="font-size:0.68rem;color:var(--text-muted);font-weight:700;">اشتراك شامل</small>`}
               `}
             </div>
-            <button type="button" class="btn btn-primary btn-sm" style="font-weight:800; gap:4px;">
-              تفاصيل والاشتراك <span class="material-symbols-rounded" style="font-size:1rem;">arrow_back</span>
+
+            <button type="button" class="btn-bassthalk-cta">
+              <span>تفاصيل والاشتراك</span>
+              <span class="material-symbols-rounded" style="font-size:1.1rem;">arrow_back</span>
             </button>
           </div>
         </div>

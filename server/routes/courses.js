@@ -76,13 +76,23 @@ router.get('/:id', optionalAuth, (req, res) => {
           isLocked = true;
         }
 
-        // Update isPreviousCompleted for the NEXT item
-        const itemKey = `${item.item_type}_${item.id}`;
-        isPreviousCompleted = completedItemIds.has(itemKey);
+        const isCompleted = completedItemIds.has(itemKey);
+        isPreviousCompleted = isCompleted;
 
-        return { ...item, is_locked: isLocked };
+        return { ...item, is_locked: isLocked, is_completed: isCompleted };
       });
     });
+
+    let totalItems = 0;
+    let completedItems = 0;
+    chapters.forEach(ch => {
+      (ch.items || []).forEach(it => {
+        totalItems++;
+        if (it.is_completed) completedItems++;
+      });
+    });
+    course.total_items = totalItems;
+    course.completed_items = completedItems;
 
     course.chapters = chapters;
     course.total_lessons = lessons.length;

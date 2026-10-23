@@ -3,6 +3,7 @@ import { api } from '../utils/api.js';
 import { getUser } from '../utils/auth.js';
 import { showToast } from '../components/toast.js';
 import { getInitials, formatCurrency } from '../utils/helpers.js';
+import chemCurriculum from '../assets/chem-curriculum-3d.jpg';
 
 export function renderDashboard() {
   const user = getUser();
@@ -152,20 +153,26 @@ export async function initDashboard() {
         </div>
       `
       : courses.map(c => `
-        <div class="card" style="padding: 16px; display: flex; align-items: center; gap: 16px; cursor: pointer; transition: var(--transition);" onclick="window.location.hash='#/courses/${c.id}'">
-          <div style="width: 64px; height: 64px; border-radius: var(--radius-md); background: linear-gradient(135deg, var(--green-50), var(--green-100)); display: flex; align-items: center; justify-content: center; flex-shrink: 0; border:1px solid var(--border-light)">
-            <span class="material-symbols-rounded" style="color:var(--primary); font-size:1.6rem;">science</span>
+        <div class="card" style="padding: 14px 18px; display: flex; align-items: center; gap: 16px; cursor: pointer; transition: all 0.2s ease; border-radius: 16px;" onclick="window.location.hash='#/courses/${c.id}'">
+          <div style="width: 72px; height: 72px; border-radius: 12px; overflow: hidden; flex-shrink: 0; position: relative; border:1px solid var(--border-light);">
+            <img src="${c.thumbnail || chemCurriculum}" alt="${c.title}" style="width:100%; height:100%; object-fit:cover;">
           </div>
           <div style="flex: 1; min-width: 0;">
-            <h3 style="font-size: 0.95rem; font-weight: 800; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 6px;">${c.title}</h3>
+            <div style="display:flex; align-items:center; gap:6px; margin-bottom:4px;">
+              <span class="badge" style="background:rgba(5, 150, 105, 0.1); color:var(--primary); font-size:0.68rem; padding:1px 6px; font-weight:700;">مفتوح طوال العام</span>
+              <span style="font-size:0.72rem; color:var(--text-muted); font-weight:600;">${c.grade || 'ثانوية عامة'}</span>
+            </div>
+            <h3 style="font-size: 0.95rem; font-weight: 800; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 8px;">${c.title}</h3>
             <div style="display: flex; align-items: center; gap: 10px;">
-              <div class="progress-bar" style="max-width: 150px; height: 6px; flex: 1;">
+              <div class="progress-bar" style="max-width: 160px; height: 6px; flex: 1;">
                 <div class="progress-fill" style="width: ${c.progress || 0}%"></div>
               </div>
-              <span style="font-size: 0.76rem; font-weight: 700; color: var(--text-secondary);">${c.progress || 0}% مكتمل</span>
+              <span style="font-size: 0.74rem; font-weight: 800; color: var(--primary);">${c.progress || 0}% مكتمل</span>
             </div>
           </div>
-          <span class="material-symbols-rounded" style="color:var(--text-muted);">arrow_back_ios</span>
+          <button class="btn btn-sm btn-primary" style="gap:4px; padding:6px 14px; font-size:0.8rem; flex-shrink:0;">
+            متابعة <span class="material-symbols-rounded" style="font-size:1rem;">arrow_left</span>
+          </button>
         </div>
       `).join('');
 
