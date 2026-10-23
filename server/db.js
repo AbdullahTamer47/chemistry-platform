@@ -1,15 +1,103 @@
-import Database from 'better-sqlite3';
+import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const dbPath = path.join(__dirname, '..', 'data.db');
 
-const db = new Database(dbPath);
+let db;
+const isVercel = !!process.env.VERCEL || !!process.env.AWS_LAMBDA_FUNCTION_NAME;
 
-// Enable WAL mode for better performance
-db.pragma('journal_mode = WAL');
-db.pragma('foreign_keys = ON');
+if (!isVercel) {
+  try {
+    const { default: Database } = await import('better-sqlite3');
+    db = new Database(dbPath);
+    try {
+      db.pragma('journal_mode = WAL');
+      db.pragma('foreign_keys = ON');
+    } catch (e) {}
+  } catch (err) {
+    console.warn('[DB] better-sqlite3 unavailable, using WebAssembly engine:', err.message);
+  }
+}
+
+if (!db) {
+  const { default: initSqlJs } = await import('sql.js');
+  const SQL = await initSqlJs();
+  let buffer = null;
+  if (fs.existsSync(dbPath)) {
+    buffer = fs.readFileSync(dbPath);
+  } else if (fs.existsSync(path.join(__dirname, 'data.db'))) {
+    buffer = fs.readFileSync(path.join(__dirname, 'data.db'));
+  }
+  const rawDb = buffer ? new SQL.Database(buffer) : new SQL.Database();
+
+  db = {
+    prepare(sql) {
+      return {
+        all(...params) {
+          const args = (params.length === 1 && Array.isArray(params[0])) ? params[0] : params;
+          const stmt = rawDb.prepare(sql);
+          try {
+            if (args.length > 0) stmt.bind(args);
+            const list = [];
+            while (stmt.step()) {
+              list.push(stmt.getAsObject());
+            }
+            return list;
+          } finally {
+            stmt.free();
+          }
+        },
+        get(...params) {
+          const args = (params.length === 1 && Array.isArray(params[0])) ? params[0] : params;
+          const stmt = rawDb.prepare(sql);
+          try {
+            if (args.length > 0) stmt.bind(args);
+            if (stmt.step()) {
+              return stmt.getAsObject();
+            }
+            return undefined;
+          } finally {
+            stmt.free();
+          }
+        },
+        run(...params) {
+          const args = (params.length === 1 && Array.isArray(params[0])) ? params[0] : params;
+          if (args.length > 0) {
+            rawDb.run(sql, args);
+          } else {
+            rawDb.run(sql);
+          }
+          const lastRowIdRes = rawDb.exec("SELECT last_insert_rowid() as id");
+          const lastInsertRowid = lastRowIdRes[0]?.values[0][0] ?? 0;
+          const changesRes = rawDb.exec("SELECT changes() as c");
+          const changes = changesRes[0]?.values[0][0] ?? 0;
+          return { changes, lastInsertRowid };
+        }
+      };
+    },
+    exec(sql) {
+      return rawDb.exec(sql);
+    },
+    pragma(sql) {
+      try { return rawDb.exec(`PRAGMA ${sql}`); } catch (e) {}
+    },
+    transaction(fn) {
+      return function(...args) {
+        rawDb.exec('BEGIN TRANSACTION');
+        try {
+          const res = fn(...args);
+          rawDb.exec('COMMIT');
+          return res;
+        } catch (err) {
+          try { rawDb.exec('ROLLBACK'); } catch (e) {}
+          throw err;
+        }
+      };
+    }
+  };
+}
 
 // Create tables
 db.exec(`

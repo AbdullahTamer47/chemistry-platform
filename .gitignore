@@ -9,7 +9,6 @@ dist-ssr/
 *.local
 
 # Database & SQLite WAL files
-*.db
 *.db-wal
 *.db-shm
 backups/
