@@ -1,3 +1,5 @@
+import { showToast } from '../components/toast.js';
+
 export function getUser() {
   try {
     const u = localStorage.getItem('user');
@@ -33,11 +35,12 @@ export function isLoggedIn() {
 
 export function isTeacher() {
   const u = getUser();
-  return u && (u.role === 'teacher' || u.role === 'admin');
+  return !!(u && (u.role === 'teacher' || u.role === 'admin'));
 }
 
 export function requireAuth() {
   if (!isLoggedIn()) {
+    showToast('يرجى تسجيل الدخول أولاً للوصول إلى هذه الصفحة', 'info');
     window.location.hash = '#/login';
     return false;
   }
@@ -45,7 +48,13 @@ export function requireAuth() {
 }
 
 export function requireTeacher() {
+  if (!isLoggedIn()) {
+    showToast('يرجى تسجيل الدخول بحساب المعلم أولاً', 'info');
+    window.location.hash = '#/login';
+    return false;
+  }
   if (!isTeacher()) {
+    showToast('غير مصرح لك بالدخول - هذه الصفحة خاصة بالمعلم وإدارة المنصة فقط', 'warning');
     window.location.hash = '#/dashboard';
     return false;
   }

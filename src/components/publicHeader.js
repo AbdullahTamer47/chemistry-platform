@@ -8,7 +8,7 @@ export function renderPublicHeader(activeNav = 'home') {
       <!-- Right Side Actions (RTL Start) -->
       <div class="landing-header-right">
         ${isLoggedIn()
-          ? `<a href="#/${isTeacher() ? 'admin' : 'dashboard'}" class="btn-sakr-solid"><span class="material-symbols-rounded" style="font-size:1.15rem;">dashboard</span> لوحة التحكم</a>
+          ? `<a href="#/${isTeacher() ? 'admin' : 'dashboard'}" class="btn-sakr-solid"><span class="material-symbols-rounded" style="font-size:1.15rem;">dashboard</span> ${isTeacher() ? 'لوحة المعلم والإدارة' : 'لوحة الطالب'}</a>
              <button class="btn-sakr-outline" id="landingLogoutBtn"><span class="material-symbols-rounded" style="font-size:1.15rem;">logout</span> خروج</button>`
           : `<a href="#/register" class="btn-sakr-solid">حساب جديد</a>
              <a href="#/login" class="btn-sakr-outline">تسجيل الدخول</a>`
@@ -18,8 +18,7 @@ export function renderPublicHeader(activeNav = 'home') {
       <!-- Center Navigation Links -->
       <nav class="landing-nav">
         <a href="#/" class="landing-nav-link ${activeNav === 'home' ? 'active' : ''}" data-nav="hero">الرئيسية</a>
-        <a href="#/packages" class="landing-nav-link ${activeNav === 'packages' ? 'active' : ''}">باقات الـ 3 شهور</a>
-        <a href="#/courses" class="landing-nav-link ${activeNav === 'courses' ? 'active' : ''}">الكورسات والباقات</a>
+        <a href="#/courses" class="landing-nav-link ${activeNav === 'courses' ? 'active' : ''}">الكورسات وباقات المنهج</a>
         <a href="#/store-locator" class="landing-nav-link ${activeNav === 'store-locator' ? 'active' : ''}">دليل المكتبات</a>
         <a href="#reviews" class="landing-nav-link ${activeNav === 'reviews' ? 'active' : ''}" data-scroll="reviews">آراء الطلاب</a>
         <a href="#faq" class="landing-nav-link ${activeNav === 'faq' ? 'active' : ''}" data-scroll="faq">الأسئلة الشائعة</a>

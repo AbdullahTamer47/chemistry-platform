@@ -149,7 +149,7 @@ export async function initCourseDetail(id) {
                       : '';
                       
                     return `
-                      <div class="lesson-item ${isLocked ? 'completed' : ''}" ${link ? `onclick="location.hash='${link}'"` : ''}>
+                      <div class="lesson-item clickable-lesson-item ${isLocked ? 'locked' : ''}" data-link="${link}" data-locked="${isLocked ? '1' : '0'}" data-enrolled="${enrolled ? '1' : '0'}" style="cursor:pointer;">
                         <span class="material-symbols-rounded" style="${isExam ? 'color:var(--accent)' : 'color:var(--primary)'}">${icon}</span>
                         <span style="flex:1;">${item.title}</span>
                         ${item.is_free ? '<span class="badge badge-success">مجاني</span>' : ''}
@@ -249,6 +249,28 @@ export async function initCourseDetail(id) {
         const isActive = item.classList.contains('active');
         // We can close all or just toggle
         item.classList.toggle('active', !isActive);
+      });
+    });
+
+    // Handle clicking on lessons or exams
+    document.querySelectorAll('.clickable-lesson-item').forEach(el => {
+      el.addEventListener('click', () => {
+        const link = el.dataset.link;
+        const isLocked = el.dataset.locked === '1';
+        const isEnr = el.dataset.enrolled === '1';
+
+        if (link) {
+          window.location.hash = link;
+        } else if (!isEnr) {
+          showToast('يرجى تفعيل الاشتراك في الكورس أولاً لمشاهدة هذا الدرس', 'warning');
+          const codeInput = document.getElementById('activationCode');
+          if (codeInput) {
+            codeInput.focus();
+            codeInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }
+        } else if (isLocked) {
+          showToast('هذا المحتوى مغلق حالياً حتى تكمل المحتوى السابق وتجتاز امتحانه', 'info');
+        }
       });
     });
 

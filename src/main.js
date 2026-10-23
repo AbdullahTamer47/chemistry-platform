@@ -213,7 +213,13 @@ const routes = {
   '/live': { render: renderLive, init: initLive, auth: true },
   '/wallet': { render: renderWallet, init: initWallet, auth: true },
   '/certificates': { render: renderCertificates, init: initCertificates, auth: true },
-  '/packages': { render: renderPackages, init: initPackages },
+  '/packages': { 
+    render: () => {
+      window.location.hash = '#/courses';
+      return renderCourses();
+    }, 
+    init: initCourses 
+  },
   '/store-locator': { render: renderStoreLocator, init: initStoreLocator },
   '/notifications': { render: renderNotifications, init: initNotifications, auth: true },
   '/profile': { render: renderProfile, init: initProfile, auth: true },

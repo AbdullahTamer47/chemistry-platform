@@ -249,6 +249,19 @@
   color: var(--success);
 }
 
+.lesson-item.locked {
+  opacity: 0.75;
+}
+
+.lesson-item.locked:hover {
+  background: rgba(245, 158, 11, 0.05);
+  color: var(--text-secondary);
+}
+
+.lesson-item.locked .material-symbols-rounded {
+  color: var(--warning);
+}
+
 .lesson-item .lesson-duration {
   margin-right: auto;
   margin-left: 0;

@@ -10,18 +10,15 @@ export function renderNavbar(currentPage) {
   const isDark = localStorage.getItem('darkMode') === 'true';
 
   const studentNav = `
-    <div class="nav-section-title">الرئيسية</div>
+    <div class="nav-section-title">لوحة الطالب</div>
     <a class="nav-item ${currentPage === 'dashboard' ? 'active' : ''}" href="#/dashboard">
-      <span class="material-symbols-rounded">dashboard</span> لوحة التحكم
-    </a>
-    <a class="nav-item ${currentPage === 'packages' ? 'active' : ''}" href="#/packages">
-      <span class="material-symbols-rounded" style="color:var(--primary);">view_carousel</span> باقات الـ 3 شهور <span class="badge badge-success" style="font-size:0.6rem;padding:2px 6px;margin-right:auto;">خصم 30%</span>
+      <span class="material-symbols-rounded">home</span> الرئيسية التعليمية
     </a>
     <a class="nav-item ${currentPage === 'courses' ? 'active' : ''}" href="#/courses">
-      <span class="material-symbols-rounded">school</span> الكورسات والباقات
+      <span class="material-symbols-rounded">school</span> الكورسات وباقات المنهج
     </a>
     <a class="nav-item ${currentPage === 'exams' ? 'active' : ''}" href="#/exams">
-      <span class="material-symbols-rounded">assignment</span> الامتحانات
+      <span class="material-symbols-rounded">assignment</span> الامتحانات والتقييمات
     </a>
     <a class="nav-item ${currentPage === 'my-results' ? 'active' : ''}" href="#/my-results">
       <span class="material-symbols-rounded">fact_check</span> نتائجي وتصحيحاتي
@@ -30,7 +27,7 @@ export function renderNavbar(currentPage) {
       <span class="material-symbols-rounded" style="color:var(--warning);">workspace_premium</span> شهاداتي المعتمدة
     </a>
     <a class="nav-item ${currentPage === 'leaderboard' ? 'active' : ''}" href="#/leaderboard">
-      <span class="material-symbols-rounded">emoji_events</span> المتصدرين
+      <span class="material-symbols-rounded">emoji_events</span> لوحة المتصدرين
     </a>
     <a class="nav-item ${currentPage === 'live' ? 'active' : ''}" href="#/live">
       <span class="material-symbols-rounded">live_tv</span> الحصص اللايف
@@ -52,9 +49,9 @@ export function renderNavbar(currentPage) {
   `;
 
   const teacherNav = `
-    <div class="nav-section-title">لوحة المعلم</div>
+    <div class="nav-section-title">لوحة المعلم والإدارة</div>
     <a class="nav-item ${currentPage === 'admin' ? 'active' : ''}" href="#/admin">
-      <span class="material-symbols-rounded">dashboard</span> لوحة التحكم
+      <span class="material-symbols-rounded">admin_panel_settings</span> لوحة الإدارة العامة
     </a>
     <a class="nav-item ${currentPage === 'admin-courses' ? 'active' : ''}" href="#/admin/courses">
       <span class="material-symbols-rounded">book</span> إدارة الكورسات
@@ -63,23 +60,23 @@ export function renderNavbar(currentPage) {
       <span class="material-symbols-rounded">assignment</span> إدارة الامتحانات
     </a>
     <a class="nav-item ${currentPage === 'admin-students' ? 'active' : ''}" href="#/admin/students">
-      <span class="material-symbols-rounded">group</span> الطلاب
+      <span class="material-symbols-rounded">group</span> سجل الطلاب
     </a>
     <a class="nav-item ${currentPage === 'admin-codes' ? 'active' : ''}" href="#/admin/codes">
-      <span class="material-symbols-rounded">key</span> أكواد التفعيل
+      <span class="material-symbols-rounded">key</span> أكواد التفعيل والشحن
     </a>
     <a class="nav-item ${currentPage === 'admin-live' ? 'active' : ''}" href="#/admin/live">
-      <span class="material-symbols-rounded">live_tv</span> الحصص اللايف
+      <span class="material-symbols-rounded">live_tv</span> بث الحصص اللايف
     </a>
     <a class="nav-item ${currentPage === 'admin-notifications' ? 'active' : ''}" href="#/admin/notifications">
-      <span class="material-symbols-rounded">notifications</span> الإشعارات
+      <span class="material-symbols-rounded">notifications</span> إرسال الإشعارات
     </a>
-    <div class="nav-section-title">عام</div>
+    <div class="nav-section-title">واجهة الطلاب</div>
     <a class="nav-item ${currentPage === 'courses' ? 'active' : ''}" href="#/courses">
-      <span class="material-symbols-rounded">visibility</span> عرض الكورسات
+      <span class="material-symbols-rounded">visibility</span> تصفح الكورسات كطالب
     </a>
     <a class="nav-item ${currentPage === 'leaderboard' ? 'active' : ''}" href="#/leaderboard">
-      <span class="material-symbols-rounded">emoji_events</span> المتصدرين
+      <span class="material-symbols-rounded">emoji_events</span> لوحة المتصدرين
     </a>
   `;
 
@@ -122,7 +119,7 @@ export function renderNavbar(currentPage) {
           <div class="sidebar-user-avatar">${getInitials(user.name)}</div>
           <div class="sidebar-user-info">
             <div class="sidebar-user-name">${user.name}</div>
-            <div class="sidebar-user-role">${teacher ? 'معلم' : (user.grade || 'طالب')}</div>
+            <div class="sidebar-user-role">${teacher ? 'معلم / إدارة المنصة' : (user.grade || 'طالب')}</div>
           </div>
         </a>
         <div class="sidebar-logout" id="logoutBtn">

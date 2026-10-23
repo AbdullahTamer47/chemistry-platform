@@ -35,7 +35,7 @@ export function renderLanding() {
           
           <div class="hero-sakr-actions">
             ${isLoggedIn()
-              ? `<a href="#/${isTeacher() ? 'admin' : 'dashboard'}" class="btn-sakr-hero-white"><span class="material-symbols-rounded">dashboard</span> الانتقال إلى لوحة التحكم</a>`
+              ? `<a href="#/${isTeacher() ? 'admin' : 'dashboard'}" class="btn-sakr-hero-white"><span class="material-symbols-rounded">dashboard</span> الانتقال إلى ${isTeacher() ? 'لوحة المعلم والإدارة' : 'لوحة الطالب'}</a>`
               : `<a href="#/register" class="btn-sakr-hero-white"><span class="material-symbols-rounded">rocket_launch</span> اشترك دلوقتي !</a>
                  <a href="#/courses" class="btn-sakr-hero-trans"><span class="material-symbols-rounded">school</span> تصفح الكورسات</a>`
             }
