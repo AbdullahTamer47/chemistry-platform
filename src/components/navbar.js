@@ -1,0 +1,208 @@
+import { getUser, isTeacher, logout } from '../utils/auth.js';
+import { getInitials } from '../utils/helpers.js';
+import { api } from '../utils/api.js';
+import zraLogoFace from '../assets/zra-logo-face.png';
+import zraLogoText from '../assets/zra-logo-text.png';
+
+export function renderNavbar(currentPage) {
+  const user = getUser();
+  const teacher = isTeacher();
+  const isDark = localStorage.getItem('darkMode') === 'true';
+
+  const studentNav = `
+    <div class="nav-section-title">الرئيسية</div>
+    <a class="nav-item ${currentPage === 'dashboard' ? 'active' : ''}" href="#/dashboard">
+      <span class="material-symbols-rounded">dashboard</span> لوحة التحكم
+    </a>
+    <a class="nav-item ${currentPage === 'packages' ? 'active' : ''}" href="#/packages">
+      <span class="material-symbols-rounded" style="color:var(--primary);">view_carousel</span> باقات الـ 3 شهور <span class="badge badge-success" style="font-size:0.6rem;padding:2px 6px;margin-right:auto;">خصم 30%</span>
+    </a>
+    <a class="nav-item ${currentPage === 'courses' ? 'active' : ''}" href="#/courses">
+      <span class="material-symbols-rounded">school</span> الكورسات والباقات
+    </a>
+    <a class="nav-item ${currentPage === 'exams' ? 'active' : ''}" href="#/exams">
+      <span class="material-symbols-rounded">assignment</span> الامتحانات
+    </a>
+    <a class="nav-item ${currentPage === 'my-results' ? 'active' : ''}" href="#/my-results">
+      <span class="material-symbols-rounded">fact_check</span> نتائجي وتصحيحاتي
+    </a>
+    <a class="nav-item ${currentPage === 'certificates' ? 'active' : ''}" href="#/certificates">
+      <span class="material-symbols-rounded" style="color:var(--warning);">workspace_premium</span> شهاداتي المعتمدة
+    </a>
+    <a class="nav-item ${currentPage === 'leaderboard' ? 'active' : ''}" href="#/leaderboard">
+      <span class="material-symbols-rounded">emoji_events</span> المتصدرين
+    </a>
+    <a class="nav-item ${currentPage === 'live' ? 'active' : ''}" href="#/live">
+      <span class="material-symbols-rounded">live_tv</span> الحصص اللايف
+    </a>
+    <div class="nav-section-title">حسابي والخدمات</div>
+    <a class="nav-item ${currentPage === 'wallet' ? 'active' : ''}" href="#/wallet">
+      <span class="material-symbols-rounded">account_balance_wallet</span> المحفظة والشحن
+    </a>
+    <a class="nav-item ${currentPage === 'store-locator' ? 'active' : ''}" href="#/store-locator">
+      <span class="material-symbols-rounded">storefront</span> دليل المكتبات والمنافذ
+    </a>
+    <a class="nav-item ${currentPage === 'notifications' ? 'active' : ''}" href="#/notifications" id="nav-notif">
+      <span class="material-symbols-rounded">notifications</span> الإشعارات
+      <span class="nav-badge" id="notifBadge" style="display:none">0</span>
+    </a>
+    <a class="nav-item ${currentPage === 'profile' ? 'active' : ''}" href="#/profile">
+      <span class="material-symbols-rounded">person</span> الملف الشخصي
+    </a>
+  `;
+
+  const teacherNav = `
+    <div class="nav-section-title">لوحة المعلم</div>
+    <a class="nav-item ${currentPage === 'admin' ? 'active' : ''}" href="#/admin">
+      <span class="material-symbols-rounded">dashboard</span> لوحة التحكم
+    </a>
+    <a class="nav-item ${currentPage === 'admin-courses' ? 'active' : ''}" href="#/admin/courses">
+      <span class="material-symbols-rounded">book</span> إدارة الكورسات
+    </a>
+    <a class="nav-item ${currentPage === 'admin-exams' ? 'active' : ''}" href="#/admin/exams">
+      <span class="material-symbols-rounded">assignment</span> إدارة الامتحانات
+    </a>
+    <a class="nav-item ${currentPage === 'admin-students' ? 'active' : ''}" href="#/admin/students">
+      <span class="material-symbols-rounded">group</span> الطلاب
+    </a>
+    <a class="nav-item ${currentPage === 'admin-codes' ? 'active' : ''}" href="#/admin/codes">
+      <span class="material-symbols-rounded">key</span> أكواد التفعيل
+    </a>
+    <a class="nav-item ${currentPage === 'admin-live' ? 'active' : ''}" href="#/admin/live">
+      <span class="material-symbols-rounded">live_tv</span> الحصص اللايف
+    </a>
+    <a class="nav-item ${currentPage === 'admin-notifications' ? 'active' : ''}" href="#/admin/notifications">
+      <span class="material-symbols-rounded">notifications</span> الإشعارات
+    </a>
+    <div class="nav-section-title">عام</div>
+    <a class="nav-item ${currentPage === 'courses' ? 'active' : ''}" href="#/courses">
+      <span class="material-symbols-rounded">visibility</span> عرض الكورسات
+    </a>
+    <a class="nav-item ${currentPage === 'leaderboard' ? 'active' : ''}" href="#/leaderboard">
+      <span class="material-symbols-rounded">emoji_events</span> المتصدرين
+    </a>
+  `;
+
+  return `
+    <div class="sidebar-overlay" id="sidebarOverlay"></div>
+    <div class="mobile-header" id="mobileHeader">
+      <button class="mobile-menu-btn" id="mobileMenuBtn" aria-label="Open menu"><span class="material-symbols-rounded">menu</span></button>
+      <div class="sidebar-logo" style="display: flex; align-items: center; gap: 6px;">
+        <img src="${zraLogoFace}" alt="Z.R.A" class="logo-face-img" style="height: 32px;" />
+        <img src="${zraLogoText}" alt="Z.R.A" class="logo-text-img" style="height: 22px;" />
+      </div>
+      <button class="mobile-menu-btn" id="mobileDarkToggle" title="الوضع الليلي">
+        <span class="material-symbols-rounded">${isDark ? 'light_mode' : 'dark_mode'}</span>
+      </button>
+    </div>
+    
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-header">
+        <div class="sidebar-logo" style="display: flex; align-items: center; gap: 8px;">
+          <img src="${zraLogoFace}" alt="Z.R.A" class="logo-face-img" style="height: 36px;" />
+          <img src="${zraLogoText}" alt="Z.R.A" class="logo-text-img" style="height: 26px;" />
+        </div>
+        <div class="sidebar-subtitle">د. زياد رمزي عياد</div>
+      </div>
+      
+      <nav class="sidebar-nav">
+        ${teacher ? teacherNav : studentNav}
+      </nav>
+      
+      <!-- Dark Mode Toggle Button (Styled inline as item) -->
+      <div class="dark-mode-toggle" id="darkModeToggle" style="padding:4px 10px; margin:4px 10px; cursor:pointer;">
+        <div class="nav-item" style="margin:0;">
+          <span class="material-symbols-rounded" id="sidebarDarkIcon">${isDark ? 'light_mode' : 'dark_mode'}</span>
+          <span id="sidebarDarkText">${isDark ? 'الوضع النهاري' : 'الوضع الليلي'}</span>
+        </div>
+      </div>
+      
+      ${user ? `
+        <a href="#/profile" class="sidebar-user" style="text-decoration:none; transition:var(--transition);">
+          <div class="sidebar-user-avatar">${getInitials(user.name)}</div>
+          <div class="sidebar-user-info">
+            <div class="sidebar-user-name">${user.name}</div>
+            <div class="sidebar-user-role">${teacher ? 'معلم' : (user.grade || 'طالب')}</div>
+          </div>
+        </a>
+        <div class="sidebar-logout" id="logoutBtn">
+          <span class="material-symbols-rounded">logout</span> تسجيل خروج
+        </div>
+      ` : ''}
+    </aside>
+  `;
+}
+
+export function initNavbar() {
+  const btn = document.getElementById('mobileMenuBtn');
+  const sidebar = document.getElementById('sidebar');
+  const overlay = document.getElementById('sidebarOverlay');
+  const logoutBtn = document.getElementById('logoutBtn');
+
+  if (btn && sidebar && overlay) {
+    btn.addEventListener('click', () => {
+      sidebar.classList.toggle('open');
+      overlay.classList.toggle('active');
+    });
+    overlay.addEventListener('click', () => {
+      sidebar.classList.remove('open');
+      overlay.classList.remove('active');
+    });
+  }
+
+  if (logoutBtn) {
+    logoutBtn.addEventListener('click', logout);
+  }
+
+  // Dark mode toggle in-place (no re-renders!)
+  function toggleDark() {
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+    const newDark = !isDark;
+    
+    if (newDark) {
+      document.documentElement.setAttribute('data-theme', 'dark');
+      localStorage.setItem('darkMode', 'true');
+    } else {
+      document.documentElement.removeAttribute('data-theme');
+      localStorage.setItem('darkMode', 'false');
+    }
+
+    // Dynamic UI Updates without reloads
+    const mobileDarkToggle = document.getElementById('mobileDarkToggle');
+    const sidebarDarkIcon = document.getElementById('sidebarDarkIcon');
+    const sidebarDarkText = document.getElementById('sidebarDarkText');
+
+    if (mobileDarkToggle) {
+      mobileDarkToggle.innerHTML = `<span class="material-symbols-rounded">${newDark ? 'light_mode' : 'dark_mode'}</span>`;
+    }
+    if (sidebarDarkIcon) {
+      sidebarDarkIcon.textContent = newDark ? 'light_mode' : 'dark_mode';
+    }
+    if (sidebarDarkText) {
+      sidebarDarkText.textContent = newDark ? 'الوضع النهاري' : 'الوضع الليلي';
+    }
+  }
+
+  const darkToggle = document.getElementById('darkModeToggle');
+  if (darkToggle) darkToggle.addEventListener('click', toggleDark);
+  
+  const mobileDarkToggle = document.getElementById('mobileDarkToggle');
+  if (mobileDarkToggle) mobileDarkToggle.addEventListener('click', toggleDark);
+
+  // Fetch unread notifications count
+  loadNotifBadge();
+}
+
+async function loadNotifBadge() {
+  const badge = document.getElementById('notifBadge');
+  if (!badge) return;
+  try {
+    const res = await api.getUnreadCount();
+    if (res.count > 0) {
+      badge.style.display = 'inline-flex';
+      badge.textContent = res.count > 99 ? '99+' : res.count;
+    } else {
+      badge.style.display = 'none';
+    }
+  } catch (e) { /* silent catch for non-logged or offline instances */ }
+}
