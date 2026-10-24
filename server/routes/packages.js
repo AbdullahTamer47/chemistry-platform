@@ -194,48 +194,106 @@ router.post('/:id/subscribe', authMiddleware, (req, res) => {
 // BOOKSTORES & STORE LOCATOR (دليل المنافذ)
 // ==========================================
 
-// Get bookstores with governorate filtering
-router.get('/stores/all', (req, res) => {
+// Get bookstores with governorate filtering and search
+router.get('/stores/all', optionalAuth, (req, res) => {
   try {
-    const { governorate } = req.query;
+    const { governorate, q } = req.query;
     let query = 'SELECT * FROM bookstores WHERE is_active = 1';
     const params = [];
+
     if (governorate && governorate !== 'الكل') {
       query += ' AND governorate = ?';
       params.push(governorate);
     }
+
+    if (q && q.trim()) {
+      query += ' AND (name LIKE ? OR address LIKE ? OR governorate LIKE ?)';
+      const term = `%${q.trim()}%`;
+      params.push(term, term, term);
+    }
+
     query += ' ORDER BY rating DESC, reviews_count DESC';
 
     const stores = db.prepare(query).all(...params);
     const governorates = db.prepare('SELECT DISTINCT governorate FROM bookstores WHERE is_active = 1').all().map(g => g.governorate);
+
+    // If user is logged in, attach their existing rating if any
+    if (req.user) {
+      try {
+        db.exec(`
+          CREATE TABLE IF NOT EXISTS bookstore_ratings (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            store_id INTEGER REFERENCES bookstores(id) ON DELETE CASCADE,
+            user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+            rating INTEGER NOT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(store_id, user_id)
+          );
+        `);
+        const userRatings = db.prepare('SELECT store_id, rating FROM bookstore_ratings WHERE user_id = ?').all(req.user.id);
+        const userRatingMap = new Map(userRatings.map(r => [r.store_id, r.rating]));
+        stores.forEach(s => {
+          s.my_rating = userRatingMap.get(s.id) || null;
+        });
+      } catch (e) {}
+    }
 
     res.json({
       stores,
       governorates: ['الكل', ...governorates]
     });
   } catch (err) {
+    console.error('Stores fetch error:', err);
     res.status(500).json({ error: 'حدث خطأ في جلب دليل المكتبات' });
   }
 });
 
-// Student rate bookstore
+// Student rate bookstore (with user tracking & exact mathematical average)
 router.post('/stores/:id/rate', authMiddleware, (req, res) => {
   try {
     const rating = Math.min(Math.max(Number(req.body.rating) || 5, 1), 5);
-    const store = db.prepare('SELECT * FROM bookstores WHERE id = ?').get(req.params.id);
-    if (!store) return res.status(404).json({ error: 'المكتبة غير مسجلة' });
+    const store = db.prepare('SELECT * FROM bookstores WHERE id = ? AND is_active = 1').get(req.params.id);
+    if (!store) return res.status(404).json({ error: 'المكتبة غير مسجلة أو غير مفعلة' });
 
-    const newReviewsCount = (store.reviews_count || 0) + 1;
-    const newRating = Number((((store.rating || 5.0) * (store.reviews_count || 1) + rating) / newReviewsCount).toFixed(1));
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS bookstore_ratings (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        store_id INTEGER REFERENCES bookstores(id) ON DELETE CASCADE,
+        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        rating INTEGER NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(store_id, user_id)
+      );
+    `);
 
-    db.prepare('UPDATE bookstores SET rating = ?, reviews_count = ? WHERE id = ?').run(newRating, newReviewsCount, store.id);
+    // Insert or update this student's rating
+    db.prepare(`
+      INSERT INTO bookstore_ratings (store_id, user_id, rating)
+      VALUES (?, ?, ?)
+      ON CONFLICT(store_id, user_id) DO UPDATE SET rating = excluded.rating
+    `).run(store.id, req.user.id, rating);
+
+    // Calculate exact mathematical average and count
+    const stats = db.prepare(`
+      SELECT COUNT(*) as count, AVG(rating) as avg_rating
+      FROM bookstore_ratings
+      WHERE store_id = ?
+    `).get(store.id);
+
+    const baseCount = (store.reviews_count && store.reviews_count > 10) ? store.reviews_count : 0;
+    const totalCount = Math.max(stats.count, baseCount);
+    const exactRating = Number((stats.avg_rating || rating).toFixed(1));
+
+    db.prepare('UPDATE bookstores SET rating = ?, reviews_count = ? WHERE id = ?').run(exactRating, totalCount, store.id);
 
     res.json({
-      message: 'شكراً لمشاركتك! تم تسجيل تقييمك لمساعدة زملائك الطلاب.',
-      new_rating: newRating,
-      reviews_count: newReviewsCount
+      message: 'شكراً لك! تم تسجيل تقييمك بنجاح لمساعدة زملائك الطلاب ⭐',
+      new_rating: exactRating,
+      reviews_count: totalCount,
+      user_rating: rating
     });
   } catch (err) {
+    console.error('Rate store error:', err);
     res.status(500).json({ error: 'حدث خطأ في تسجيل التقييم' });
   }
 });
