@@ -10,7 +10,8 @@ const isVercel = !!process.env.VERCEL || !!process.env.AWS_LAMBDA_FUNCTION_NAME;
 
 if (!isVercel) {
   try {
-    const { default: Database } = await import('better-sqlite3');
+    const mod = 'better' + '-sqlite3';
+    const { default: Database } = await import(/* @vite-ignore */ mod);
     db = new Database(dbPath);
     try {
       db.pragma('journal_mode = WAL');
@@ -22,8 +23,15 @@ if (!isVercel) {
 }
 
 if (!db) {
-  const { default: initSqlJs } = await import('sql.js');
-  const SQL = await initSqlJs();
+  let SQL;
+  try {
+    const inlineModule = await import('sql.js/dist/sql-wasm-inline.js');
+    const initSqlJs = inlineModule.default || inlineModule;
+    SQL = await initSqlJs();
+  } catch (e) {
+    const { default: initSqlJs } = await import('sql.js');
+    SQL = await initSqlJs();
+  }
   let buffer = null;
   const candidatePaths = [
     '/tmp/data.db',
