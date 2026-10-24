@@ -36,7 +36,13 @@ async function request(endpoint, options = {}) {
     data = { message: text };
   }
 
-  if (!res.ok) throw new Error(data.error || 'حدث خطأ غير متوقع');
+  if (!res.ok) {
+    const errorMsg = (typeof data?.error === 'string' && data.error)
+      || (typeof data?.message === 'string' && data.message)
+      || (typeof data === 'string' && data)
+      || (res.status === 404 ? 'الخدمة المطلوبة غير متوفرة حالياً (404)' : `حدث خطأ في الخادم (${res.status})`);
+    throw new Error(errorMsg);
+  }
   return data;
 }
 

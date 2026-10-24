@@ -114,7 +114,7 @@ export async function initCourseDetail(id) {
         <div class="course-bassthalk-breadcrumbs">
           <a href="#/"><span class="material-symbols-rounded" style="font-size:1.1rem; vertical-align:middle;">home</span> الرئيسية</a>
           <span class="material-symbols-rounded" style="font-size:0.85rem;">arrow_back_ios</span>
-          <a href="#/courses">الكورسات وباقات المنهج</a>
+          <a href="#/courses">الكورسات</a>
           <span class="material-symbols-rounded" style="font-size:0.85rem;">arrow_back_ios</span>
           <span style="color:var(--text-primary); font-weight:800;">${esc(course.title)}</span>
         </div>

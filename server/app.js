@@ -19,38 +19,46 @@ import packageRoutes from './routes/packages.js';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 
-const allowedOrigins = process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',').map(s => s.trim()) : null;
 app.use(cors({
-  origin: (origin, callback) => {
-    if (!origin || !allowedOrigins || allowedOrigins.includes('*') || allowedOrigins.includes(origin)) {
-      return callback(null, true);
-    }
-    return callback(new Error('غير مصرح بهذا النطاق للاتصال بالخادم'));
-  },
+  origin: true,
   credentials: true
 }));
 app.use(express.json({ limit: '5mb' }));
 app.use(express.urlencoded({ extended: true }));
 
+// Normalize URL prefix if rewritten by Vercel
+app.use((req, res, next) => {
+  if (req.url.startsWith('/api/api/')) {
+    req.url = req.url.replace('/api/api/', '/api/');
+  }
+  next();
+});
+
 // Static uploads
 app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads')));
 
+// Mount helper: mounts route under both /api/... and /... for universal compatibility
+const mount = (routePath, router) => {
+  app.use(`/api${routePath}`, router);
+  app.use(routePath, router);
+};
+
 // API Routes
-app.use('/api/auth', authRoutes);
-app.use('/api/courses', courseRoutes);
-app.use('/api/lessons', lessonRoutes);
-app.use('/api/exams', examRoutes);
-app.use('/api/codes', codeRoutes);
-app.use('/api/leaderboard', leaderboardRoutes);
-app.use('/api/live', liveRoutes);
-app.use('/api/students', studentRoutes);
-app.use('/api/discussions', discussionRoutes);
-app.use('/api/payments', paymentRoutes);
-app.use('/api/upload', uploadRoutes);
-app.use('/api/packages', packageRoutes);
+mount('/auth', authRoutes);
+mount('/courses', courseRoutes);
+mount('/lessons', lessonRoutes);
+mount('/exams', examRoutes);
+mount('/codes', codeRoutes);
+mount('/leaderboard', leaderboardRoutes);
+mount('/live', liveRoutes);
+mount('/students', studentRoutes);
+mount('/discussions', discussionRoutes);
+mount('/payments', paymentRoutes);
+mount('/upload', uploadRoutes);
+mount('/packages', packageRoutes);
 
 // Health check
-app.get('/api/health', (req, res) => res.json({ status: 'ok', message: 'كيمياوي API يعمل بنجاح' }));
+app.get(['/api/health', '/health'], (req, res) => res.json({ status: 'ok', message: 'كيمياوي API يعمل بنجاح' }));
 
 // Global API Error Handler
 app.use('/api', (err, req, res, next) => {

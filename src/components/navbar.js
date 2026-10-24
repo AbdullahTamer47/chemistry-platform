@@ -15,7 +15,7 @@ export function renderNavbar(currentPage) {
       <span class="material-symbols-rounded">home</span> الرئيسية التعليمية
     </a>
     <a class="nav-item ${currentPage === 'courses' ? 'active' : ''}" href="#/courses">
-      <span class="material-symbols-rounded">school</span> الكورسات وباقات المنهج
+      <span class="material-symbols-rounded">school</span> الكورسات
     </a>
     <a class="nav-item ${currentPage === 'exams' ? 'active' : ''}" href="#/exams">
       <span class="material-symbols-rounded">assignment</span> الامتحانات والتقييمات

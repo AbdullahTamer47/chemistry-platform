@@ -6,6 +6,13 @@ import drZiadImg from '../assets/dr-ziad.png';
 import zraLogoFace from '../assets/zra-logo-face.png';
 import zraLogoText from '../assets/zra-logo-text.png';
 
+function normalizeDigits(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d))
+    .replace(/\s|-/g, '');
+}
+
 export function renderLogin() {
   return `
   <div class="auth-page-sakr">
@@ -120,7 +127,7 @@ export function initLogin() {
       const deviceName = /Mobi|Android/i.test(navigator.userAgent) ? 'موبايل' : 'كمبيوتر / لابتوب';
 
       const data = await api.login({
-        phone: document.getElementById('loginPhone').value.trim(),
+        phone: normalizeDigits(document.getElementById('loginPhone').value),
         password: passwordInput.value,
         device_id: deviceId,
         device_name: deviceName
@@ -267,11 +274,34 @@ export function initRegister() {
     e.preventDefault();
     const btn = document.getElementById('regBtn');
     
-    // Simple verification
-    const parentPhone = document.getElementById('regParentPhone').value.trim();
-    const studentPhone = document.getElementById('regPhone').value.trim();
-    if (parentPhone === studentPhone) {
+    // Normalize and validate phone numbers
+    const parentPhone = normalizeDigits(document.getElementById('regParentPhone').value);
+    const studentPhone = normalizeDigits(document.getElementById('regPhone').value);
+    const grade = document.getElementById('regGrade').value;
+    const name = document.getElementById('regName').value.trim();
+
+    if (!name) {
+      showToast('يرجى إدخال الاسم بالكامل', 'warning');
+      return;
+    }
+
+    if (!studentPhone.startsWith('01') || studentPhone.length !== 11) {
+      showToast('يرجى إدخال رقم هاتف محمول مصري صحيح مكون من 11 رقماً يبدأ بـ 01', 'warning');
+      return;
+    }
+
+    if (parentPhone && (!parentPhone.startsWith('01') || parentPhone.length !== 11)) {
+      showToast('يرجى إدخال رقم ولي أمر مصري صحيح مكون من 11 رقماً يبدأ بـ 01', 'warning');
+      return;
+    }
+
+    if (parentPhone && parentPhone === studentPhone) {
       showToast('رقم هاتف الطالب لا يمكن أن يكون هو نفسه رقم ولي الأمر', 'error');
+      return;
+    }
+
+    if (!grade) {
+      showToast('يرجى اختيار المرحلة الدراسية', 'warning');
       return;
     }
 
@@ -280,10 +310,10 @@ export function initRegister() {
     
     try {
       const data = await api.register({
-        name: document.getElementById('regName').value.trim(),
+        name,
         phone: studentPhone,
         password: passwordInput.value,
-        grade: document.getElementById('regGrade').value,
+        grade,
         parent_phone: parentPhone
       });
       setAuth(data.user, data.token);

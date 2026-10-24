@@ -8,31 +8,48 @@ const router = Router();
 const registerLimiter = rateLimit({ windowMs: 60 * 60 * 1000, max: 15, message: 'تم تجاوز عدد الحسابات المسموح بإنشائها من هذا الجهاز، حاول لاحقاً' });
 const loginLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 25, message: 'محاولات دخول كثيرة جداً، يرجى الانتظار 15 دقيقة قبل المحاولة مرة أخرى' });
 
+function normalizePhone(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d))
+    .replace(/\s|-/g, '');
+}
+
 // Register
 router.post('/register', registerLimiter, (req, res) => {
   try {
     const { name, phone, password, grade, parent_phone } = req.body;
 
     if (!name || !phone || !password || !grade) {
-      return res.status(400).json({ error: 'الاسم ورقم الهاتف وكلمة المرور والمرحلة مطلوبون' });
+      return res.status(400).json({ error: 'الاسم ورقم الهاتف وكلمة المرور والمرحلة الدراسية مطلوبون' });
     }
 
-    const cleanPhone = String(phone).replace(/\s|-/g, '');
+    const cleanPhone = normalizePhone(phone);
+    const cleanParentPhone = normalizePhone(parent_phone);
+
     if (!/^01[0125][0-9]{8}$/.test(cleanPhone)) {
-      return res.status(400).json({ error: 'رقم الهاتف غير صحيح (11 رقم يبدأ بـ 01)' });
+      return res.status(400).json({ error: 'رقم الهاتف غير صحيح (يجب أن يكون 11 رقماً يبدأ بـ 01)' });
     }
 
     const existing = db.prepare('SELECT id FROM users WHERE phone = ?').get(cleanPhone);
     if (existing) {
-      return res.status(400).json({ error: 'رقم الهاتف مسجل بالفعل' });
+      return res.status(400).json({ error: 'رقم الهاتف مسجل بالفعل في المنصة، يمكنك تسجيل الدخول مباشرة' });
     }
 
     const hashedPassword = bcrypt.hashSync(password, 10);
     const result = db.prepare(
       'INSERT INTO users (name, phone, password, role, grade, parent_phone) VALUES (?, ?, ?, ?, ?, ?)'
-    ).run(name, cleanPhone, hashedPassword, 'student', grade, parent_phone || '');
+    ).run(name.trim(), cleanPhone, hashedPassword, 'student', grade, cleanParentPhone);
 
-    const user = db.prepare('SELECT id, name, role, phone, grade, parent_phone FROM users WHERE id = ?').get(result.lastInsertRowid);
+    let user = db.prepare('SELECT id, name, role, phone, grade, parent_phone FROM users WHERE id = ?').get(result.lastInsertRowid);
+    if (!user) {
+      user = db.prepare('SELECT id, name, role, phone, grade, parent_phone FROM users WHERE phone = ?').get(cleanPhone);
+    }
+
+    if (!user) {
+      throw new Error('حدث خطأ في استرجاع بيانات الحساب بعد إنشائه، يرجى المحاولة مرة أخرى');
+    }
+
     const token = generateToken(user);
 
     // Send welcome notification
@@ -63,7 +80,7 @@ router.post('/login', loginLimiter, (req, res) => {
       return res.status(400).json({ error: 'رقم الهاتف وكلمة المرور مطلوبان' });
     }
 
-    const cleanPhone = String(phone).replace(/\s|-/g, '');
+    const cleanPhone = normalizePhone(phone);
     const user = db.prepare('SELECT * FROM users WHERE phone = ?').get(cleanPhone);
     if (!user) {
       return res.status(401).json({ error: 'رقم الهاتف أو كلمة المرور غير صحيحة' });

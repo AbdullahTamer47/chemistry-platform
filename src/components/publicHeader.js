@@ -26,7 +26,7 @@ export function renderPublicHeader(activeNav = 'home') {
       <!-- Center Navigation Links (Desktop) -->
       <nav class="landing-nav">
         <a href="#/" class="landing-nav-link ${activeNav === 'home' ? 'active' : ''}" data-nav="hero">الرئيسية</a>
-        <a href="#/courses" class="landing-nav-link ${activeNav === 'courses' ? 'active' : ''}">الكورسات وباقات المنهج</a>
+        <a href="#/courses" class="landing-nav-link ${activeNav === 'courses' ? 'active' : ''}">الكورسات</a>
         <a href="#/store-locator" class="landing-nav-link ${activeNav === 'store-locator' ? 'active' : ''}">دليل المكتبات</a>
         <a href="#reviews" class="landing-nav-link ${activeNav === 'reviews' ? 'active' : ''}" data-scroll="reviews">آراء الطلاب</a>
         <a href="#faq" class="landing-nav-link ${activeNav === 'faq' ? 'active' : ''}" data-scroll="faq">الأسئلة الشائعة</a>
@@ -63,7 +63,7 @@ export function renderPublicHeader(activeNav = 'home') {
           <span class="material-symbols-rounded">home</span> الرئيسية
         </a>
         <a href="#/courses" class="landing-drawer-link ${activeNav === 'courses' ? 'active' : ''}">
-          <span class="material-symbols-rounded">school</span> الكورسات وباقات المنهج
+          <span class="material-symbols-rounded">school</span> الكورسات
         </a>
         <a href="#/store-locator" class="landing-drawer-link ${activeNav === 'store-locator' ? 'active' : ''}">
           <span class="material-symbols-rounded">storefront</span> دليل المكتبات ومنافذ الشحن
