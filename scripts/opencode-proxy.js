@@ -14,39 +14,59 @@ import fs from 'fs';
 import path from 'path';
 
 function extractAndEmbedFiles(promptText) {
-  const matches = promptText.matchAll(/[@\s"']([a-zA-Z0-9_\-\./\\]+\.(?:js|json|html|css|md))/g);
+  const rootDir = process.cwd();
   const detected = new Set();
 
+  function isSafeRelPath(p) {
+    if (!p || typeof p !== 'string') return false;
+    if (p.includes('..') || p.includes('$') || p.includes(':')) return false;
+    const resolved = path.resolve(rootDir, p);
+    return resolved.startsWith(rootDir);
+  }
+
+  // 1. Check for single file mentions (.js, .json, .html, .css, .md)
+  const matches = promptText.matchAll(/[@\s"']([a-zA-Z0-9_\-\./\\]+\.(?:js|json|html|css|md))/g);
   for (const m of matches) {
     let rawPath = m[1].replace(/^@/, '').trim().replace(/\\/g, '/');
     if (rawPath.includes('chemistry-platform/')) {
       rawPath = rawPath.split('chemistry-platform/')[1];
     }
-    if (fs.existsSync(rawPath) && fs.statSync(rawPath).isFile()) {
-      detected.add(rawPath);
+    if (isSafeRelPath(rawPath)) {
+      try {
+        const full = path.join(rootDir, rawPath);
+        if (fs.existsSync(full) && fs.statSync(full).isFile()) {
+          detected.add(rawPath);
+        }
+      } catch (e) {}
     }
   }
 
-  // Check for folder mentions like @server or @src
-  const folderMatches = promptText.matchAll(/[@\s"']([a-zA-Z0-9_\-\./\\]+)/g);
-  for (const fm of folderMatches) {
-    let raw = fm[1].replace(/^@/, '').trim().replace(/\\/g, '/');
-    if (raw.includes('chemistry-platform/')) raw = raw.split('chemistry-platform/')[1];
-    if (fs.existsSync(raw) && fs.statSync(raw).isDirectory()) {
-      function walkDir(dir) {
-        const entries = fs.readdirSync(dir, { withFileTypes: true });
-        for (const entry of entries) {
-          const full = path.join(dir, entry.name).replace(/\\/g, '/');
-          if (entry.isDirectory()) {
-            if (!['node_modules', 'dist', 'backups', '.git', 'uploads', 'tempmediaStorage'].includes(entry.name)) {
-              walkDir(full);
-            }
-          } else if (/\.(js|json|css|html)$/.test(entry.name) && !entry.name.endsWith('.min.js')) {
-            detected.add(full);
+  // 2. Check for folder mentions like @server or @src (strictly inside rootDir)
+  const allowedFolders = ['server', 'src', 'api'];
+  for (const f of allowedFolders) {
+    if (promptText.includes(`@${f}`) || promptText.includes(`/${f}`) || promptText.includes(`\\${f}`)) {
+      try {
+        const fullDir = path.join(rootDir, f);
+        if (fs.existsSync(fullDir) && fs.statSync(fullDir).isDirectory()) {
+          function walkDir(dir, relPrefix) {
+            try {
+              const entries = fs.readdirSync(dir, { withFileTypes: true });
+              for (const entry of entries) {
+                const fullEntry = path.join(dir, entry.name);
+                const relEntry = path.join(relPrefix, entry.name).replace(/\\/g, '/');
+                if (entry.isDirectory()) {
+                  if (!['node_modules', 'dist', 'backups', '.git', 'uploads', 'tempmediaStorage', '.system_generated'].includes(entry.name)) {
+                    walkDir(fullEntry, relEntry);
+                  }
+                } else if (/\.(js|json|css|html)$/.test(entry.name) && !entry.name.endsWith('.min.js')) {
+                  detected.add(relEntry);
+                }
+              }
+            } catch (e) {}
           }
+          walkDir(fullDir, f);
         }
-      }
-      walkDir(raw);
+      } catch (e) {}
     }
   }
 

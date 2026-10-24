@@ -1,29 +1,62 @@
 import { renderNavbar, initNavbar } from '../components/navbar.js';
 import { renderPublicHeader, initPublicHeader } from '../components/publicHeader.js';
-import { isLoggedIn } from '../utils/auth.js';
+import { isLoggedIn, isTeacher } from '../utils/auth.js';
 import { api } from '../utils/api.js';
 import { showToast } from '../components/toast.js';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
-function renderMainContent(logged) {
+const EGYPT_GOVERNORATES = [
+  'القاهرة', 'الجيزة', 'الإسكندرية', 'الدقهلية', 'الغربية', 'الشرقية', 
+  'القليوبية', 'المنوفية', 'البحيرة', 'كفر الشيخ', 'دمياط', 'بورسعيد', 
+  'الإسماعيلية', 'السويس', 'الفيوم', 'بني سويف', 'المنيا', 'أسيوط', 
+  'سوهاج', 'قنا', 'الأقصر', 'أسوان', 'البحر الأحمر', 'الوادي الجديد', 
+  'مطروح', 'شمال سيناء', 'جنوب سيناء'
+];
+
+function renderMainContent(logged, teacher) {
   return `
     <div class="page-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:16px;margin-bottom:24px;">
       <div>
-        <h1 class="page-title" style="display:flex;align-items:center;gap:10px;font-size:1.6rem;font-weight:900;">
-          <span class="material-symbols-rounded" style="color:var(--primary);font-size:2rem;">storefront</span>
-          دليل المكتبات ومنافذ الشحن المعتمدة
-        </h1>
-        <p class="page-subtitle" style="color:var(--text-secondary);font-size:0.95rem;margin-top:6px;">
-          المكتبات والسناتر المعتمدة لشراء مذكرات كيمياوي وكروت شحن المنصة بجميع محافظات مصر
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;">
+          <h1 class="page-title" style="display:flex;align-items:center;gap:10px;font-size:1.6rem;font-weight:900;margin:0;">
+            <span class="material-symbols-rounded" style="color:var(--primary);font-size:2rem;">storefront</span>
+            ${teacher ? 'إدارة وتحديث منافذ البيع والمكتبات المعتمدة' : 'دليل المكتبات ومنافذ الشحن المعتمدة'}
+          </h1>
+          ${teacher ? '<span class="badge badge-primary" style="font-size:0.75rem;padding:4px 8px;">لوحة المعلم</span>' : ''}
+        </div>
+        <p class="page-subtitle" style="color:var(--text-secondary);font-size:0.95rem;margin:0;">
+          ${teacher 
+            ? 'إضافة وتعديل بيانات منافذ بيع مذكرات كيمياوي وكروت شحن المنصة لجميع الطلاب بمحافظات مصر'
+            : 'المكتبات والسناتر المعتمدة لشراء مذكرات كيمياوي وكروت شحن المنصة بجميع محافظات مصر'}
         </p>
       </div>
+
       <div style="display:flex;gap:10px;flex-wrap:wrap;">
-        <a href="#/wallet" class="btn btn-outline" style="gap:6px;font-weight:700;">
-          <span class="material-symbols-rounded">account_balance_wallet</span> شحن المحفظة أونلاين
-        </a>
+        ${teacher ? `
+          <button type="button" class="btn btn-primary" id="openAddStoreBtn" style="gap:6px;font-weight:700;">
+            <span class="material-symbols-rounded">add_circle</span> إضافة منفذ معتمد جديد
+          </button>
+        ` : `
+          <a href="#/wallet" class="btn btn-outline" style="gap:6px;font-weight:700;">
+            <span class="material-symbols-rounded">account_balance_wallet</span> شحن المحفظة أونلاين
+          </a>
+        `}
       </div>
     </div>
+
+    ${teacher ? `
+      <!-- TEACHER QUICK NOTICE -->
+      <div class="card" style="padding:14px 18px;margin-bottom:20px;border-radius:14px;border:1px solid rgba(5,150,105,0.25);background:rgba(5,150,105,0.04);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
+        <div style="display:flex;align-items:center;gap:10px;font-size:0.9rem;font-weight:700;color:var(--primary);">
+          <span class="material-symbols-rounded">verified</span>
+          <span>أنت الآن في وضع إدارة المنافذ والمكتبات المعتمدة. يمكنك إضافة منافذ جديدة، أو تعديل وحذف المنافذ القائمة فوراً.</span>
+        </div>
+        <a href="#/store-locator" class="btn btn-sm btn-outline" style="font-size:0.78rem;gap:4px;">
+          <span class="material-symbols-rounded">visibility</span> معاينة كطالب
+        </a>
+      </div>
+    ` : ''}
 
     <!-- SEARCH & FILTER TOOLBAR -->
     <div class="card" style="padding:20px;margin-bottom:24px;border-radius:18px;border:1px solid var(--border-light);box-shadow:0 4px 20px rgba(0,0,0,0.03);">
@@ -62,23 +95,26 @@ function renderMainContent(logged) {
 
 export function renderStoreLocator() {
   const logged = isLoggedIn();
+  const teacher = isTeacher();
 
   if (!logged) {
     return `
       <div class="landing" style="min-height: 100vh; background: var(--bg-main);">
         ${renderPublicHeader('store-locator')}
         <main class="section-container" style="padding-top: 110px; padding-bottom: 60px; max-width: 1200px; margin: 0 auto; padding-inline: 20px;">
-          ${renderMainContent(false)}
+          ${renderMainContent(false, false)}
         </main>
       </div>
     `;
   }
 
+  const activePage = teacher ? (window.location.hash.includes('admin/stores') ? 'admin-stores' : 'store-locator') : 'store-locator';
+
   return `
     <div class="app-layout">
-      ${renderNavbar('store-locator')}
+      ${renderNavbar(activePage)}
       <main class="main-content" style="max-width: 1200px; margin: 0 auto; padding: 32px 24px 60px;">
-        ${renderMainContent(true)}
+        ${renderMainContent(true, teacher)}
       </main>
     </div>
   `;
@@ -86,6 +122,8 @@ export function renderStoreLocator() {
 
 export async function initStoreLocator() {
   const logged = isLoggedIn();
+  const teacher = isTeacher();
+
   if (logged) {
     initNavbar();
   } else {
@@ -96,6 +134,7 @@ export async function initStoreLocator() {
   const pillsEl = document.getElementById('governoratePills');
   const searchInput = document.getElementById('storeSearchInput');
   const countBadge = document.getElementById('resultsCountBadge');
+  const openAddStoreBtn = document.getElementById('openAddStoreBtn');
 
   if (!gridEl) return;
 
@@ -103,6 +142,13 @@ export async function initStoreLocator() {
   let availableGovs = ['الكل'];
   let currentGov = 'الكل';
   let searchQuery = '';
+
+  // TEACHER: ADD STORE MODAL
+  if (openAddStoreBtn && teacher) {
+    openAddStoreBtn.addEventListener('click', () => {
+      openStoreFormModal(null);
+    });
+  }
 
   function renderStores() {
     let filtered = allStores;
@@ -130,11 +176,18 @@ export async function initStoreLocator() {
           <span class="material-symbols-rounded" style="font-size:3.5rem;color:var(--text-muted);margin-bottom:12px;">store_mall_directory</span>
           <h3 style="font-weight:800;margin-bottom:8px;color:var(--text-primary);">لا توجد منافذ مطابقة للبحث</h3>
           <p style="color:var(--text-secondary);max-width:440px;margin:0 auto 16px;font-size:0.9rem;">
-            لم نعثر على مكتبة في محافظة "${currentGov}" بالاسم "${esc(searchQuery)}". يمكنك الشحن أونلاين عبر فودافون كاش أو إنستاباي بسهولة.
+            لم نعثر على مكتبة في محافظة "${currentGov}" بالاسم "${esc(searchQuery)}". 
+            ${teacher ? 'يمكنك إضافة مكتبة جديدة الآن بالضغط على زر إضافة منفذ معتمد بالأعلى.' : 'يمكنك الشحن أونلاين عبر فودافون كاش أو إنستاباي بسهولة.'}
           </p>
-          <a href="#/wallet" class="btn btn-primary" style="display:inline-flex;align-items:center;gap:6px;">
-            <span class="material-symbols-rounded">account_balance_wallet</span> شحن المحفظة أونلاين
-          </a>
+          ${teacher ? `
+            <button type="button" class="btn btn-primary" onclick="document.getElementById('openAddStoreBtn')?.click()" style="display:inline-flex;align-items:center;gap:6px;">
+              <span class="material-symbols-rounded">add_circle</span> إضافة منفذ جديد هنا
+            </button>
+          ` : `
+            <a href="#/wallet" class="btn btn-primary" style="display:inline-flex;align-items:center;gap:6px;">
+              <span class="material-symbols-rounded">account_balance_wallet</span> شحن المحفظة أونلاين
+            </a>
+          `}
         </div>
       `;
       return;
@@ -175,35 +228,60 @@ export async function initStoreLocator() {
                     <span class="material-symbols-rounded" style="font-size:1.2rem;color:#f59e0b;">star</span>
                     <span>${displayRating}</span>
                   </div>
-                  <span style="font-size:0.78rem;color:var(--text-muted);font-weight:600;">(${reviewCount} تقييم طالب)</span>
+                  <span style="font-size:0.78rem;color:var(--text-muted);font-weight:600;">(${reviewCount} تقييم)</span>
                   <span class="badge badge-success" style="font-size:0.68rem;margin-right:auto;font-weight:700;">منفذ معتمد ✅</span>
                 </div>
               </div>
 
               <!-- Action buttons -->
               <div style="padding-top:16px;border-top:1px solid var(--border-light);display:flex;flex-direction:column;gap:10px;">
-                <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
-                  <a href="tel:${cleanPhone}" class="btn btn-outline btn-sm" style="font-size:0.8rem;gap:4px;justify-content:center;padding:8px;" title="اتصال هاتفي">
-                    <span class="material-symbols-rounded" style="font-size:1.1rem;">call</span>
-                    <span>اتصال</span>
-                  </a>
-                  <a href="${waUrl}" target="_blank" rel="noopener noreferrer" class="btn btn-outline btn-sm" style="font-size:0.8rem;color:#16a34a;border-color:#16a34a;gap:4px;justify-content:center;padding:8px;" title="محادثة واتساب">
-                    <span class="material-symbols-rounded" style="font-size:1.1rem;">chat</span>
-                    <span>واتساب</span>
-                  </a>
-                </div>
+                ${teacher ? `
+                  <!-- TEACHER ACTIONS -->
+                  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+                    <button type="button" class="btn btn-outline btn-sm edit-store-trigger-btn" data-store-id="${store.id}" style="font-size:0.82rem;gap:4px;justify-content:center;font-weight:700;">
+                      <span class="material-symbols-rounded" style="font-size:1.1rem;color:var(--primary);">edit</span>
+                      <span>تعديل البيانات</span>
+                    </button>
+                    <button type="button" class="btn btn-secondary btn-sm delete-store-trigger-btn" data-store-id="${store.id}" data-store-name="${esc(store.name)}" style="font-size:0.82rem;gap:4px;justify-content:center;color:var(--error);font-weight:700;">
+                      <span class="material-symbols-rounded" style="font-size:1.1rem;">delete</span>
+                      <span>حذف المنفذ</span>
+                    </button>
+                  </div>
+                  <div style="display:flex;justify-content:space-between;align-items:center;padding-top:4px;">
+                    <a href="${mapsUrl}" target="_blank" rel="noopener noreferrer" class="btn btn-ghost btn-sm" style="gap:4px;font-size:0.78rem;color:var(--primary);padding:4px 6px;">
+                      <span class="material-symbols-rounded" style="font-size:1.1rem;">navigation</span>
+                      <span>معاينة الموقع بالخريطة</span>
+                    </a>
+                    <a href="tel:${cleanPhone}" class="btn btn-ghost btn-sm" style="font-size:0.78rem;gap:4px;padding:4px 6px;">
+                      <span class="material-symbols-rounded" style="font-size:1.1rem;">call</span>
+                      <span>${cleanPhone}</span>
+                    </a>
+                  </div>
+                ` : `
+                  <!-- STUDENT ACTIONS -->
+                  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+                    <a href="tel:${cleanPhone}" class="btn btn-outline btn-sm" style="font-size:0.8rem;gap:4px;justify-content:center;padding:8px;" title="اتصال هاتفي">
+                      <span class="material-symbols-rounded" style="font-size:1.1rem;">call</span>
+                      <span>اتصال</span>
+                    </a>
+                    <a href="${waUrl}" target="_blank" rel="noopener noreferrer" class="btn btn-outline btn-sm" style="font-size:0.8rem;color:#16a34a;border-color:#16a34a;gap:4px;justify-content:center;padding:8px;" title="محادثة واتساب">
+                      <span class="material-symbols-rounded" style="font-size:1.1rem;">chat</span>
+                      <span>واتساب</span>
+                    </a>
+                  </div>
 
-                <div style="display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;">
-                  <a href="${mapsUrl}" target="_blank" rel="noopener noreferrer" class="btn btn-ghost btn-sm" style="gap:4px;font-size:0.78rem;color:var(--primary);justify-content:flex-start;padding:4px 6px;">
-                    <span class="material-symbols-rounded" style="font-size:1.1rem;">navigation</span>
-                    <span>فتح الموقع على الخريطة</span>
-                  </a>
+                  <div style="display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;">
+                    <a href="${mapsUrl}" target="_blank" rel="noopener noreferrer" class="btn btn-ghost btn-sm" style="gap:4px;font-size:0.78rem;color:var(--primary);justify-content:flex-start;padding:4px 6px;">
+                      <span class="material-symbols-rounded" style="font-size:1.1rem;">navigation</span>
+                      <span>فتح الموقع على الخريطة</span>
+                    </a>
 
-                  <button type="button" class="btn btn-sm btn-ghost rate-store-trigger-btn" data-store-id="${store.id}" data-store-name="${esc(store.name)}" style="color:#d97706;font-size:0.78rem;gap:3px;padding:4px 8px;">
-                    <span class="material-symbols-rounded" style="font-size:1.05rem;">star_rate</span>
-                    <span>${store.my_rating ? `تقييمك: ${store.my_rating}⭐` : 'تقييم'}</span>
-                  </button>
-                </div>
+                    <button type="button" class="btn btn-sm btn-ghost rate-store-trigger-btn" data-store-id="${store.id}" data-store-name="${esc(store.name)}" style="color:#d97706;font-size:0.78rem;gap:3px;padding:4px 8px;">
+                      <span class="material-symbols-rounded" style="font-size:1.05rem;">star_rate</span>
+                      <span>${store.my_rating ? `تقييمك: ${store.my_rating}⭐` : 'تقييم'}</span>
+                    </button>
+                  </div>
+                `}
               </div>
             </div>
           `;
@@ -211,23 +289,167 @@ export async function initStoreLocator() {
       </div>
     `;
 
-    // Bind rating triggers
-    document.querySelectorAll('.rate-store-trigger-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const storeId = btn.dataset.storeId;
-        const storeName = btn.dataset.storeName;
+    // Bind Teacher Actions
+    if (teacher) {
+      gridEl.querySelectorAll('.edit-store-trigger-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const storeId = Number(btn.dataset.storeId);
+          const store = allStores.find(s => s.id === storeId);
+          if (store) openStoreFormModal(store);
+        });
+      });
 
-        if (!isLoggedIn()) {
-          showToast('يرجى تسجيل الدخول أولاً لتقييم المكتبة', 'warning');
-          setTimeout(() => { window.location.hash = '#/login'; }, 1000);
-          return;
+      gridEl.querySelectorAll('.delete-store-trigger-btn').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          const storeId = Number(btn.dataset.storeId);
+          const storeName = btn.dataset.storeName;
+          if (!confirm(`هل أنت متأكد من حذف "${storeName}" من دليل المكتبات المعتمدة؟`)) return;
+
+          try {
+            const res = await api.deleteBookstore(storeId);
+            showToast(res.message || 'تم حذف المنفذ بنجاح', 'success');
+            allStores = allStores.filter(s => s.id !== storeId);
+            renderStores();
+          } catch (err) {
+            showToast(err.message || 'تعذر حذف المكتبة', 'error');
+          }
+        });
+      });
+    }
+
+    // Bind Student Rating triggers
+    if (!teacher) {
+      gridEl.querySelectorAll('.rate-store-trigger-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const storeId = btn.dataset.storeId;
+          const storeName = btn.dataset.storeName;
+
+          if (!isLoggedIn()) {
+            showToast('يرجى تسجيل الدخول أولاً لتقييم المكتبة', 'warning');
+            setTimeout(() => { window.location.hash = '#/login'; }, 1000);
+            return;
+          }
+
+          openRatingDialog(storeId, storeName);
+        });
+      });
+    }
+  }
+
+  // TEACHER MODAL: ADD / EDIT STORE
+  function openStoreFormModal(store) {
+    let existingDialog = document.getElementById('storeFormModal');
+    if (existingDialog) existingDialog.remove();
+
+    const isEdit = !!store;
+    const modal = document.createElement('div');
+    modal.id = 'storeFormModal';
+    modal.className = 'modal-backdrop active';
+    modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.65);display:flex;align-items:center;justify-content:center;z-index:9999;padding:20px;backdrop-filter:blur(5px);';
+    modal.innerHTML = `
+      <div class="card" style="max-width:520px;width:100%;padding:28px 24px;border-radius:20px;box-shadow:0 24px 50px rgba(0,0,0,0.25);position:relative;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;border-bottom:1px solid var(--border-light);padding-bottom:12px;">
+          <h3 style="font-size:1.25rem;font-weight:900;color:var(--text-primary);display:flex;align-items:center;gap:8px;margin:0;">
+            <span class="material-symbols-rounded" style="color:var(--primary);">${isEdit ? 'edit_square' : 'add_business'}</span>
+            ${isEdit ? 'تعديل بيانات المنفذ المعتمد' : 'إضافة منفذ معتمد جديد'}
+          </h3>
+          <button type="button" id="closeStoreFormModalBtn" class="btn btn-ghost btn-sm" style="padding:4px;"><span class="material-symbols-rounded">close</span></button>
+        </div>
+
+        <form id="storeFormElement" style="display:flex;flex-direction:column;gap:14px;">
+          <div>
+            <label class="form-label" style="font-size:0.85rem;font-weight:700;margin-bottom:6px;display:block;">اسم المكتبة أو السنتر: *</label>
+            <input type="text" id="sf_name" class="form-input" required value="${esc(store?.name || '')}" placeholder="مثال: سنتر ومكتبة الأوائل" />
+          </div>
+
+          <div>
+            <label class="form-label" style="font-size:0.85rem;font-weight:700;margin-bottom:6px;display:block;">المحافظة: *</label>
+            <select id="sf_gov" class="form-input" required>
+              <option value="">اختر المحافظة</option>
+              ${EGYPT_GOVERNORATES.map(g => `
+                <option value="${g}" ${store?.governorate === g ? 'selected' : ''}>${g}</option>
+              `).join('')}
+            </select>
+          </div>
+
+          <div>
+            <label class="form-label" style="font-size:0.85rem;font-weight:700;margin-bottom:6px;display:block;">العنوان التفصيلي: *</label>
+            <input type="text" id="sf_address" class="form-input" required value="${esc(store?.address || '')}" placeholder="مثال: شارع كامل صدقي، الفجالة، بجوار المحطة" />
+          </div>
+
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+            <div>
+              <label class="form-label" style="font-size:0.85rem;font-weight:700;margin-bottom:6px;display:block;">رقم الهاتف: *</label>
+              <input type="tel" id="sf_phone" class="form-input" required value="${esc(store?.phone || '')}" placeholder="01xxxxxxxxx" dir="ltr" />
+            </div>
+            <div>
+              <label class="form-label" style="font-size:0.85rem;font-weight:700;margin-bottom:6px;display:block;">رقم الواتساب:</label>
+              <input type="tel" id="sf_whatsapp" class="form-input" value="${esc(store?.whatsapp || '')}" placeholder="01xxxxxxxxx" dir="ltr" />
+            </div>
+          </div>
+
+          <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:16px;">
+            <button type="button" id="cancelStoreFormBtn" class="btn btn-secondary">إلغاء</button>
+            <button type="submit" id="saveStoreFormBtn" class="btn btn-primary" style="font-weight:800;">
+              <span class="material-symbols-rounded">check</span>
+              ${isEdit ? 'حفظ التعديلات' : 'إضافة المنفذ الآن'}
+            </button>
+          </div>
+        </form>
+      </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    modal.querySelector('#closeStoreFormModalBtn').addEventListener('click', () => modal.remove());
+    modal.querySelector('#cancelStoreFormBtn').addEventListener('click', () => modal.remove());
+
+    modal.querySelector('#storeFormElement').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const saveBtn = modal.querySelector('#saveStoreFormBtn');
+      saveBtn.disabled = true;
+      saveBtn.textContent = 'جاري الحفظ...';
+
+      const body = {
+        name: document.getElementById('sf_name').value.trim(),
+        governorate: document.getElementById('sf_gov').value,
+        address: document.getElementById('sf_address').value.trim(),
+        phone: document.getElementById('sf_phone').value.trim(),
+        whatsapp: document.getElementById('sf_whatsapp').value.trim() || document.getElementById('sf_phone').value.trim()
+      };
+
+      try {
+        if (isEdit) {
+          const res = await api.updateBookstore(store.id, body);
+          showToast(res.message || 'تم تحديث المنفذ بنجاح ✅', 'success');
+          const target = allStores.find(s => s.id === store.id);
+          if (target) Object.assign(target, body);
+        } else {
+          const res = await api.createBookstore(body);
+          showToast(res.message || 'تم إضافة المنفذ بنجاح ✅', 'success');
+          allStores.unshift({
+            id: res.store_id || Date.now(),
+            ...body,
+            rating: 5.0,
+            reviews_count: 1,
+            is_active: 1
+          });
+          if (!availableGovs.includes(body.governorate)) {
+            availableGovs.push(body.governorate);
+          }
         }
 
-        openRatingDialog(storeId, storeName);
-      });
+        modal.remove();
+        renderStores();
+      } catch (err) {
+        showToast(err.message || 'حدث خطأ في حفظ بيانات المكتبة', 'error');
+        saveBtn.disabled = false;
+        saveBtn.textContent = isEdit ? 'حفظ التعديلات' : 'إضافة المنفذ الآن';
+      }
     });
   }
 
+  // STUDENT MODAL: RATING DIALOG
   function openRatingDialog(storeId, storeName) {
     let existingDialog = document.getElementById('storeRatingModal');
     if (existingDialog) existingDialog.remove();
@@ -254,7 +476,7 @@ export async function initStoreLocator() {
 
         <div style="display:flex;gap:10px;justify-content:center;">
           <button type="button" id="cancelRatingBtn" class="btn btn-secondary btn-sm" style="flex:1;">إلغاء</button>
-          <button type="button" id="confirmRatingBtn" class="btn btn-primary btn-sm" style="flex:1;" disabled>تأكيد التقييم</button>
+          <button type="button" id="confirmRatingBtn" class="btn btn-primary btn-sm" style="flex:1;">تأكيد التقييم</button>
         </div>
       </div>
     `;
@@ -269,7 +491,6 @@ export async function initStoreLocator() {
       selectedStar = val;
       starBtns.forEach(b => {
         const r = Number(b.dataset.rating);
-        const icon = b.querySelector('.material-symbols-rounded');
         if (r <= val) {
           b.style.color = '#f59e0b';
           b.style.transform = 'scale(1.15)';
@@ -301,7 +522,6 @@ export async function initStoreLocator() {
         showToast(res.message || 'تم حفظ تقييمك بنجاح ⭐', 'success');
         modal.remove();
 
-        // Update local store data
         const target = allStores.find(s => s.id === Number(storeId));
         if (target) {
           target.rating = res.new_rating;

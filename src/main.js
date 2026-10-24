@@ -29,7 +29,7 @@ import { renderAdminCourseDetail, initAdminCourseDetail } from './pages/adminCou
 import { renderAdminExamDetail, initAdminExamDetail } from './pages/adminExamDetail.js';
 import { renderNavbar, initNavbar } from './components/navbar.js';
 import { api } from './utils/api.js';
-import { isLoggedIn, requireAuth, requireTeacher, getUser } from './utils/auth.js';
+import { isLoggedIn, isTeacher, requireAuth, requireTeacher, getUser } from './utils/auth.js';
 import { showToast } from './components/toast.js';
 import { timeAgo } from './utils/helpers.js';
 
@@ -205,14 +205,53 @@ const routes = {
   '/': { render: renderLanding, init: initLanding },
   '/login': { render: renderLogin, init: initLogin },
   '/register': { render: renderRegister, init: initRegister },
-  '/dashboard': { render: renderDashboard, init: initDashboard, auth: true },
+  '/dashboard': { 
+    render: () => {
+      if (isTeacher()) {
+        window.location.hash = '#/admin';
+        return renderAdmin();
+      }
+      return renderDashboard();
+    }, 
+    init: () => {
+      if (isTeacher()) return initAdmin();
+      return initDashboard();
+    }, 
+    auth: true 
+  },
   '/courses': { render: renderCourses, init: initCourses },
   '/exams': { render: renderExams, init: initExams, auth: true },
   '/my-results': { render: renderMyResults, init: initMyResults, auth: true },
   '/leaderboard': { render: renderLeaderboard, init: initLeaderboard, auth: true },
   '/live': { render: renderLive, init: initLive, auth: true },
-  '/wallet': { render: renderWallet, init: initWallet, auth: true },
-  '/certificates': { render: renderCertificates, init: initCertificates, auth: true },
+  '/wallet': { 
+    render: () => {
+      if (isTeacher()) {
+        window.location.hash = '#/admin';
+        return renderAdmin();
+      }
+      return renderWallet();
+    }, 
+    init: () => {
+      if (isTeacher()) return initAdmin();
+      return initWallet();
+    }, 
+    auth: true 
+  },
+  '/certificates': { 
+    render: () => {
+      if (isTeacher()) {
+        window.location.hash = '#/admin';
+        return renderAdmin();
+      }
+      return renderCertificates();
+    }, 
+    init: () => {
+      if (isTeacher()) return initAdmin();
+      return initCertificates();
+    }, 
+    auth: true 
+  },
   '/packages': { 
     render: () => {
       window.location.hash = '#/courses';
@@ -230,6 +269,7 @@ const routes = {
   '/admin/exams': { render: renderAdminExams, init: initAdminExams, auth: true, teacher: true },
   '/admin/live': { render: renderAdminLive, init: initAdminLive, auth: true, teacher: true },
   '/admin/notifications': { render: renderAdminNotifications, init: initAdminNotifications, auth: true, teacher: true },
+  '/admin/stores': { render: renderStoreLocator, init: initStoreLocator, auth: true, teacher: true },
 };
 
 // Dynamic routes

@@ -71,12 +71,18 @@ export function renderNavbar(currentPage) {
     <a class="nav-item ${currentPage === 'admin-notifications' ? 'active' : ''}" href="#/admin/notifications">
       <span class="material-symbols-rounded">notifications</span> إرسال الإشعارات
     </a>
-    <div class="nav-section-title">واجهة الطلاب</div>
+    <a class="nav-item ${currentPage === 'admin-stores' ? 'active' : ''}" href="#/admin/stores">
+      <span class="material-symbols-rounded">storefront</span> إدارة منافذ البيع والمكتبات
+    </a>
+    <div class="nav-section-title">معاينة واجهة الطلاب</div>
     <a class="nav-item ${currentPage === 'courses' ? 'active' : ''}" href="#/courses">
       <span class="material-symbols-rounded">visibility</span> تصفح الكورسات كطالب
     </a>
     <a class="nav-item ${currentPage === 'leaderboard' ? 'active' : ''}" href="#/leaderboard">
       <span class="material-symbols-rounded">emoji_events</span> لوحة المتصدرين
+    </a>
+    <a class="nav-item ${currentPage === 'store-locator' ? 'active' : ''}" href="#/store-locator">
+      <span class="material-symbols-rounded">storefront</span> دليل المكتبات (معاينة الطالب)
     </a>
   `;
 

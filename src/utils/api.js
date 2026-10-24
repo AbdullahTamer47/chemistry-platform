@@ -199,7 +199,11 @@ export const api = {
   subscribePackage: (id, body) => request(`/packages/${id}/subscribe`, { method: 'POST', body }),
   getBookstores: (governorate) => request(`/packages/stores/all${governorate ? `?governorate=${encodeURIComponent(governorate)}` : ''}`),
   rateBookstore: (id, rating) => request(`/packages/stores/${id}/rate`, { method: 'POST', body: { rating } }),
+  createBookstore: (body) => request('/packages/stores', { method: 'POST', body }),
+  updateBookstore: (id, body) => request(`/packages/stores/${id}`, { method: 'PUT', body }),
+  deleteBookstore: (id) => request(`/packages/stores/${id}`, { method: 'DELETE' }),
 
   // Pillar 5: Adaptive Mistakes Quiz
   getAdaptiveMistakesQuiz: () => request('/exams/adaptive-mistakes-quiz', { method: 'POST' }),
 };
+

@@ -298,4 +298,69 @@ router.post('/stores/:id/rate', authMiddleware, (req, res) => {
   }
 });
 
+// Teacher: Add new bookstore
+router.post('/stores', authMiddleware, teacherMiddleware, (req, res) => {
+  try {
+    const { name, governorate, address, phone, whatsapp } = req.body;
+    if (!name || !governorate || !address || !phone) {
+      return res.status(400).json({ error: 'الاسم والمحافظة والعنوان ورقم الهاتف مطلوبين' });
+    }
+    const cleanPhone = String(phone).replace(/\s|-/g, '');
+    const cleanWa = whatsapp ? String(whatsapp).replace(/\s|-/g, '') : cleanPhone;
+
+    const result = db.prepare(`
+      INSERT INTO bookstores (name, governorate, address, phone, whatsapp, rating, reviews_count, is_active)
+      VALUES (?, ?, ?, ?, ?, 5.0, 1, 1)
+    `).run(name.trim(), governorate.trim(), address.trim(), cleanPhone, cleanWa);
+
+    res.json({
+      message: 'تم إضافة المنفذ المعتمد بنجاح ✅',
+      store_id: result.lastInsertRowid
+    });
+  } catch (err) {
+    console.error('Create store error:', err);
+    res.status(500).json({ error: 'حدث خطأ في إضافة المكتبة' });
+  }
+});
+
+// Teacher: Update bookstore
+router.put('/stores/:id', authMiddleware, teacherMiddleware, (req, res) => {
+  try {
+    const { name, governorate, address, phone, whatsapp, is_active } = req.body;
+    const store = db.prepare('SELECT id FROM bookstores WHERE id = ?').get(req.params.id);
+    if (!store) return res.status(404).json({ error: 'المكتبة غير موجودة' });
+
+    db.prepare(`
+      UPDATE bookstores
+      SET name = COALESCE(?, name),
+          governorate = COALESCE(?, governorate),
+          address = COALESCE(?, address),
+          phone = COALESCE(?, phone),
+          whatsapp = COALESCE(?, whatsapp),
+          is_active = COALESCE(?, is_active)
+      WHERE id = ?
+    `).run(name, governorate, address, phone, whatsapp, is_active, req.params.id);
+
+    res.json({ message: 'تم تحديث بيانات المكتبة بنجاح ✅' });
+  } catch (err) {
+    console.error('Update store error:', err);
+    res.status(500).json({ error: 'حدث خطأ في تحديث بيانات المكتبة' });
+  }
+});
+
+// Teacher: Delete bookstore
+router.delete('/stores/:id', authMiddleware, teacherMiddleware, (req, res) => {
+  try {
+    const store = db.prepare('SELECT id FROM bookstores WHERE id = ?').get(req.params.id);
+    if (!store) return res.status(404).json({ error: 'المكتبة غير موجودة' });
+
+    db.prepare('DELETE FROM bookstores WHERE id = ?').run(req.params.id);
+    res.json({ message: 'تم حذف المكتبة من الدليل بنجاح ✅' });
+  } catch (err) {
+    console.error('Delete store error:', err);
+    res.status(500).json({ error: 'حدث خطأ في حذف المكتبة' });
+  }
+});
+
 export default router;
+
