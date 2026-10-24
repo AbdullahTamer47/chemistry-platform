@@ -4,9 +4,9 @@
   "description": "منصة كيمياوي - Egyptian Chemistry Education Platform by د. زياد رمزي عياد",
   "type": "module",
   "scripts": {
-    "dev": "concurrently \"vite\" \"node --watch server/index.js\"",
+    "dev": "concurrently \"vite\" \"node --watch --watch-path=server server/index.js\"",
     "dev:client": "vite",
-    "dev:server": "node --watch server/index.js",
+    "dev:server": "node --watch --watch-path=server server/index.js",
     "build": "vite build",
     "preview": "vite preview",
     "seed": "node server/seed.js",

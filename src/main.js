@@ -303,7 +303,7 @@ async function navigate() {
   let path = hashPath;
   let targetSection = null;
 
-  const sectionIds = ['reviews', 'faq', 'features', 'grades', 'why-us'];
+  const sectionIds = ['reviews', 'faq', 'features', 'grades', 'why-us', 'about'];
   const cleanId = path.replace(/^\/?#?/, '');
 
   if (!path.startsWith('/') || sectionIds.includes(cleanId)) {

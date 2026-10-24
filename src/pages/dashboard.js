@@ -18,7 +18,7 @@ export function renderDashboard() {
       </div>
 
       <!-- Stats Grid -->
-      <div class="stats-grid" id="dashStats" style="margin-bottom: 28px;">
+      <div class="stats-grid" id="dashStats" style="margin-bottom: 32px;">
         <div class="skeleton-card skeleton"></div>
         <div class="skeleton-card skeleton"></div>
         <div class="skeleton-card skeleton"></div>
@@ -26,43 +26,43 @@ export function renderDashboard() {
       </div>
 
       <!-- Main Columns -->
-      <div style="display: grid; grid-template-columns: 2fr 1.1fr; gap: 24px;" id="dashGrid">
+      <div style="display: grid; grid-template-columns: 2fr 1.1fr; gap: 28px;" id="dashGrid">
         <!-- Courses Column -->
         <div>
-          <div class="section-header">
-            <h2 class="section-title-sm"><span class="material-symbols-rounded" style="color:var(--primary)">auto_stories</span> كورساتك المستمرة</h2>
-            <a href="#/courses" class="btn btn-ghost btn-sm" style="font-weight:700">تصفح الكورسات الجديدة <span class="material-symbols-rounded">arrow_left</span></a>
+          <div class="section-header" style="background: var(--bg-card); padding: 16px 20px; border-radius: var(--radius-lg); border: 1px solid var(--border-light); box-shadow: var(--shadow-sm); margin-bottom: 20px;">
+            <h2 class="section-title-sm" style="font-size: 1.1rem;"><span class="material-symbols-rounded" style="color:var(--primary); font-size:1.4rem;">auto_stories</span> كورساتك المستمرة</h2>
+            <a href="#/courses" class="btn btn-secondary btn-sm" style="font-weight:700; border-radius: var(--radius-full);"><span class="material-symbols-rounded">explore</span> تصفح المزيد <span class="material-symbols-rounded">arrow_left</span></a>
           </div>
-          <div id="dashCourses" style="display: flex; flex-direction: column; gap: 16px;">
-            <div class="skeleton-card skeleton" style="height: 100px;"></div>
-            <div class="skeleton-card skeleton" style="height: 100px;"></div>
+          <div id="dashCourses" style="display: flex; flex-direction: column; gap: 18px;">
+            <div class="skeleton-card skeleton" style="height: 110px; border-radius: var(--radius-lg);"></div>
+            <div class="skeleton-card skeleton" style="height: 110px; border-radius: var(--radius-lg);"></div>
           </div>
         </div>
 
         <!-- Sidebar Column -->
         <div style="display: flex; flex-direction: column; gap: 24px;">
           <!-- Quick Actions -->
-          <div class="card">
-            <h3 class="card-title" style="margin-bottom: 16px;"><span class="material-symbols-rounded" style="color:var(--accent)">offline_bolt</span> وصول سريع</h3>
-            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px;">
-              <a href="#/wallet" class="btn btn-secondary btn-sm" style="flex-direction:column; gap:8px; padding:14px 6px;">
-                <span class="material-symbols-rounded" style="font-size:1.5rem; color:var(--accent);">wallet</span>
-                <span style="font-size:0.75rem;">المحفظة</span>
+          <div class="card" style="border-radius: var(--radius-xl); box-shadow: var(--shadow-md);">
+            <h3 class="card-title" style="margin-bottom: 18px; font-size: 1.1rem;"><span class="material-symbols-rounded" style="color:var(--accent); font-size:1.3rem;">offline_bolt</span> وصول سريع ومميز</h3>
+            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px;">
+              <a href="#/wallet" class="btn btn-secondary btn-sm" style="flex-direction:column; gap:8px; padding:16px 8px; border-radius: var(--radius-md); transition: var(--transition);">
+                <span class="material-symbols-rounded" style="font-size:1.6rem; color:var(--accent);">wallet</span>
+                <span style="font-size:0.78rem; font-weight:700;">المحفظة</span>
               </a>
-              <a href="#/leaderboard" class="btn btn-secondary btn-sm" style="flex-direction:column; gap:8px; padding:14px 6px;">
-                <span class="material-symbols-rounded" style="font-size:1.5rem; color:var(--primary);">emoji_events</span>
-                <span style="font-size:0.75rem;">المتصدرين</span>
+              <a href="#/leaderboard" class="btn btn-secondary btn-sm" style="flex-direction:column; gap:8px; padding:16px 8px; border-radius: var(--radius-md); transition: var(--transition);">
+                <span class="material-symbols-rounded" style="font-size:1.6rem; color:var(--primary);">emoji_events</span>
+                <span style="font-size:0.78rem; font-weight:700;">المتصدرين</span>
               </a>
-              <button id="dash-open-chem-lab" class="btn btn-secondary btn-sm" style="flex-direction:column; gap:8px; padding:14px 6px; border:1px solid rgba(16,185,129,0.3); background:rgba(16,185,129,0.06); cursor:pointer;">
-                <span class="material-symbols-rounded" style="font-size:1.5rem; color:#10b981;">science</span>
-                <span style="font-size:0.75rem; color:#10b981; font-weight:700;">المختبر</span>
+              <button id="dash-open-chem-lab" class="btn btn-secondary btn-sm" style="flex-direction:column; gap:8px; padding:16px 8px; border-radius: var(--radius-md); border:1px solid rgba(16,185,129,0.3); background:rgba(16,185,129,0.06); cursor:pointer; transition: var(--transition);">
+                <span class="material-symbols-rounded" style="font-size:1.6rem; color:#10b981;">science</span>
+                <span style="font-size:0.78rem; color:#10b981; font-weight:800;">المختبر</span>
               </button>
             </div>
           </div>
 
           <!-- Activity / Timeline -->
-          <div class="card">
-            <h3 class="card-title" style="margin-bottom: 16px;"><span class="material-symbols-rounded" style="color:var(--info)">history</span> آخر النشاطات</h3>
+          <div class="card" style="border-radius: var(--radius-xl); box-shadow: var(--shadow-md);">
+            <h3 class="card-title" style="margin-bottom: 18px; font-size: 1.1rem;"><span class="material-symbols-rounded" style="color:var(--info); font-size:1.3rem;">history</span> آخر النشاطات</h3>
             <div id="dashActivity">
               <div class="skeleton-text skeleton"></div>
               <div class="skeleton-text skeleton" style="width: 80%;"></div>
@@ -162,25 +162,25 @@ export async function initDashboard() {
         </div>
       `
       : courses.map(c => `
-        <div class="card" style="padding: 14px 18px; display: flex; align-items: center; gap: 16px; cursor: pointer; transition: all 0.2s ease; border-radius: 16px;" onclick="window.location.hash='#/courses/${c.id}'">
-          <div style="width: 72px; height: 72px; border-radius: 12px; overflow: hidden; flex-shrink: 0; position: relative; border:1px solid var(--border-light);">
+        <div class="card" style="padding: 24px; display: flex; align-items: center; gap: 20px; cursor: pointer; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); border-radius: 16px; border: 1px solid var(--border-light);" onmouseover="this.style.boxShadow='var(--shadow-md)'; this.style.transform='translateY(-2px)';" onmouseout="this.style.boxShadow='var(--shadow-sm)'; this.style.transform='translateY(0)';" onclick="window.location.hash='#/courses/${c.id}'">
+          <div style="width: 80px; height: 80px; border-radius: 12px; overflow: hidden; flex-shrink: 0; position: relative; box-shadow: var(--shadow-sm);">
             <img src="${c.thumbnail || chemCurriculum}" alt="${c.title}" style="width:100%; height:100%; object-fit:cover;">
           </div>
           <div style="flex: 1; min-width: 0;">
-            <div style="display:flex; align-items:center; gap:6px; margin-bottom:4px;">
-              <span class="badge" style="background:rgba(5, 150, 105, 0.1); color:var(--primary); font-size:0.68rem; padding:1px 6px; font-weight:700;">مفتوح طوال العام</span>
-              <span style="font-size:0.72rem; color:var(--text-muted); font-weight:600;">${c.grade || 'ثانوية عامة'}</span>
+            <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px;">
+              <span class="badge" style="background:rgba(5, 150, 105, 0.1); color:var(--primary); font-size:0.7rem; padding:4px 10px; font-weight:700; border-radius: 8px;">مفتوح طوال العام</span>
+              <span style="font-size:0.75rem; color:var(--text-muted); font-weight:600;">${c.grade || 'ثانوية عامة'}</span>
             </div>
-            <h3 style="font-size: 0.95rem; font-weight: 800; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 8px;">${c.title}</h3>
-            <div style="display: flex; align-items: center; gap: 10px;">
-              <div class="progress-bar" style="max-width: 160px; height: 6px; flex: 1;">
+            <h3 style="font-size: 1.05rem; font-weight: 800; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 10px;">${c.title}</h3>
+            <div style="display: flex; align-items: center; gap: 12px;">
+              <div class="progress-bar" style="max-width: 200px; height: 8px; flex: 1; border-radius: 4px;">
                 <div class="progress-fill" style="width: ${c.progress || 0}%"></div>
               </div>
-              <span style="font-size: 0.74rem; font-weight: 800; color: var(--primary);">${c.progress || 0}% مكتمل</span>
+              <span style="font-size: 0.75rem; font-weight: 800; color: var(--primary);">${c.progress || 0}% مكتمل</span>
             </div>
           </div>
-          <button class="btn btn-sm btn-primary" style="gap:4px; padding:6px 14px; font-size:0.8rem; flex-shrink:0;">
-            متابعة <span class="material-symbols-rounded" style="font-size:1rem;">arrow_left</span>
+          <button class="btn btn-sm btn-primary" style="gap:4px; padding:8px 18px; font-size:0.85rem; flex-shrink:0; border-radius: 10px;">
+            متابعة <span class="material-symbols-rounded" style="font-size:1.1rem;">arrow_left</span>
           </button>
         </div>
       `).join('');

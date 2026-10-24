@@ -41,7 +41,7 @@ router.get('/', authMiddleware, (req, res) => {
 });
 
 // Student: get all my exam attempts (history & results)
-router.get('/my-attempts', authMiddleware, (req, res) => {
+router.get(['/my-attempts', '/my-results'], authMiddleware, (req, res) => {
   try {
     const attempts = db.prepare(`
       SELECT ea.id, ea.exam_id, ea.score, ea.total_points, ea.time_spent, ea.is_graded, ea.teacher_feedback, ea.completed_at,
@@ -538,9 +538,19 @@ router.get('/:id/submissions', authMiddleware, teacherMiddleware, (req, res) => 
 });
 
 // Teacher: grade essay questions in an attempt
-router.post('/attempt/:id/grade-essay', authMiddleware, teacherMiddleware, (req, res) => {
+router.post(['/attempt/:id/grade-essay', '/attempt/:id/grade', '/attempts/:id/grade-essay', '/attempts/:id/grade'], authMiddleware, teacherMiddleware, (req, res) => {
   try {
-    const { essay_grades, teacher_feedback } = req.body;
+    let { essay_grades, teacher_feedback, scores, feedback, overall_feedback } = req.body;
+    teacher_feedback = teacher_feedback || overall_feedback;
+    if (!essay_grades && scores) {
+      essay_grades = {};
+      Object.keys(scores).forEach(qId => {
+        essay_grades[qId] = {
+          points: scores[qId],
+          notes: (feedback && feedback[qId]) || ''
+        };
+      });
+    }
     const attempt = db.prepare('SELECT * FROM exam_attempts WHERE id = ?').get(req.params.id);
     if (!attempt) return res.status(404).json({ error: 'المحاولة غير موجودة' });
 
@@ -775,6 +785,7 @@ function formatAttemptReview(attempt, exam, user) {
     teacher_feedback: attempt.teacher_feedback,
     completed_at: attempt.completed_at,
     results,
+    questions: results,
     rank: rank?.rank || 1,
     passed: attempt.score >= exam.passing_score,
     course_id: exam.course_id,
@@ -798,7 +809,7 @@ router.get('/:id/my-attempt', authMiddleware, (req, res) => {
 });
 
 // Get attempt results by ID
-router.get('/attempt/:id', authMiddleware, (req, res) => {
+router.get(['/attempt/:id', '/attempts/:id'], authMiddleware, (req, res) => {
   try {
     const isTeacherUser = isTeacher(req.user);
     const attempt = isTeacherUser

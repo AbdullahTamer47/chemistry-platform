@@ -3,23 +3,35 @@ import db from './db.js';
 
 console.log('Seeding database with full educational demo content...');
 
-// Clear existing data — order matters for foreign keys
+// Clear existing data — selectively preserve Admin
+db.pragma('foreign_keys = OFF');
 const tables = [
   'code_usage', 'activation_codes', 'discussion_replies', 'course_discussions',
   'lesson_progress', 'exam_attempts', 'exam_overrides', 'questions', 'exams',
   'lessons', 'chapters', 'enrollments', 'notifications', 'video_tokens',
-  'live_sessions', 'courses', 'users'
+  'live_sessions', 'courses', 'payment_requests', 'platform_settings', 'exam_sessions', 'fawry_orders', 'wallet_vouchers', 'saved_lessons', 'certificates', 'packages', 'package_enrollments', 'bookstores'
 ];
 
 tables.forEach(t => {
   try { db.prepare(`DELETE FROM ${t}`).run(); } catch (e) { /* table might not exist yet */ }
 });
 
-// 1. Create teacher account
-const teacherPass = bcrypt.hashSync('teacher123', 10);
-const teacherRes = db.prepare('INSERT INTO users (name, phone, password, role, grade) VALUES (?, ?, ?, ?, ?)')
-  .run('د. زياد رمزي عياد', '01000000000', teacherPass, 'teacher', 'ثالثة ثانوي');
-const teacherId = teacherRes.lastInsertRowid;
+// Delete all users except the teacher
+db.prepare("DELETE FROM users WHERE phone != '01000000000'").run();
+
+db.pragma('foreign_keys = ON');
+
+// 1. Ensure teacher account exists
+let teacher = db.prepare('SELECT id FROM users WHERE phone = ?').get('01000000000');
+let teacherId;
+if (teacher) {
+  teacherId = teacher.id;
+} else {
+  const teacherPass = bcrypt.hashSync('teacher123', 10);
+  const teacherRes = db.prepare('INSERT INTO users (name, phone, password, role, grade) VALUES (?, ?, ?, ?, ?)')
+    .run('د. زياد رمزي عياد', '01000000000', teacherPass, 'teacher', 'ثالثة ثانوي');
+  teacherId = teacherRes.lastInsertRowid;
+}
 
 // 2. Create demo students
 const studentPass = bcrypt.hashSync('student123', 10);

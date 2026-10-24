@@ -157,7 +157,7 @@ export function renderLanding() {
     </section>
 
     <!-- Section 2: Distinctive Teacher Masterclass Showcase -->
-    <section class="teacher-masterclass-section reveal">
+    <section class="teacher-masterclass-section reveal" id="about">
       <div class="section-container">
         <div class="teacher-masterclass-grid">
           

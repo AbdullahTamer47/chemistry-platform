@@ -363,7 +363,11 @@ async function runAllScenarios() {
   assert(chargeAgain.status === 400 && chargeAgain.data.error.includes('مسبقاً'), 'Used voucher cannot be charged again');
 
   // 5.8 Manual Payment Request (Vodafone Cash / InstaPay) with receipt
-  const anotherCourse = coursesRes.data.find(c => !c.is_free && c.id !== paidCourse.id) || coursesRes.data[1] || coursesRes.data[0];
+  let anotherCourse = coursesRes.data.find(c => !c.is_free && c.id !== paidCourse.id);
+  if (!anotherCourse) {
+    anotherCourse = coursesRes.data.find(c => c.id !== paidCourse.id) || coursesRes.data[0];
+    db.prepare('UPDATE courses SET is_free = 0, price = 250 WHERE id = ?').run(anotherCourse.id);
+  }
   // Remove enrollment if any
   db.prepare('DELETE FROM enrollments WHERE user_id = ? AND course_id = ?').run(regSuccess.data.user.id, anotherCourse.id);
   
