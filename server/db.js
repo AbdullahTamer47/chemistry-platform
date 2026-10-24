@@ -25,10 +25,23 @@ if (!db) {
   const { default: initSqlJs } = await import('sql.js');
   const SQL = await initSqlJs();
   let buffer = null;
-  if (fs.existsSync(dbPath)) {
-    buffer = fs.readFileSync(dbPath);
-  } else if (fs.existsSync(path.join(__dirname, 'data.db'))) {
-    buffer = fs.readFileSync(path.join(__dirname, 'data.db'));
+  const candidatePaths = [
+    '/tmp/data.db',
+    path.join(process.cwd(), 'data.db'),
+    dbPath,
+    path.join(__dirname, 'data.db'),
+    path.join(__dirname, '..', 'data.db')
+  ];
+  for (const cp of candidatePaths) {
+    if (fs.existsSync(cp)) {
+      try {
+        const candidateBuf = fs.readFileSync(cp);
+        if (candidateBuf && candidateBuf.length > 0) {
+          buffer = candidateBuf;
+          break;
+        }
+      } catch (e) {}
+    }
   }
   const rawDb = buffer ? new SQL.Database(buffer) : new SQL.Database();
 
@@ -73,6 +86,11 @@ if (!db) {
           const lastInsertRowid = lastRowIdRes[0]?.values[0][0] ?? 0;
           const changesRes = rawDb.exec("SELECT changes() as c");
           const changes = changesRes[0]?.values[0][0] ?? 0;
+          if (process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME) {
+            try {
+              fs.writeFileSync('/tmp/data.db', Buffer.from(rawDb.export()));
+            } catch (e) {}
+          }
           return { changes, lastInsertRowid };
         }
       };

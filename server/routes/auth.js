@@ -36,17 +36,21 @@ router.post('/register', registerLimiter, (req, res) => {
     const token = generateToken(user);
 
     // Send welcome notification
-    db.prepare('INSERT INTO notifications (user_id, title, message, type) VALUES (?, ?, ?, ?)').run(
-      user.id,
-      'أهلاً بيك في كيمياوي!',
-      `مرحباً ${name}، نورتنا في منصة د. زياد رمزي عياد. يلا نبدأ نذاكر كيمياء!`,
-      'success'
-    );
+    try {
+      db.prepare('INSERT INTO notifications (user_id, title, message, type) VALUES (?, ?, ?, ?)').run(
+        user.id,
+        'أهلاً بيك في كيمياوي!',
+        `مرحباً ${name}، نورتنا في منصة د. زياد رمزي عياد. يلا نبدأ نذاكر كيمياء!`,
+        'success'
+      );
+    } catch (notifErr) {
+      console.warn('Welcome notification warning:', notifErr.message);
+    }
 
     res.json({ user, token });
   } catch (err) {
     console.error('Register error:', err);
-    res.status(500).json({ error: 'حدث خطأ في التسجيل' });
+    res.status(500).json({ error: err.message || 'حدث خطأ في التسجيل' });
   }
 });
 

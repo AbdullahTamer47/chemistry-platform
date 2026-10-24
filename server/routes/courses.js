@@ -76,6 +76,7 @@ router.get('/:id', optionalAuth, (req, res) => {
           isLocked = true;
         }
 
+        const itemKey = `${item.item_type}_${item.id}`;
         const isCompleted = completedItemIds.has(itemKey);
         isPreviousCompleted = isCompleted;
 
