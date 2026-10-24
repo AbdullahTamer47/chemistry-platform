@@ -27,6 +27,19 @@ async function request(endpoint, options = {}) {
 
   const res = await fetch(`${API_BASE}${endpoint}`, config);
 
+  // 401 Session Handling (Recommended by gpt-6.1-sol)
+  if (res.status === 401) {
+    const isAuthEndpoint = endpoint.includes('/auth/login') || endpoint.includes('/auth/register');
+    if (!isAuthEndpoint) {
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      if (!window.location.hash.includes('/login') && !window.location.hash.includes('/register')) {
+        window.location.hash = '#/login';
+      }
+      throw new Error('انتهت الجلسة - يرجى تسجيل الدخول مرة أخرى');
+    }
+  }
+
   // Handle empty responses (204 No Content, etc.)
   const text = await res.text();
   let data;
