@@ -4,6 +4,7 @@ import { getUser } from '../utils/auth.js';
 import { showToast } from '../components/toast.js';
 import { getInitials, formatCurrency } from '../utils/helpers.js';
 import chemCurriculum from '../assets/chem-curriculum-3d.jpg';
+import { openChemistryLabModal } from '../components/chemistryLabModal.js';
 
 export function renderDashboard() {
   const user = getUser();
@@ -43,15 +44,19 @@ export function renderDashboard() {
           <!-- Quick Actions -->
           <div class="card">
             <h3 class="card-title" style="margin-bottom: 16px;"><span class="material-symbols-rounded" style="color:var(--accent)">offline_bolt</span> وصول سريع</h3>
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
-              <a href="#/wallet" class="btn btn-secondary btn-sm" style="flex-direction:column; gap:8px; padding:16px 10px;">
-                <span class="material-symbols-rounded" style="font-size:1.6rem; color:var(--accent);">wallet</span>
-                <span>شحن المحفظة</span>
+            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px;">
+              <a href="#/wallet" class="btn btn-secondary btn-sm" style="flex-direction:column; gap:8px; padding:14px 6px;">
+                <span class="material-symbols-rounded" style="font-size:1.5rem; color:var(--accent);">wallet</span>
+                <span style="font-size:0.75rem;">المحفظة</span>
               </a>
-              <a href="#/leaderboard" class="btn btn-secondary btn-sm" style="flex-direction:column; gap:8px; padding:16px 10px;">
-                <span class="material-symbols-rounded" style="font-size:1.6rem; color:var(--primary);">emoji_events</span>
-                <span>المتصدرين</span>
+              <a href="#/leaderboard" class="btn btn-secondary btn-sm" style="flex-direction:column; gap:8px; padding:14px 6px;">
+                <span class="material-symbols-rounded" style="font-size:1.5rem; color:var(--primary);">emoji_events</span>
+                <span style="font-size:0.75rem;">المتصدرين</span>
               </a>
+              <button id="dash-open-chem-lab" class="btn btn-secondary btn-sm" style="flex-direction:column; gap:8px; padding:14px 6px; border:1px solid rgba(16,185,129,0.3); background:rgba(16,185,129,0.06); cursor:pointer;">
+                <span class="material-symbols-rounded" style="font-size:1.5rem; color:#10b981;">science</span>
+                <span style="font-size:0.75rem; color:#10b981; font-weight:700;">المختبر</span>
+              </button>
             </div>
           </div>
 
@@ -71,6 +76,10 @@ export function renderDashboard() {
 
 export async function initDashboard() {
   initNavbar();
+  const chemLabBtn = document.getElementById('dash-open-chem-lab');
+  if (chemLabBtn) {
+    chemLabBtn.addEventListener('click', () => openChemistryLabModal());
+  }
   const user = getUser();
   if (!user) return;
 

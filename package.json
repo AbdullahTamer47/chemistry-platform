@@ -11,7 +11,8 @@
     "preview": "vite preview",
     "seed": "node server/seed.js",
     "backup": "node server/backup.js",
-    "test": "node scratch/test_regression.js"
+    "test": "node scratch/test_regression.js",
+    "gpt": "node scripts/gpt-sol.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

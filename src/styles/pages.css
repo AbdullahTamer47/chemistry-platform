@@ -1914,3 +1914,105 @@
     justify-content: flex-end;
   }
 }
+
+/* ========================================================
+   Interactive Chemistry Lab & Equation Modal Styles
+   ======================================================== */
+.chem-lab-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(10, 15, 29, 0.85);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+.chem-lab-content {
+  background: #0f172a;
+  border: 1px solid #334155;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7);
+  border-radius: 16px;
+  max-width: 680px;
+  width: 100%;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  padding: 24px;
+  overflow-y: auto;
+  position: relative;
+}
+
+.chem-lab-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid #1e293b;
+  padding-bottom: 16px;
+  margin-bottom: 16px;
+}
+
+.chem-lab-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.chem-lab-icon {
+  font-size: 2rem;
+  background: rgba(16, 185, 129, 0.15);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  border-radius: 12px;
+  padding: 6px 12px;
+}
+
+.chem-lab-close {
+  background: transparent;
+  border: none;
+  color: #94a3b8;
+  font-size: 2rem;
+  cursor: pointer;
+  line-height: 1;
+  transition: color 0.2s;
+}
+
+.chem-lab-close:hover {
+  color: #fff;
+}
+
+.chem-lab-tabs {
+  display: flex;
+  gap: 8px;
+  border-bottom: 1px solid #334155;
+  padding-bottom: 12px;
+  margin-bottom: 16px;
+  overflow-x: auto;
+}
+
+.chem-tab-btn {
+  background: #1e293b;
+  border: 1px solid #334155;
+  color: #cbd5e1;
+  padding: 8px 16px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.88rem;
+  font-weight: 600;
+  white-space: nowrap;
+  transition: all 0.2s;
+}
+
+.chem-tab-btn:hover {
+  background: #334155;
+  color: #fff;
+}
+
+.chem-tab-btn.active {
+  background: #10b981;
+  color: #fff;
+  border-color: #10b981;
+}
+

@@ -5,6 +5,7 @@ import { showToast } from '../components/toast.js';
 import { confirmModal } from '../components/modal.js';
 import { sanitize } from '../utils/helpers.js';
 import { renderPublicHeader, initPublicHeader } from '../components/publicHeader.js';
+import { openChemistryLabModal } from '../components/chemistryLabModal.js';
 
 import drZiadThumbs from '../assets/dr-ziad-pose-thumbs.jpg';
 import drZiadFlask from '../assets/dr-ziad-pose-flask.jpg';
@@ -206,6 +207,9 @@ export async function initCourseDetail(id) {
           </button>
           <button class="course-bassthalk-tab-btn" data-tab="forum">
             <span class="material-symbols-rounded">forum</span> منتدى النقاش وسؤال المعلم
+          </button>
+          <button id="open-chem-lab-btn" class="btn btn-sm" style="background:linear-gradient(135deg, #059669 0%, #10b981 100%); color:#fff; font-weight:800; border-radius:12px; margin-right:auto; gap:6px; box-shadow:0 4px 12px rgba(16, 185, 129, 0.25); cursor:pointer;">
+            <span class="material-symbols-rounded">science</span> المختبر وحاسبة المعادلات ⚗️
           </button>
         </div>
 
@@ -589,6 +593,11 @@ export async function initCourseDetail(id) {
         });
       });
     });
+
+    const openChemLabBtn = document.getElementById('open-chem-lab-btn');
+    if (openChemLabBtn) {
+      openChemLabBtn.addEventListener('click', () => openChemistryLabModal());
+    }
 
     // 2. Unit Accordion Toggling Handler
     document.querySelectorAll('.unit-header-bassthalk').forEach(header => {
