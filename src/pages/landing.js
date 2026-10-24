@@ -7,6 +7,7 @@ import { isLoggedIn, isTeacher } from '../utils/auth.js';
 import { renderPublicHeader, initPublicHeader } from '../components/publicHeader.js';
 import zraLogoFace from '../assets/zra-logo-face.png';
 import zraLogoText from '../assets/zra-logo-text.png';
+import { openChemistryLabModal } from '../components/chemistryLabModal.js';
 
 export function renderLanding() {
   return `
@@ -35,9 +36,11 @@ export function renderLanding() {
           
           <div class="hero-sakr-actions">
             ${isLoggedIn()
-              ? `<a href="#/${isTeacher() ? 'admin' : 'dashboard'}" class="btn-sakr-hero-white"><span class="material-symbols-rounded">dashboard</span> الانتقال إلى ${isTeacher() ? 'لوحة المعلم والإدارة' : 'لوحة الطالب'}</a>`
+              ? `<a href="#/${isTeacher() ? 'admin' : 'dashboard'}" class="btn-sakr-hero-white"><span class="material-symbols-rounded">dashboard</span> الانتقال إلى ${isTeacher() ? 'لوحة المعلم والإدارة' : 'لوحة الطالب'}</a>
+                 <button type="button" id="heroChemLabBtn" class="btn-sakr-hero-trans" style="cursor:pointer; display:inline-flex; align-items:center; gap:8px;"><span class="material-symbols-rounded" style="color:#10b981;">science</span> المختبر التفاعلي</button>`
               : `<a href="#/register" class="btn-sakr-hero-white"><span class="material-symbols-rounded">rocket_launch</span> اشترك دلوقتي !</a>
-                 <a href="#/courses" class="btn-sakr-hero-trans"><span class="material-symbols-rounded">school</span> تصفح الكورسات</a>`
+                 <a href="#/courses" class="btn-sakr-hero-trans"><span class="material-symbols-rounded">school</span> تصفح الكورسات</a>
+                 <button type="button" id="heroChemLabBtn" class="btn-sakr-hero-trans" style="cursor:pointer; display:inline-flex; align-items:center; gap:8px;"><span class="material-symbols-rounded" style="color:#10b981;">science</span> المختبر التفاعلي</button>`
             }
           </div>
 
@@ -542,4 +545,10 @@ export function initLanding() {
     });
   }, { threshold: 0.15 });
   revealElements.forEach(el => revealObserver.observe(el));
+
+  // Interactive Chemistry Lab modal trigger
+  const heroLabBtn = document.getElementById('heroChemLabBtn');
+  if (heroLabBtn) {
+    heroLabBtn.addEventListener('click', () => openChemistryLabModal());
+  }
 }
