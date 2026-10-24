@@ -282,6 +282,41 @@ router.post('/:id/submit', authMiddleware, (req, res) => {
       serverTimeSpent = Math.max(serverElapsed, time_spent || 0);
     }
 
+    const feedbackByConcept = {
+      iron_oxidation: {
+        reinforcement: "تتبّع عدد أكسدة الحديد قبل موازنة التفاعل. ميّز بين FeO وFe₂O₃ وFe₃O₄؛ الأخير يحتوي على الحديد بحالتي الأكسدة +2 و+3.",
+        learning_action: "راجع معادلات أكسدة الحديد واختزاله، واكتب أعداد الأكسدة ثم أعد موازنة المعادلة."
+      },
+      limiting_reagent: {
+        reinforcement: "وازن المعادلة ثم حوّل كميات المتفاعلات إلى مولات. قارن عدد المولات مقسوماً على معامل كل متفاعل؛ القيمة الأصغر تحدّد المادة المحدِّدة للتفاعل.",
+        learning_action: "أعد حساب عدد مولات المادة المحدِّدة للتفاعل، ثم احسب كمية الناتج باستخدام معاملات المعادلة."
+      },
+      stoichiometry: {
+        reinforcement: "ابدأ بالعلاقة n = m / M، ثم استخدم النسب المولية من المعادلة الموزونة. لا تقارن الكتل مباشرةً دون تحويلها إلى مولات.",
+        learning_action: "راجع حساب الكتلة المولية، وأعد الحل مع كتابة الوحدات في كل خطوة، ثم حل مسألتين على النسب المولية."
+      },
+      redox: {
+        reinforcement: "الأكسدة فقد إلكترونات وزيادة عدد الأكسدة، والاختزال اكتساب إلكترونات وانخفاض عدد الأكسدة. العامل المؤكسِد يُختزل والعامل المختزِل يتأكسد.",
+        learning_action: "حدّد أعداد الأكسدة والعاملين المؤكسِد والمختزِل، ثم اكتب نصفي التفاعل ووازن الإلكترونات."
+      },
+      chemical_equilibrium: {
+        reinforcement: "ميّز بين تغيّر موضع الاتزان وتغيّر ثابت الاتزان؛ عند ثبات درجة الحرارة لا تتغيّر قيمة K. لا تدخل المواد الصلبة والسوائل النقية في تعبير ثابت الاتزان.",
+        learning_action: "اكتب تعبير ثابت الاتزان من المعادلة الموزونة، ثم راجع أثر التغيّر المطلوب باستخدام مبدأ لوشاتلييه."
+      },
+      electrochemistry: {
+        reinforcement: "الأكسدة تحدث عند الأنود والاختزال عند الكاثود. ميّز بين الخلية الجلفانية وخلية التحليل الكهربائي عند تحديد إشارات الأقطاب.",
+        learning_action: "ارسم الخلية وحدّد الأنود والكاثود واتجاه انتقال الإلكترونات، ثم اكتب تفاعل كل قطب."
+      },
+      qualitative_analysis: {
+        reinforcement: "اربط الأيون بالكاشف وشروط الاختبار والملاحظة الناتجة؛ لون الراسب وحده قد لا يكفي للتمييز بين الأيونات.",
+        learning_action: "راجع جدول الكواشف النوعية وألوان الرواسب وظروف ذوبانها في الأحماض أو القواعد."
+      },
+      organic_reactions: {
+        reinforcement: "حدّد نوع التفاعل (إضافة، استبدال، نزع، أكسدة) والمجموعة الوظيفية المؤثرة وقاعدة ماركوفنيكوف عند إضافة متفاعل غير متماثل.",
+        learning_action: "اكتب الصيغة البنائية للمركب، ثم طبّق شروط التفاعل وقواعد التوجيه خطوة بخطوة."
+      }
+    };
+
     let totalPoints = 0, earnedPoints = 0;
     const results = questions.map(q => {
       totalPoints += q.points;
@@ -319,7 +354,32 @@ router.post('/:id/submit', authMiddleware, (req, res) => {
         };
       }
       if (isCorrect) earnedPoints += q.points;
-      return { question_id: q.id, user_answer: userAnswer, correct_answer: q.correct_answer, is_correct: isCorrect, explanation: q.explanation, points: q.points, options: q.options ? JSON.parse(q.options) : null, text: q.text, type: q.type, image_url: q.image_url };
+
+      let pedagogical_feedback = null;
+      if (!isCorrect) {
+        if (q.concept_key && feedbackByConcept[q.concept_key]) {
+          pedagogical_feedback = feedbackByConcept[q.concept_key];
+        } else if (q.explanation) {
+          pedagogical_feedback = {
+            reinforcement: q.explanation,
+            learning_action: "راجع النقطة العلمية الموضحة في تفسير السؤال لإتقان الفكرة."
+          };
+        }
+      }
+
+      return { 
+        question_id: q.id, 
+        user_answer: userAnswer, 
+        correct_answer: q.correct_answer, 
+        is_correct: isCorrect, 
+        explanation: q.explanation, 
+        pedagogical_feedback,
+        points: q.points, 
+        options: q.options ? JSON.parse(q.options) : null, 
+        text: q.text, 
+        type: q.type, 
+        image_url: q.image_url 
+      };
     });
 
     // Penalty for unanswered questions in random bank
@@ -331,7 +391,16 @@ router.post('/:id/submit', authMiddleware, (req, res) => {
     const score = totalPoints > 0 ? Math.round((earnedPoints / totalPoints) * 100) : 0;
     const hasEssay = questions.some(q => q.type === 'essay');
     const isGraded = hasEssay ? 0 : 1;
-    const result = db.prepare('INSERT INTO exam_attempts (exam_id, user_id, answers, score, total_points, time_spent, is_graded, completed_at) VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)').run(exam.id, req.user.id, JSON.stringify(answers || {}), score, totalPoints, serverTimeSpent, isGraded);
+
+    // Snapshot assigned question IDs and pedagogical feedback summary
+    const questionIdsJson = JSON.stringify(questions.map(q => q.id));
+    const pedagogicalSummary = JSON.stringify(results.filter(r => r.pedagogical_feedback).map(r => ({ q_id: r.question_id, feedback: r.pedagogical_feedback })));
+
+    const result = db.prepare(`
+      INSERT INTO exam_attempts (exam_id, user_id, answers, score, total_points, time_spent, is_graded, question_ids, pedagogical_feedback, completed_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+    `).run(exam.id, req.user.id, JSON.stringify(answers || {}), score, totalPoints, serverTimeSpent, isGraded, questionIdsJson, pedagogicalSummary);
+
     // Clear exam session on successful submission
     db.prepare('DELETE FROM exam_sessions WHERE user_id = ? AND exam_id = ?').run(req.user.id, exam.id);
     const rank = db.prepare('SELECT COUNT(*) + 1 as rank FROM exam_attempts WHERE exam_id = ? AND score > ? AND user_id != ?').get(exam.id, score, req.user.id);
@@ -573,7 +642,57 @@ function formatAttemptReview(attempt, exam, user) {
   try { userAnswers = attempt.answers ? JSON.parse(attempt.answers) : {}; } catch (e) {}
   try { essayGrades = attempt.essay_grades ? JSON.parse(attempt.essay_grades) : {}; } catch (e) {}
 
-  const questions = db.prepare('SELECT * FROM questions WHERE exam_id = ? ORDER BY order_num').all(exam.id);
+  let questions;
+  if (attempt.question_ids) {
+    try {
+      const qIds = JSON.parse(attempt.question_ids);
+      if (Array.isArray(qIds) && qIds.length > 0) {
+        const placeholders = qIds.map(() => '?').join(',');
+        questions = db.prepare(`SELECT * FROM questions WHERE id IN (${placeholders}) ORDER BY order_num`).all(...qIds);
+      } else {
+        questions = db.prepare('SELECT * FROM questions WHERE exam_id = ? ORDER BY order_num').all(exam.id);
+      }
+    } catch (e) {
+      questions = db.prepare('SELECT * FROM questions WHERE exam_id = ? ORDER BY order_num').all(exam.id);
+    }
+  } else {
+    questions = db.prepare('SELECT * FROM questions WHERE exam_id = ? ORDER BY order_num').all(exam.id);
+  }
+
+  const feedbackByConcept = {
+    iron_oxidation: {
+      reinforcement: "تتبّع عدد أكسدة الحديد قبل موازنة التفاعل. ميّز بين FeO وFe₂O₃ وFe₃O₄؛ الأخير يحتوي على الحديد بحالتي الأكسدة +2 و+3.",
+      learning_action: "راجع معادلات أكسدة الحديد واختزاله، واكتب أعداد الأكسدة ثم أعد موازنة المعادلة."
+    },
+    limiting_reagent: {
+      reinforcement: "وازن المعادلة ثم حوّل كميات المتفاعلات إلى مولات. قارن عدد المولات مقسوماً على معامل كل متفاعل؛ القيمة الأصغر تحدّد المادة المحدِّدة للتفاعل.",
+      learning_action: "أعد حساب عدد مولات المادة المحدِّدة للتفاعل، ثم احسب كمية الناتج باستخدام معاملات المعادلة."
+    },
+    stoichiometry: {
+      reinforcement: "ابدأ بالعلاقة n = m / M، ثم استخدم النسب المولية من المعادلة الموزونة. لا تقارن الكتل مباشرةً دون تحويلها إلى مولات.",
+      learning_action: "راجع حساب الكتلة المولية، وأعد الحل مع كتابة الوحدات في كل خطوة، ثم حل مسألتين على النسب المولية."
+    },
+    redox: {
+      reinforcement: "الأكسدة فقد إلكترونات وزيادة عدد الأكسدة، والاختزال اكتساب إلكترونات وانخفاض عدد الأكسدة. العامل المؤكسِد يُختزل والعامل المختزِل يتأكسد.",
+      learning_action: "حدّد أعداد الأكسدة والعاملين المؤكسِد والمختزِل، ثم اكتب نصفي التفاعل ووازن الإلكترونات."
+    },
+    chemical_equilibrium: {
+      reinforcement: "ميّز بين تغيّر موضع الاتزان وتغيّر ثابت الاتزان؛ عند ثبات درجة الحرارة لا تتغيّر قيمة K. لا تدخل المواد الصلبة والسوائل النقية في تعبير ثابت الاتزان.",
+      learning_action: "اكتب تعبير ثابت الاتزان من المعادلة الموزونة، ثم راجع أثر التغيّر المطلوب باستخدام مبدأ لوشاتلييه."
+    },
+    electrochemistry: {
+      reinforcement: "الأكسدة تحدث عند الأنود والاختزال عند الكاثود. ميّز بين الخلية الجلفانية وخلية التحليل الكهربائي عند تحديد إشارات الأقطاب.",
+      learning_action: "ارسم الخلية وحدّد الأنود والكاثود واتجاه انتقال الإلكترونات، ثم اكتب تفاعل كل قطب."
+    },
+    qualitative_analysis: {
+      reinforcement: "اربط الأيون بالكاشف وشروط الاختبار والملاحظة الناتجة؛ لون الراسب وحده قد لا يكفي للتمييز بين الأيونات.",
+      learning_action: "راجع جدول الكواشف النوعية وألوان الرواسب وظروف ذوبانها في الأحماض أو القواعد."
+    },
+    organic_reactions: {
+      reinforcement: "حدّد نوع التفاعل (إضافة، استبدال، نزع، أكسدة) والمجموعة الوظيفية المؤثرة وقاعدة ماركوفنيكوف عند إضافة متفاعل غير متماثل.",
+      learning_action: "اكتب الصيغة البنائية للمركب، ثم طبّق شروط التفاعل وقواعد التوجيه خطوة بخطوة."
+    }
+  };
 
   let totalPoints = 0;
   let earnedPoints = 0;
@@ -614,6 +733,18 @@ function formatAttemptReview(attempt, exam, user) {
 
     earnedPoints += questionEarned;
 
+    let pedagogical_feedback = null;
+    if (!isCorrect) {
+      if (q.concept_key && feedbackByConcept[q.concept_key]) {
+        pedagogical_feedback = feedbackByConcept[q.concept_key];
+      } else if (q.explanation) {
+        pedagogical_feedback = {
+          reinforcement: q.explanation,
+          learning_action: "راجع النقطة العلمية الموضحة في تفسير السؤال لإتقان الفكرة."
+        };
+      }
+    }
+
     return {
       id: q.id,
       text: q.text,
@@ -626,6 +757,7 @@ function formatAttemptReview(attempt, exam, user) {
       points: q.points,
       earned_points: questionEarned,
       explanation: q.explanation,
+      pedagogical_feedback,
       teacher_comment: teacherComment,
       is_essay: q.type === 'essay'
     };

@@ -1,18 +1,19 @@
 {
   "$schema": "https://opencode.ai/config.json",
-  "providers": {
-    "agentrouter": {
-      "name": "AgentRouter",
-      "package": "@opencode/ai/providers/openai-compatible",
-      "settings": {
-        "baseURL": "https://agentrouter.org/v1"
+  "model": "agentrouter-sol/gpt-6.1-sol",
+  "provider": {
+    "agentrouter-sol": {
+      "name": "AgentRouter Sol",
+      "npm": "@ai-sdk/openai-compatible",
+      "options": {
+        "baseURL": "http://127.0.0.1:4141/v1",
+        "apiKey": "sk-IjsujHV67XpJpLvi4FWqz8Z2srXhInPaPKTo6jeH5xaF5JPh"
       },
       "models": {
         "gpt-6.1-sol": {
-          "name": "GPT-6.1 SOL"
+          "name": "GPT-6.1 Sol"
         }
       }
     }
-  },
-  "model": "agentrouter/gpt-6.1-sol"
+  }
 }

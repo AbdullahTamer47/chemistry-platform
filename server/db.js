@@ -386,6 +386,9 @@ function addColumnIfMissing(table, column, def) {
 }
 addColumnIfMissing('enrollments', 'code_id', 'INTEGER');
 addColumnIfMissing('enrollments', 'payment_id', 'INTEGER');
+addColumnIfMissing('exam_attempts', 'question_ids', 'TEXT');
+addColumnIfMissing('exam_attempts', 'pedagogical_feedback', 'TEXT');
+addColumnIfMissing('questions', 'concept_key', 'TEXT');
 
 // Manual payment requests (Vodafone Cash / InstaPay / Fawry) reviewed by teacher
 db.exec(`

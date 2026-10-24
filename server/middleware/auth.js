@@ -40,17 +40,18 @@ function resolveUser(token) {
   try {
     const user = db.prepare('SELECT id, name, role, grade FROM users WHERE id = ?').get(decoded.id);
     if (user) return user;
+    // If the database query succeeded but the user wasn't found, the user has been deleted or deactivated.
+    return null;
   } catch (err) {
     console.warn('[Auth] DB lookup warning on serverless:', err.message);
+    // Fallback to verified JWT payload only during operational database outages on serverless
+    return {
+      id: decoded.id,
+      name: decoded.name || 'مستخدم المنصة',
+      role: decoded.role,
+      grade: decoded.grade || null
+    };
   }
-
-  // Fallback to verified JWT payload so serverless instances never lock out valid students!
-  return {
-    id: decoded.id,
-    name: decoded.name || 'مستخدم المنصة',
-    role: decoded.role,
-    grade: decoded.grade || null
-  };
 }
 
 export function authMiddleware(req, res, next) {

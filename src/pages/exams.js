@@ -906,6 +906,26 @@ export function renderResult(result, timeTaken) {
               ` 
               : ''
             }
+
+            <!-- Pedagogical Feedback (Thanawya Amma Chemistry Action Plan) -->
+            ${r.pedagogical_feedback 
+              ? `
+              <div style="margin-top:10px; background:rgba(99, 102, 241, 0.08); border-right:3px solid #6366f1; border-radius:var(--radius-md); padding:12px 16px; font-size:0.82rem; line-height:1.7;">
+                <div style="font-weight:800; color:#4f46e5; display:flex; align-items:center; gap:6px; margin-bottom:6px;">
+                  <span class="material-symbols-rounded" style="font-size:1.1rem;">psychology</span>
+                  <span>توجيه علمي لتثبيت المفهوم الكيميائي:</span>
+                </div>
+                <div style="color:var(--text-primary); margin-bottom:6px;">
+                  ${r.pedagogical_feedback.reinforcement}
+                </div>
+                <div style="font-weight:700; color:#059669; font-size:0.78rem; display:flex; align-items:center; gap:4px;">
+                  <span class="material-symbols-rounded" style="font-size:0.95rem;">assignment_turned_in</span>
+                  <span>الخطوة المقترحة للإتقان: ${r.pedagogical_feedback.learning_action}</span>
+                </div>
+              </div>
+              ` 
+              : ''
+            }
           </div>
         `;
       }).join('')}
