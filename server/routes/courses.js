@@ -122,17 +122,72 @@ router.post('/:id/enroll', authMiddleware, (req, res) => {
     const courseId = req.params.id;
     const course = db.prepare('SELECT id, title, is_free, price FROM courses WHERE id = ?').get(courseId);
     if (!course) return res.status(404).json({ error: 'الكورس غير موجود' });
-    if (!course.is_free && Number(course.price) > 0) {
-      return res.status(403).json({ error: 'هذا الكورس مدفوع، يرجى استخدام كود التفعيل أو إرسال طلب دفع' });
-    }
+
     const existing = db.prepare('SELECT id FROM enrollments WHERE user_id = ? AND course_id = ?').get(req.user.id, courseId);
     if (existing) return res.status(400).json({ error: 'أنت مشترك بالفعل في هذا الكورس' });
 
-    db.prepare('INSERT INTO enrollments (user_id, course_id) VALUES (?, ?)').run(req.user.id, courseId);
-    res.json({ message: 'تم الاشتراك في الكورس المجاني بنجاح', course_title: course.title });
+    // Free course enrollment
+    if (course.is_free || Number(course.price) === 0) {
+      db.prepare('INSERT INTO enrollments (user_id, course_id) VALUES (?, ?)').run(req.user.id, courseId);
+      db.prepare('INSERT INTO notifications (user_id, title, message, type) VALUES (?, ?, ?, ?)').run(
+        req.user.id,
+        'اشتراك جديد في الكورس',
+        `تم تفعيل اشتراكك في الكورس المجاني "${course.title}" بنجاح!`,
+        'success'
+      );
+      return res.json({ message: 'تم الاشتراك في الكورس المجاني بنجاح', course_title: course.title });
+    }
+
+    // Paid course via wallet balance
+    const coursePrice = Number(course.price);
+    
+    // Ensure student wallet exists
+    db.prepare('INSERT INTO student_wallets (user_id, balance) VALUES (?, 0) ON CONFLICT(user_id) DO NOTHING').run(req.user.id);
+    const wallet = db.prepare('SELECT balance FROM student_wallets WHERE user_id = ?').get(req.user.id);
+    const currentBalance = Number(wallet?.balance || 0);
+
+    if (currentBalance < coursePrice) {
+      return res.status(400).json({
+        error: `رصيد محفظتك الحالي (${currentBalance} ج) غير كافٍ. سعر الكورس هو ${coursePrice} ج. يرجى شحن المحفظة أولاً أو استخدام كود التفعيل.`
+      });
+    }
+
+    const tx = db.transaction(() => {
+      // Deduct balance
+      db.prepare('UPDATE student_wallets SET balance = balance - ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ?').run(coursePrice, req.user.id);
+      
+      // Record transaction
+      db.prepare("INSERT INTO wallet_transactions (user_id, amount, type, description) VALUES (?, ?, 'debit', ?)").run(
+        req.user.id,
+        -coursePrice,
+        `شراء كورس "${course.title}" من رصيد المحفظة`
+      );
+
+      // Enroll student
+      db.prepare('INSERT INTO enrollments (user_id, course_id) VALUES (?, ?)').run(req.user.id, courseId);
+
+      // Send notification
+      db.prepare('INSERT INTO notifications (user_id, title, message, type) VALUES (?, ?, ?, ?)').run(
+        req.user.id,
+        'تم شراء الكورس بنجاح 🎉',
+        `تم خصم ${coursePrice} ج من محفظتك وتفعيل كورس "${course.title}". نتمنى لك دراسة ممتعة!`,
+        'success'
+      );
+    });
+
+    tx();
+
+    const updatedWallet = db.prepare('SELECT balance FROM student_wallets WHERE user_id = ?').get(req.user.id);
+
+    res.json({
+      message: 'تم الاشتراك في الكورس بنجاح وخصم المبلغ من محفظتك 🎉',
+      course_title: course.title,
+      new_balance: updatedWallet.balance,
+      remaining_balance: updatedWallet.balance
+    });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'حدث خطأ في تفعيل الاشتراك' });
+    console.error('Course enroll error:', err);
+    res.status(500).json({ error: err.message || 'حدث خطأ في تفعيل الاشتراك' });
   }
 });
 

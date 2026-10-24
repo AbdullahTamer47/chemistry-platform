@@ -79,8 +79,13 @@ export async function initCourseDetail(id) {
   try {
     const course = await api.getCourse(id);
     let enrollment = null;
+    let userBalance = 0;
     if (logged) {
       try { enrollment = await api.getEnrollment(id); } catch (e) {}
+      try {
+        const dash = await api.getDashboard();
+        userBalance = Number(dash?.user?.balance || 0);
+      } catch (e) {}
     }
     const enrolled = enrollment?.enrolled || course.is_free || isTeacher();
 
@@ -497,20 +502,46 @@ export async function initCourseDetail(id) {
                   </span>
                 </div>
               ` : logged ? `
-                <h4 style="font-weight:900; font-size:1rem; margin-bottom:6px; display:flex; align-items:center; gap:6px;">
-                  <span class="material-symbols-rounded" style="color:var(--primary);">offline_bolt</span> تفعيل كود الكورس
-                </h4>
-                <p style="font-size:0.78rem; color:var(--text-secondary); margin-bottom:14px; line-height:1.6;">
-                  أدخل كود السنتر أو كود الشحن الإلكتروني لتفعيل وصولك الفوري للمحاضرات:
-                </p>
+                <div style="margin-bottom:16px;">
+                  ${course.is_free ? `
+                    <button class="btn btn-primary" id="freeEnrollBtn" style="width:100%; justify-content:center; margin-bottom:10px; font-weight:800; gap:6px;">
+                      <span class="material-symbols-rounded">verified</span> اشترك في الكورس المجاني الآن
+                    </button>
+                  ` : `
+                    <div style="background:var(--bg-secondary); border:1px solid var(--border-light); border-radius:12px; padding:12px 14px; margin-bottom:12px;">
+                      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; font-size:0.84rem;">
+                        <span style="color:var(--text-secondary);">سعر الكورس:</span>
+                        <strong style="color:var(--primary); font-size:1.05rem;">${course.price} ج.م</strong>
+                      </div>
+                      <div style="display:flex; justify-content:space-between; align-items:center; font-size:0.8rem;">
+                        <span style="color:var(--text-muted);">رصيد محفظتك الحالي:</span>
+                        <strong style="color:${userBalance >= course.price ? '#16a34a' : '#dc2626'}; font-weight:800;">${userBalance} ج.م</strong>
+                      </div>
+                    </div>
+
+                    ${userBalance >= course.price ? `
+                      <button class="btn btn-primary" id="walletEnrollBtn" style="width:100%; justify-content:center; margin-bottom:10px; font-weight:800; gap:6px;">
+                        <span class="material-symbols-rounded">account_balance_wallet</span> تأكيد الشراء من المحفظة (${course.price} ج)
+                      </button>
+                    ` : `
+                      <a href="#/wallet" class="btn btn-outline" style="width:100%; justify-content:center; margin-bottom:10px; font-weight:800; gap:6px;">
+                        <span class="material-symbols-rounded">payments</span> شحن المحفظة لشراء الكورس
+                      </a>
+                    `}
+                  `}
+                </div>
+
+                <div style="position:relative; text-align:center; margin:16px 0; border-top:1px dashed var(--border-light);">
+                  <span style="position:relative; top:-10px; background:var(--bg-card); padding:0 10px; font-size:0.75rem; color:var(--text-muted); font-weight:700;">أو التفعيل بكود السنتر</span>
+                </div>
 
                 <div class="input-group" style="margin-bottom:10px;">
                   <span class="material-symbols-rounded input-icon">key</span>
-                  <input type="text" class="form-input" id="activationCode" placeholder="أدخل كود التفعيل" style="padding-right:44px; font-weight:700;">
+                  <input type="text" class="form-input" id="activationCode" placeholder="أدخل كود السنتر / الشحن" style="padding-right:44px; font-weight:700;" dir="ltr">
                 </div>
                 
-                <button class="btn btn-primary" id="activateBtn" style="width:100%; justify-content:center; margin-bottom:10px;">
-                  <span class="material-symbols-rounded">bolt</span> تفعيل الاشتراك فوراً
+                <button class="btn btn-secondary" id="activateBtn" style="width:100%; justify-content:center; margin-bottom:10px; font-weight:700;">
+                  <span class="material-symbols-rounded">bolt</span> تفعيل الاشتراك بالكود
                 </button>
 
                 <p style="font-size:0.72rem; color:var(--text-muted); text-align:center; margin:0;">
@@ -795,7 +826,45 @@ export async function initCourseDetail(id) {
       });
     }
 
-    // 6. Activation code submit handler
+    // 6. Direct Wallet Purchase Handler
+    const walletEnrollBtn = document.getElementById('walletEnrollBtn');
+    walletEnrollBtn?.addEventListener('click', async () => {
+      const confirmed = await confirmModal(
+        'تأكيد شراء الكورس من المحفظة',
+        `هل تريد تأكيد خصم ${course.price} ج.م من رصيدك والاشتراك في كورس "${esc(course.title)}"؟`
+      );
+      if (!confirmed) return;
+
+      walletEnrollBtn.disabled = true;
+      walletEnrollBtn.innerHTML = '<span class="material-symbols-rounded spin-icon">sync</span> جاري الشراء...';
+      try {
+        const res = await api.enrollCourse(id);
+        showToast(res.message || 'تم الاشتراك بنجاح 🎉', 'success');
+        setTimeout(() => window.location.reload(), 1000);
+      } catch (err) {
+        showToast(err.message, 'error');
+        walletEnrollBtn.disabled = false;
+        walletEnrollBtn.innerHTML = `<span class="material-symbols-rounded">account_balance_wallet</span> تأكيد الشراء من المحفظة (${course.price} ج)`;
+      }
+    });
+
+    // 7. Free Course Direct Enroll Handler
+    const freeEnrollBtn = document.getElementById('freeEnrollBtn');
+    freeEnrollBtn?.addEventListener('click', async () => {
+      freeEnrollBtn.disabled = true;
+      freeEnrollBtn.innerHTML = '<span class="material-symbols-rounded spin-icon">sync</span> جاري الاشتراك...';
+      try {
+        const res = await api.enrollCourse(id);
+        showToast(res.message || 'تم الاشتراك في الكورس المجاني بنجاح', 'success');
+        setTimeout(() => window.location.reload(), 1000);
+      } catch (err) {
+        showToast(err.message, 'error');
+        freeEnrollBtn.disabled = false;
+        freeEnrollBtn.innerHTML = '<span class="material-symbols-rounded">verified</span> اشترك في الكورس المجاني الآن';
+      }
+    });
+
+    // 8. Activation code submit handler
     const activateBtn = document.getElementById('activateBtn');
     activateBtn?.addEventListener('click', async () => {
       const inputEl = document.getElementById('activationCode');

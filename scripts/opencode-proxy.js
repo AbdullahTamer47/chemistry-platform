@@ -41,10 +41,11 @@ function extractAndEmbedFiles(promptText) {
     }
   }
 
-  // 2. Check for folder mentions like @server or @src (strictly inside rootDir)
+  // 2. Check for explicit folder mentions like @server or @src (strictly inside rootDir)
   const allowedFolders = ['server', 'src', 'api'];
   for (const f of allowedFolders) {
-    if (promptText.includes(`@${f}`) || promptText.includes(`/${f}`) || promptText.includes(`\\${f}`)) {
+    const folderRegex = new RegExp(`@${f}\\b|\\b${f}/(?:\\*|all)\\b`, 'i');
+    if (folderRegex.test(promptText)) {
       try {
         const fullDir = path.join(rootDir, f);
         if (fs.existsSync(fullDir) && fs.statSync(fullDir).isDirectory()) {
