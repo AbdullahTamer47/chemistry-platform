@@ -141,8 +141,8 @@ router.get('/me', authMiddleware, (req, res) => {
   }
 });
 
-// Update profile (Father + Mother phones)
-router.put('/me', authMiddleware, (req, res) => {
+// Update profile (Father + Mother phones) - supports both /me and /profile
+router.put(['/me', '/profile'], authMiddleware, (req, res) => {
   try {
     const { name, grade, parent_phone, parent_phone_secondary } = req.body;
     db.prepare('UPDATE users SET name = COALESCE(?, name), grade = COALESCE(?, grade), parent_phone = COALESCE(?, parent_phone), parent_phone_secondary = COALESCE(?, parent_phone_secondary) WHERE id = ?')

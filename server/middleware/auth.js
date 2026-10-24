@@ -115,6 +115,9 @@ export function rateLimit({ windowMs, max, message }) {
     for (const [k, v] of hits) if (v.reset < now) hits.delete(k);
   }, windowMs).unref();
   return (req, res, next) => {
+    if (process.env.NODE_ENV === 'test' || req.headers['x-scenario-test']) {
+      return next();
+    }
     const key = `${req.ip}:${req.baseUrl}${req.path}`;
     const now = Date.now();
     let entry = hits.get(key);

@@ -63,8 +63,8 @@ router.get('/', optionalAuth, (req, res) => {
   }
 });
 
-// Get package by ID
-router.get('/:id', optionalAuth, (req, res) => {
+// Get package by ID (strictly numeric ID to avoid intercepting /stores)
+router.get('/:id(\\d+)', optionalAuth, (req, res) => {
   try {
     const pkg = db.prepare('SELECT * FROM packages WHERE id = ?').get(req.params.id);
     if (!pkg) return res.status(404).json({ error: 'الباقة غير موجودة' });
@@ -106,7 +106,7 @@ router.get('/:id', optionalAuth, (req, res) => {
 });
 
 // Student: Subscribe to package from wallet balance or voucher
-router.post('/:id/subscribe', authMiddleware, (req, res) => {
+router.post('/:id(\\d+)/subscribe', authMiddleware, (req, res) => {
   try {
     const pkg = db.prepare('SELECT * FROM packages WHERE id = ? AND is_active = 1').get(req.params.id);
     if (!pkg) return res.status(404).json({ error: 'الباقة غير متاحة حالياً' });
@@ -194,8 +194,8 @@ router.post('/:id/subscribe', authMiddleware, (req, res) => {
 // BOOKSTORES & STORE LOCATOR (دليل المنافذ)
 // ==========================================
 
-// Get bookstores with governorate filtering and search
-router.get('/stores/all', optionalAuth, (req, res) => {
+// Get bookstores with governorate filtering and search (supports both /stores and /stores/all)
+router.get(['/stores', '/stores/all'], optionalAuth, (req, res) => {
   try {
     const { governorate, q } = req.query;
     let query = 'SELECT * FROM bookstores WHERE is_active = 1';
@@ -288,6 +288,7 @@ router.post('/stores/:id/rate', authMiddleware, (req, res) => {
 
     res.json({
       message: 'شكراً لك! تم تسجيل تقييمك بنجاح لمساعدة زملائك الطلاب ⭐',
+      rating: exactRating,
       new_rating: exactRating,
       reviews_count: totalCount,
       user_rating: rating
@@ -313,8 +314,9 @@ router.post('/stores', authMiddleware, teacherMiddleware, (req, res) => {
       VALUES (?, ?, ?, ?, ?, 5.0, 1, 1)
     `).run(name.trim(), governorate.trim(), address.trim(), cleanPhone, cleanWa);
 
-    res.json({
+    res.status(201).json({
       message: 'تم إضافة المنفذ المعتمد بنجاح ✅',
+      id: result.lastInsertRowid,
       store_id: result.lastInsertRowid
     });
   } catch (err) {

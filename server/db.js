@@ -15,6 +15,7 @@ if (!isVercel) {
     db = new Database(dbPath);
     try {
       db.pragma('journal_mode = WAL');
+      db.pragma('temp_store = MEMORY');
       db.pragma('foreign_keys = ON');
     } catch (e) {}
   } catch (err) {
