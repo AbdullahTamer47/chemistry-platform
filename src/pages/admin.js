@@ -644,8 +644,23 @@ export async function initAdminStudents() {
               <div style="max-height:200px;overflow-y:auto;margin-bottom:20px">${examsHtml}</div>
               <h4 style="font-weight:700;margin-bottom:12px;display:flex;align-items:center;gap:6px"><span class="material-symbols-rounded" style="color:var(--info)">play_circle</span> استهلاك المشاهدات (الدروس)</h4>
               <div style="max-height:200px;overflow-y:auto">${lessonsHtml}</div>
-              <button class="btn btn-secondary btn-block" style="margin-top:20px" onclick="document.querySelector('.modal-overlay')?.remove()">إغلاق</button>
+              <div style="display:flex;gap:10px;margin-top:20px;">
+                <button class="btn btn-secondary flex-1" onclick="document.querySelector('.modal-overlay')?.remove()">إغلاق</button>
+                <button class="btn btn-outline-danger" id="modalResetDeviceBtn" style="border:1px solid var(--error);color:var(--error);gap:6px;">
+                  <span class="material-symbols-rounded" style="font-size:1.1rem;">devices_off</span> إعادة ضبط الأجهزة
+                </button>
+              </div>
             `);
+
+            document.getElementById('modalResetDeviceBtn')?.addEventListener('click', async () => {
+              const ok = await confirmModal('إعادة ضبط الأجهزة', `هل أنت متأكد من مسح الأجهزة المسجلة للطالب ${s.name}؟ سيمكنه ذلك من الدخول من أجهزة جديدة.`);
+              if (ok) {
+                try {
+                  const res = await api.resetStudentDevices(s.id);
+                  showToast(res.message || 'تمت إعادة الضبط بنجاح', 'success');
+                } catch(err) { showToast(err.message, 'error'); }
+              }
+            });
           } catch(err) { showToast('تعذر تحميل التقرير', 'error'); }
         });
       });
@@ -713,6 +728,33 @@ export async function initAdminStudents() {
         });
       });
 
+      document.querySelectorAll('.wa-st-btn').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          const s = students.find(x => x.id == btn.dataset.id);
+          try {
+            const rep = await api.getStudentWhatsAppReport(s.id);
+            showModal(`تقرير ولي الأمر (واتساب) — ${s.name}`, `
+              <div style="text-align:right;">
+                <p style="font-size:0.85rem; color:var(--text-secondary); margin-bottom:12px;">نص التقرير الجاهز للإرسال:</p>
+                <div style="background:var(--bg-secondary); border:1px solid var(--border-light); border-radius:8px; padding:12px; font-size:0.85rem; line-height:1.6; white-space:pre-wrap; margin-bottom:16px;">${rep.report_text}</div>
+                <div style="display:flex; flex-direction:column; gap:10px;">
+                  ${rep.whatsapp_parent_url ? `
+                    <a href="${rep.whatsapp_parent_url}" target="_blank" class="btn btn-primary btn-block" style="background:#25D366; border-color:#25D366; gap:8px;">
+                      <span class="material-symbols-rounded">chat</span> إرسال لولي الأمر الأول (الأب) عبر واتساب
+                    </a>
+                  ` : '<p style="font-size:0.8rem; color:var(--error);">لم يتم تسجيل رقم ولي الأمر الأول</p>'}
+                  ${rep.whatsapp_parent_secondary_url ? `
+                    <a href="${rep.whatsapp_parent_secondary_url}" target="_blank" class="btn btn-secondary btn-block" style="gap:8px;">
+                      <span class="material-symbols-rounded">chat</span> إرسال لولي الأمر الثاني (الأم) عبر واتساب
+                    </a>
+                  ` : ''}
+                </div>
+              </div>
+            `);
+          } catch(err) { showToast(err.message, 'error'); }
+        });
+      });
+
       document.querySelectorAll('.delete-st-btn').forEach(btn => {
         btn.addEventListener('click', async () => {
           const ok = await confirmModal('تأكيد حذف الطالب', 'هل أنت متأكد من حذف حساب الطالب نهائياً؟ سيتم حذف جميع اشتراكاته ودرجاته.');
@@ -738,6 +780,7 @@ export async function initAdminStudents() {
         return `<div class="mobile-swipe-hint"><span class="material-symbols-rounded">swipe</span> اسحب أفقياً لعرض باقي سجلات الطلاب</div><div class="table-wrapper"><table><thead><tr><th>الاسم</th><th>الهاتف</th><th>المرحلة</th><th>الكورسات</th><th>المعدل</th><th>إجراءات</th></tr></thead><tbody>
           ${items.map(s => `<tr><td style="font-weight:600">${s.name}</td><td dir="ltr">${s.phone}</td><td>${s.grade || '-'}</td><td>${s.enrolled_courses}</td><td><span class="badge ${(s.avg_score || 0) >= 60 ? 'badge-success' : 'badge-danger'}">${s.avg_score || 0}%</span></td>
           <td><div style="display:flex;gap:4px">
+            <button class="btn btn-ghost btn-sm wa-st-btn" data-id="${s.id}" title="تقرير الواتساب لولي الأمر"><span class="material-symbols-rounded" style="color:#25D366">chat</span></button>
             <button class="btn btn-ghost btn-sm report-st-btn" data-id="${s.id}" title="تقرير الطالب"><span class="material-symbols-rounded" style="color:var(--info)">analytics</span></button>
             <button class="btn btn-ghost btn-sm edit-st-btn" data-id="${s.id}" title="تعديل"><span class="material-symbols-rounded">edit</span></button>
             <button class="btn btn-ghost btn-sm text-danger delete-st-btn" data-id="${s.id}" title="حذف" style="color:var(--error)"><span class="material-symbols-rounded">delete</span></button>

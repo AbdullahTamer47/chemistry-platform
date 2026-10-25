@@ -115,9 +115,15 @@ export function initLogin() {
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     const btn = document.getElementById('loginBtn');
+    if (btn.disabled) return; // prevent double-submit
+
+    // Read values synchronously BEFORE any async work
+    const phone = normalizeDigits(document.getElementById('loginPhone').value);
+    const password = document.getElementById('loginPassword').value;
+
     btn.disabled = true;
     btn.innerHTML = '<span class="material-symbols-rounded spin-icon">sync</span> جاري تسجيل الدخول...';
-    
+
     try {
       let deviceId = localStorage.getItem('chem_device_id');
       if (!deviceId) {
@@ -126,20 +132,19 @@ export function initLogin() {
       }
       const deviceName = /Mobi|Android/i.test(navigator.userAgent) ? 'موبايل' : 'كمبيوتر / لابتوب';
 
-      const data = await api.login({
-        phone: normalizeDigits(document.getElementById('loginPhone').value),
-        password: passwordInput.value,
-        device_id: deviceId,
-        device_name: deviceName
-      });
+      const data = await api.login({ phone, password, device_id: deviceId, device_name: deviceName });
       setAuth(data.user, data.token);
       showToast(`مرحباً بك ${data.user.name.split(' ')[0]}!`, 'success');
       const isT = data.user.role === 'teacher' || data.user.role === 'admin';
       window.location.hash = isT ? '#/admin' : '#/dashboard';
     } catch (err) {
       showToast(err.message, 'error');
-      btn.disabled = false;
-      btn.innerHTML = '<span class="material-symbols-rounded">login</span> تسجيل الدخول';
+    } finally {
+      // Always re-enable the button — even on network errors or timeouts
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = '<span class="material-symbols-rounded">login</span> تسجيل الدخول';
+      }
     }
   });
 }
@@ -273,12 +278,14 @@ export function initRegister() {
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     const btn = document.getElementById('regBtn');
-    
-    // Normalize and validate phone numbers
+    if (btn.disabled) return; // prevent double-submit
+
+    // Normalize and validate phone numbers — read synchronously before async
     const parentPhone = normalizeDigits(document.getElementById('regParentPhone').value);
     const studentPhone = normalizeDigits(document.getElementById('regPhone').value);
     const grade = document.getElementById('regGrade').value;
     const name = document.getElementById('regName').value.trim();
+    const password = passwordInput.value;
 
     if (!name) {
       showToast('يرجى إدخال الاسم بالكامل', 'warning');
@@ -307,22 +314,20 @@ export function initRegister() {
 
     btn.disabled = true;
     btn.innerHTML = '<span class="material-symbols-rounded spin-icon">sync</span> جاري إنشاء الحساب...';
-    
+
     try {
-      const data = await api.register({
-        name,
-        phone: studentPhone,
-        password: passwordInput.value,
-        grade,
-        parent_phone: parentPhone
-      });
+      const data = await api.register({ name, phone: studentPhone, password, grade, parent_phone: parentPhone });
       setAuth(data.user, data.token);
       showToast('تم إنشاء حسابك بنجاح! مرحباً بك', 'success');
       window.location.hash = '#/dashboard';
     } catch (err) {
       showToast(err.message, 'error');
-      btn.disabled = false;
-      btn.innerHTML = '<span class="material-symbols-rounded">person_add</span> إنشاء حسابي الآن';
+    } finally {
+      // Always re-enable the button — even on network errors or timeouts
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = '<span class="material-symbols-rounded">person_add</span> إنشاء حسابي الآن';
+      }
     }
   });
 }

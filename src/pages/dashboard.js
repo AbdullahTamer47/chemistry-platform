@@ -3,8 +3,10 @@ import { api } from '../utils/api.js';
 import { getUser } from '../utils/auth.js';
 import { showToast } from '../components/toast.js';
 import { getInitials, formatCurrency } from '../utils/helpers.js';
+import { safeSetHTML, errorState } from '../utils/dom.js';
 import chemCurriculum from '../assets/chem-curriculum-3d.jpg';
 import { openChemistryLabModal } from '../components/chemistryLabModal.js';
+
 
 export function renderDashboard() {
   const user = getUser();
@@ -92,8 +94,9 @@ export async function initDashboard() {
     if (hour < 12) greeting = 'صباح الخير';
     else if (hour < 17) greeting = 'طاب ظهرك';
     else greeting = 'مساء النور';
-    
-    document.getElementById('dashWelcome').innerHTML = `
+
+    // Guard: if the user navigated away, safeSetHTML returns false and we bail
+    const welcomeOk = safeSetHTML('dashWelcome', `
       <div style="background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%); border-radius: var(--radius-xl); padding: clamp(16px, 3.5vw, 28px) clamp(16px, 4vw, 32px); color: white; display: flex; align-items: center; gap: clamp(12px, 3vw, 24px); box-shadow: var(--shadow-lg); position: relative; overflow: hidden; flex-wrap: wrap;">
         <div style="position: absolute; left: 0; top: 0; bottom: 0; width: 30%; background: radial-gradient(circle at center left, rgba(255,255,255,0.08) 0%, transparent 70%); pointer-events: none;"></div>
         <div style="width: clamp(48px, 6vw, 64px); height: clamp(48px, 6vw, 64px); border-radius: 50%; background: rgba(255,255,255,0.18); backdrop-filter: blur(8px); display: flex; align-items: center; justify-content: center; font-size: clamp(1.2rem, 2.5vw, 1.5rem); font-weight: 800; border: 2px solid rgba(255,255,255,0.3); flex-shrink: 0;">
@@ -107,10 +110,11 @@ export async function initDashboard() {
           </p>
         </div>
       </div>
-    `;
+    `);
+    if (!welcomeOk) return; // user navigated away
 
     // 2. Stats Grid
-    document.getElementById('dashStats').innerHTML = `
+    safeSetHTML('dashStats', `
       <!-- Balance Card -->
       <div class="stat-card">
         <div class="stat-icon gold"><span class="material-symbols-rounded">payments</span></div>
@@ -148,11 +152,11 @@ export async function initDashboard() {
           <div class="stat-label">امتحانات تم حلها</div>
         </div>
       </div>
-    `;
+    `);
 
     // 3. Active Courses
     const courses = data.activeCourses || [];
-    document.getElementById('dashCourses').innerHTML = courses.length === 0
+    safeSetHTML('dashCourses', courses.length === 0
       ? `
         <div class="card" style="padding: 40px; text-align: center; display:flex; flex-direction:column; align-items:center;">
           <span class="material-symbols-rounded" style="font-size: 3.2rem; color: var(--text-muted); margin-bottom:12px;">school</span>
@@ -183,11 +187,11 @@ export async function initDashboard() {
             متابعة <span class="material-symbols-rounded" style="font-size:1.1rem;">arrow_left</span>
           </button>
         </div>
-      `).join('');
+      `).join(''));
 
     // 4. Recent Activity Timeline
     const activities = data.recentActivity || [];
-    document.getElementById('dashActivity').innerHTML = activities.length === 0
+    safeSetHTML('dashActivity', activities.length === 0
       ? '<p style="font-size: 0.8rem; color: var(--text-muted); text-align: center; padding: 12px 0;">لا توجد نشاطات مؤخراً</p>'
       : `<div style="display: flex; flex-direction: column; gap: 14px; position: relative; padding-right: 12px; border-right: 2px solid var(--border-light); margin-right: 6px;">
           ${activities.map(act => {
@@ -196,10 +200,8 @@ export async function initDashboard() {
             if (act.action.includes('امتحان')) { icon = 'assignment_turned_in'; color = 'var(--primary)'; }
             else if (act.action.includes('شحن') || act.action.includes('محفظة')) { icon = 'payments'; color = 'var(--accent)'; }
             else if (act.action.includes('تفعيل') || act.action.includes('كورس')) { icon = 'auto_stories'; color = 'var(--info)'; }
-            
             return `
               <div style="position: relative;">
-                <!-- Timeline dot -->
                 <div style="position: absolute; right: -19px; top: 4px; width: 12px; height: 12px; border-radius: 50%; background: ${color}; border: 3px solid var(--bg-card); box-shadow: 0 0 0 1px var(--border);"></div>
                 <div style="display: flex; gap: 10px; align-items: flex-start;">
                   <span class="material-symbols-rounded" style="font-size:1.1rem; color:${color}; margin-top:2px;">${icon}</span>
@@ -211,9 +213,12 @@ export async function initDashboard() {
               </div>
             `;
           }).join('')}
-        </div>`;
+        </div>`);
 
   } catch (err) {
-    showToast(err.message, 'error');
+    // Show error in the welcome area if it's still mounted
+    if (!safeSetHTML('dashWelcome', errorState(err.message))) {
+      showToast(err.message, 'error');
+    }
   }
 }

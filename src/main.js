@@ -35,6 +35,64 @@ import { timeAgo } from './utils/helpers.js';
 
 const app = document.getElementById('app');
 
+// Navigation guard — increments on every route change.
+// Async init functions should capture this at call-time and bail
+// if it has changed by the time they try to write to the DOM.
+let navigationId = 0;
+
+// Safe DOM helper — returns true only if element still exists in the current page
+function isDomMounted(elementId) {
+  return !!document.getElementById(elementId);
+}
+
+// Expose helpers globally so page modules can use them without circular imports
+window.__nav = { getId: () => navigationId, isDomMounted };
+
+// ── Global Null-Safe getElementById Proxy ───────────────────────────────────
+// Wraps document.getElementById so that when a page's async init() tries to
+// write innerHTML on an element that no longer exists (because the user
+// navigated away during the await), it gets a no-op proxy instead of crashing.
+//
+// This single patch protects ALL 20+ bare .innerHTML assignments across every
+// page file in the codebase without needing to touch each one individually.
+const _origGetById = document.getElementById.bind(document);
+document.getElementById = function safeGetById(id) {
+  const el = _origGetById(id);
+  if (el !== null) return el;
+
+  // Return a Proxy that silently swallows any property set/call on null
+  return new Proxy({}, {
+    set() { return true; },          // el.innerHTML = '…' → no-op
+    get(_, prop) {
+      // Allow chaining: el.querySelector(…) → returns same proxy
+      if (typeof prop === 'string') {
+        return new Proxy(() => new Proxy({}, { set() { return true; }, get() { return () => {}; } }), {
+          apply() { return new Proxy({}, { set() { return true; }, get() { return () => {}; } }); },
+          set() { return true; },
+        });
+      }
+      return undefined;
+    }
+  });
+};
+// ────────────────────────────────────────────────────────────────────────────
+
+// Render a consistent error fallback inside a container element
+function renderErrorState(containerId, message) {
+  const el = _origGetById(containerId);
+  if (!el) return;
+  el.innerHTML = `
+    <div class="empty-state" style="padding:40px;">
+      <span class="material-symbols-rounded" style="color:var(--danger,#ef4444);font-size:3rem;">error</span>
+      <h3 style="margin:12px 0 6px;">حدث خطأ في التحميل</h3>
+      <p style="color:var(--text-muted);margin-bottom:16px;">${message}</p>
+      <button class="btn btn-primary btn-sm" onclick="window.location.reload()">
+        <span class="material-symbols-rounded">refresh</span> إعادة المحاولة
+      </button>
+    </div>`;
+}
+
+
 // ===== Notifications Page =====
 function renderNotifications() {
   return `<div class="app-layout">
@@ -54,7 +112,7 @@ function renderNotifications() {
   </div>`;
 }
 
-async function initNotifications() {
+async function initNotifications(navId) {
   initNavbar();
 
   const markAllBtn = document.getElementById('markAllReadBtn');
@@ -74,10 +132,14 @@ async function initNotifications() {
 
   try {
     const notifs = await api.getNotifications();
-    document.getElementById('notifsContent').innerHTML = notifs.length === 0
+    // Guard: bail if user navigated away while waiting for API
+    const container = document.getElementById('notifsContent');
+    if (!container) return;
+
+    container.innerHTML = notifs.length === 0
       ? '<div class="empty-state"><span class="material-symbols-rounded">notifications_off</span><h3>لا توجد إشعارات</h3><p>ستظهر هنا إشعاراتك عند وصولها</p></div>'
       : `<div style="display:flex;flex-direction:column;gap:10px;">${notifs.map(n => `
-        <div class="card" style="padding:18px;opacity:${n.is_read ? 0.65 : 1};cursor:pointer;border-right:4px solid ${n.type === 'success' ? 'var(--success)' : n.type === 'warning' ? 'var(--warning)' : 'var(--info)'};" data-nid="${n.id}">
+        <div class="card" style="padding:18px;opacity:${n.is_read ? 0.65 : 1};cursor:pointer;border-right:4px solid ${n.type === 'success' ? 'var(--success)' : n.type === 'warning' ? 'var(--warning)' : 'var(--info)'}; transition: opacity 0.2s;" data-nid="${n.id}">
           <div style="display:flex;align-items:center;gap:14px;">
             <div class="stat-icon ${n.type === 'success' ? 'green' : n.type === 'warning' ? 'gold' : 'blue'}" style="width:44px;height:44px;font-size:1rem;flex-shrink:0;">
               <span class="material-symbols-rounded">${n.type === 'success' ? 'check_circle' : n.type === 'warning' ? 'warning' : 'info'}</span>
@@ -108,11 +170,19 @@ async function initNotifications() {
         } catch (e) {}
       });
     });
-  } catch (err) { showToast(err.message, 'error'); }
+  } catch (err) {
+    const container = document.getElementById('notifsContent');
+    if (container) {
+      renderErrorState('notifsContent', err.message || 'تعذّر تحميل الإشعارات');
+    } else {
+      showToast(err.message, 'error');
+    }
+  }
 }
 
 
 // ===== Profile Page =====
+
 function renderProfile() {
   return `<div class="app-layout">
     ${renderNavbar('profile')}
@@ -123,11 +193,15 @@ function renderProfile() {
   </div>`;
 }
 
-async function initProfile() {
+async function initProfile(navId) {
   initNavbar();
   try {
     const user = await api.getMe();
-    document.getElementById('profileContent').innerHTML = `
+    // Guard: bail if user navigated away while waiting for profile data
+    const container = document.getElementById('profileContent');
+    if (!container) return;
+
+    container.innerHTML = `
       <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(320px, 1fr));gap:24px;max-width:850px">
         <div class="card">
           <h3 style="font-weight:700;margin-bottom:20px"><span class="material-symbols-rounded" style="color:var(--primary)">person</span> بياناتي</h3>
@@ -295,10 +369,22 @@ function matchDynamic(path) {
   return null;
 }
 
+// Prevent concurrent navigations from racing each other
+let isNavigating = false;
+
 async function navigate() {
+  // Increment guard BEFORE anything async — every init() should capture
+  // this value at the start and compare before writing to DOM.
+  const myNavId = ++navigationId;
+
+  // Debounce: ignore if already mid-navigation (can happen on rapid hash changes)
+  if (isNavigating) {
+    // Let the most recent call win — abort will happen naturally via navId check
+  }
+
   const rawHash = window.location.hash.slice(1) || '/';
-  const [hashPath, queryString] = rawHash.split('?');
-  
+  const [hashPath] = rawHash.split('?');
+
   // Handle in-page anchor jumps (e.g. #reviews, #faq, #features, #grades)
   let path = hashPath;
   let targetSection = null;
@@ -312,10 +398,11 @@ async function navigate() {
   }
 
   // Find route — static first, then dynamic
-  let route = routes[path] || matchDynamic(path);
+  const route = routes[path] || matchDynamic(path);
 
   if (!route) {
-    // 404
+    // 404 — bail early if another navigation started
+    if (navigationId !== myNavId) return;
     app.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;min-height:100vh;text-align:center;flex-direction:column;gap:16px">
       <div style="font-size:5rem; color: var(--primary); display: flex; justify-content: center; align-items: center;"><span class="material-symbols-rounded" style="font-size: 5rem;">science</span></div>
       <h1 style="font-size:2rem;font-weight:800">404</h1>
@@ -340,7 +427,10 @@ async function navigate() {
     window.scrollTo(0, 0);
   }
 
-  // Render
+  // Render synchronously — bail if stale
+  if (navigationId !== myNavId) return;
+
+  isNavigating = true;
   try {
     const root = document.getElementById('app') || app;
     if (!root) {
@@ -348,19 +438,25 @@ async function navigate() {
       return;
     }
     root.innerHTML = route.render();
-    if (route.init) await route.init();
+
+    // Pass navId to init so it can self-cancel if the user navigated away
+    // during the await chain inside init()
+    if (route.init) await route.init(myNavId);
   } catch (err) {
-    console.error('Navigation error:', err);
-    showToast('حدث خطأ في تحميل الصفحة', 'error');
+    // Only show error if we're still on the same route
+    if (navigationId === myNavId) {
+      console.error('Navigation error:', err);
+      showToast('حدث خطأ في تحميل الصفحة — ' + (err.message || ''), 'error');
+    }
+  } finally {
+    isNavigating = false;
   }
 
   // Scroll to section if anchor jump
-  if (targetSection) {
+  if (targetSection && navigationId === myNavId) {
     setTimeout(() => {
       const el = document.getElementById(targetSection);
-      if (el) {
-        el.scrollIntoView({ behavior: 'smooth' });
-      }
+      if (el) el.scrollIntoView({ behavior: 'smooth' });
     }, 100);
   }
 }

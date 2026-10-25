@@ -226,6 +226,65 @@ router.get('/', authMiddleware, teacherMiddleware, (req, res) => {
   } catch (err) { res.status(500).json({ error: 'حدث خطأ' }); }
 });
 
+// Teacher: Get manual WhatsApp Progress Report for a student
+router.get('/:id/whatsapp-report', authMiddleware, teacherMiddleware, (req, res) => {
+  try {
+    const student = db.prepare('SELECT id, name, phone, grade, parent_phone, parent_phone_secondary FROM users WHERE id = ? AND role = ?').get(req.params.id, 'student');
+    if (!student) return res.status(404).json({ error: 'الطالب غير موجود' });
+
+    const stats = db.prepare(`
+      SELECT COUNT(*) as exams_taken, ROUND(AVG(score), 1) as avg_score
+      FROM exam_attempts WHERE user_id = ? AND completed_at IS NOT NULL
+    `).get(student.id);
+
+    const activeCourses = db.prepare(`
+      SELECT c.title FROM courses c JOIN enrollments e ON c.id = e.course_id WHERE e.user_id = ?
+    `).all(student.id).map(c => c.title).join('، ');
+
+    const msg = `تقرير متابعة الطالب/ة: ${student.name} (${student.grade})\n` +
+      `-----------------------------------\n` +
+      `عدد الاختبارات المنجزة: ${stats.exams_taken || 0}\n` +
+      `متوسط الدرجات الكلي: ${stats.avg_score || 0}%\n` +
+      `الكورسات المفعلة: ${activeCourses || 'لا يوجد كورسات مفعلة حالياً'}\n` +
+      `-----------------------------------\n` +
+      `نتمنى له المزيد من التوفيق والنجاح! منصة د. زياد رمزي عياد للكيمياء.`;
+
+    let whatsapp_parent_url = null;
+    let whatsapp_parent_secondary_url = null;
+
+    if (student.parent_phone) {
+      const text = encodeURIComponent(`السلام عليكم ورحمة الله، ولي أمر الطالب/ة ${student.name}.\n\n${msg}`);
+      whatsapp_parent_url = `https://wa.me/20${student.parent_phone.replace(/^0+/, '')}?text=${text}`;
+    }
+
+    if (student.parent_phone_secondary) {
+      const textSecondary = encodeURIComponent(`السلام عليكم ورحمة الله، والدة الطالب/ة ${student.name}.\n\n${msg}`);
+      whatsapp_parent_secondary_url = `https://wa.me/20${student.parent_phone_secondary.replace(/^0+/, '')}?text=${textSecondary}`;
+    }
+
+    res.json({
+      student_id: student.id,
+      student_name: student.name,
+      report_text: msg,
+      whatsapp_parent_url,
+      whatsapp_parent_secondary_url
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'حدث خطأ في إنشاء تقرير الواتساب' });
+  }
+});
+
+// Teacher: Clear registered devices for a student (Device Binding Reset)
+router.delete('/:id/devices', authMiddleware, teacherMiddleware, (req, res) => {
+  try {
+    db.prepare('DELETE FROM user_devices WHERE user_id = ?').run(req.params.id);
+    res.json({ message: 'تم إعادة ضبط وتسجيل أجهزة الطالب بنجاح' });
+  } catch (err) {
+    res.status(500).json({ error: 'حدث خطأ في إعادة ضبط أجهزة الطالب' });
+  }
+});
+
 // Get student details (AFTER specific routes)
 router.get('/:id', authMiddleware, teacherMiddleware, (req, res) => {
   try {

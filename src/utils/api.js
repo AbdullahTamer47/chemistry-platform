@@ -1,5 +1,8 @@
 const API_BASE = import.meta.env.VITE_API_BASE || '/api';
 
+// Default timeout in ms — override per-call via options.timeout
+const DEFAULT_TIMEOUT_MS = 20000;
+
 function getToken() {
   return localStorage.getItem('token');
 }
@@ -25,7 +28,24 @@ async function request(endpoint, options = {}) {
     config.body = isFormData ? options.body : JSON.stringify(options.body);
   }
 
-  const res = await fetch(`${API_BASE}${endpoint}`, config);
+  // AbortController for timeout support
+  const controller = new AbortController();
+  const timeoutMs = options.timeout ?? DEFAULT_TIMEOUT_MS;
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  config.signal = controller.signal;
+
+  let res;
+  try {
+    res = await fetch(`${API_BASE}${endpoint}`, config);
+  } catch (fetchErr) {
+    clearTimeout(timeoutId);
+    if (fetchErr.name === 'AbortError') {
+      throw new Error('انتهت مهلة الطلب — يرجى التحقق من الاتصال بالإنترنت والمحاولة مرة أخرى');
+    }
+    // Network error (offline, server down, etc.)
+    throw new Error('لا يمكن الوصول للخادم — تأكد من اتصالك بالإنترنت وحاول مجدداً');
+  }
+  clearTimeout(timeoutId);
 
   // 401 Session Handling (Recommended by gpt-6.1-sol)
   if (res.status === 401) {
@@ -146,6 +166,8 @@ export const api = {
   getStudent: (id) => request(`/students/${id}`),
   updateStudent: (id, body) => request(`/students/${id}`, { method: 'PUT', body }),
   deleteStudent: (id) => request(`/students/${id}`, { method: 'DELETE' }),
+  getStudentWhatsAppReport: (id) => request(`/students/${id}/whatsapp-report`),
+  resetStudentDevices: (id) => request(`/students/${id}/devices`, { method: 'DELETE' }),
   getDashboardStats: () => request('/students/stats/dashboard'),
 
   // Notifications

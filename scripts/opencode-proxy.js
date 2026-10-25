@@ -346,6 +346,197 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  // 3. Anthropic Messages endpoint (for Claude Code)
+  if (req.url?.includes('/messages')) {
+    let bodyData = '';
+    req.on('data', chunk => { bodyData += chunk; });
+    req.on('end', async () => {
+      try {
+        const body = JSON.parse(bodyData || '{}');
+        const messages = body.messages || [];
+        const system = body.system || '';
+
+        let promptText = '';
+        if (typeof system === 'string' && system) {
+          promptText += `[SYSTEM]:\n${system}\n\n`;
+        } else if (Array.isArray(system)) {
+          const sysText = system.map(s => typeof s === 'string' ? s : s.text || JSON.stringify(s)).join('\n');
+          promptText += `[SYSTEM]:\n${sysText}\n\n`;
+        }
+
+        for (const m of messages) {
+          const role = (m.role || 'user').toUpperCase();
+          let contentStr = '';
+          if (typeof m.content === 'string') {
+            contentStr = m.content;
+          } else if (Array.isArray(m.content)) {
+            contentStr = m.content.map(c => {
+              if (typeof c === 'string') return c;
+              if (c.type === 'text') return c.text;
+              if (c.type === 'tool_result') return `[Tool Result ${c.tool_use_id || ''}]:\n${typeof c.content === 'string' ? c.content : JSON.stringify(c.content)}`;
+              if (c.type === 'tool_use') return `[Tool Use ${c.name}]:\n${JSON.stringify(c.input)}`;
+              return JSON.stringify(c);
+            }).join('\n');
+          } else {
+            contentStr = JSON.stringify(m.content);
+          }
+          promptText += `[${role}]:\n${contentStr}\n\n`;
+        }
+
+        const isStream = !!body.stream;
+        const msgId = `msg_${Date.now()}`;
+
+        const payload = JSON.stringify({
+          model: 'gpt-6.1-sol',
+          input: promptText.trim(),
+          stream: true
+        });
+
+        console.log(`[Proxy] Forwarding Claude Code Anthropic request to AgentRouter (${Buffer.byteLength(payload)}b, stream=${isStream})...`);
+
+        let streamAccumulated = '';
+        let sseBuffer = '';
+
+        const agentReq = https.request(TARGET_URL, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': req.headers.authorization || `Bearer ${AGENTROUTER_API_KEY}`,
+            'User-Agent': 'opencode/1.0',
+            'Content-Length': Buffer.byteLength(payload)
+          }
+        }, (agentRes) => {
+          if (agentRes.statusCode !== 200) {
+            let errBody = '';
+            agentRes.on('data', c => errBody += c);
+            agentRes.on('end', () => {
+              console.error('[Proxy Claude Error]:', agentRes.statusCode, errBody);
+              res.writeHead(agentRes.statusCode, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({
+                type: 'error',
+                error: { type: 'api_error', message: errBody }
+              }));
+            });
+            return;
+          }
+
+          if (isStream) {
+            res.writeHead(200, {
+              'Content-Type': 'text/event-stream',
+              'Cache-Control': 'no-cache',
+              'Connection': 'keep-alive'
+            });
+
+            // 1. message_start
+            res.write(`event: message_start\ndata: ${JSON.stringify({
+              type: 'message_start',
+              message: {
+                id: msgId,
+                type: 'message',
+                role: 'assistant',
+                content: [],
+                model: 'gpt-6.1-sol',
+                stop_reason: null,
+                stop_sequence: null,
+                usage: { input_tokens: Math.ceil(promptText.length / 4), output_tokens: 1 }
+              }
+            })}\n\n`);
+
+            // 2. content_block_start
+            res.write(`event: content_block_start\ndata: ${JSON.stringify({
+              type: 'content_block_start',
+              index: 0,
+              content_block: { type: 'text', text: '' }
+            })}\n\n`);
+          }
+
+          agentRes.on('data', chunk => {
+            sseBuffer += chunk.toString();
+            const { events, remaining } = parseSSE(sseBuffer);
+            sseBuffer = remaining;
+
+            for (const ev of events) {
+              if (ev.dataStr === '[DONE]') continue;
+              try {
+                const json = JSON.parse(ev.dataStr);
+                if (json.type === 'response.output_text.delta' && json.delta) {
+                  streamAccumulated += json.delta;
+                  if (isStream) {
+                    res.write(`event: content_block_delta\ndata: ${JSON.stringify({
+                      type: 'content_block_delta',
+                      index: 0,
+                      delta: { type: 'text_delta', text: json.delta }
+                    })}\n\n`);
+                  }
+                }
+              } catch (e) {}
+            }
+          });
+
+          agentRes.on('end', () => {
+            if (isStream) {
+              // 3. content_block_stop
+              res.write(`event: content_block_stop\ndata: ${JSON.stringify({
+                type: 'content_block_stop',
+                index: 0
+              })}\n\n`);
+
+              // 4. message_delta
+              res.write(`event: message_delta\ndata: ${JSON.stringify({
+                type: 'message_delta',
+                delta: { stop_reason: 'end_turn', stop_sequence: null },
+                usage: { output_tokens: Math.ceil(streamAccumulated.length / 4) }
+              })}\n\n`);
+
+              // 5. message_stop
+              res.write(`event: message_stop\ndata: ${JSON.stringify({
+                type: 'message_stop'
+              })}\n\n`);
+
+              res.end();
+              console.log(`[Proxy] Claude Code stream completed (${streamAccumulated.length} chars).`);
+            } else {
+              res.writeHead(200, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({
+                id: msgId,
+                type: 'message',
+                role: 'assistant',
+                content: [{ type: 'text', text: streamAccumulated }],
+                model: 'gpt-6.1-sol',
+                stop_reason: 'end_turn',
+                usage: {
+                  input_tokens: Math.ceil(promptText.length / 4),
+                  output_tokens: Math.ceil(streamAccumulated.length / 4)
+                }
+              }));
+            }
+          });
+        });
+
+        agentReq.on('error', (err) => {
+          console.error('[Proxy Claude Request Error]:', err.message);
+          if (!res.headersSent) {
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ type: 'error', error: { message: err.message } }));
+          } else {
+            res.end();
+          }
+        });
+
+        agentReq.write(payload);
+        agentReq.end();
+
+      } catch (err) {
+        console.error('[Proxy Claude Handler Error]:', err);
+        if (!res.headersSent) {
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ type: 'error', error: { message: err.message } }));
+        }
+      }
+    });
+    return;
+  }
+
   // Fallback
   res.writeHead(404, { 'Content-Type': 'application/json' });
   res.end(JSON.stringify({ error: { message: 'Not found' } }));

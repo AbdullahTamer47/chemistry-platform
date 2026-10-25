@@ -16,6 +16,7 @@ backups/
 # Environment variables & local credentials
 .env
 .env*.local
+agentrouter-config/
 
 # Uploads
 uploads/*
