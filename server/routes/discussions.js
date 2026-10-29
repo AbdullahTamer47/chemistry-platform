@@ -1,12 +1,15 @@
 import { Router } from 'express';
 import db from '../db.js';
-import { authMiddleware, teacherMiddleware } from '../middleware/auth.js';
+import { authMiddleware, teacherMiddleware, canAccessCourse, isTeacher } from '../middleware/auth.js';
 
 const router = Router();
 
 // Get discussions for a course or specific lesson
 router.get('/:courseId', authMiddleware, (req, res) => {
   try {
+    if (!isTeacher(req.user) && !canAccessCourse(req.user, req.params.courseId)) {
+      return res.status(403).json({ error: 'يجب الاشتراك في الكورس أولاً للاطلاع على النقاشات' });
+    }
     const { lesson_id } = req.query;
     let query = `
       SELECT d.*, u.name as user_name, u.role as user_role, u.avatar 
@@ -53,20 +56,24 @@ router.post('/', authMiddleware, (req, res) => {
   try {
     const { course_id, lesson_id, content } = req.body;
     
-    if (!course_id || !content) {
+    const cleanContent = String(content || '').trim();
+    if (!course_id || !cleanContent) {
       return res.status(400).json({ error: 'بيانات غير مكتملة' });
     }
+    if (cleanContent.length > 2000) {
+      return res.status(400).json({ error: 'نص السؤال طويل جداً (الحد الأقصى 2000 حرف)' });
+    }
 
-    // Check enrollment or if teacher
-    if (req.user.role === 'student') {
-      const enrolled = db.prepare('SELECT id, is_suspended FROM enrollments WHERE user_id = ? AND course_id = ?').get(req.user.id, course_id);
-      if (!enrolled) return res.status(403).json({ error: 'غير مسموح. يجب الاشتراك في الكورس أولاً' });
-      if (enrolled.is_suspended) return res.status(403).json({ error: 'تم إيقاف حسابك من هذا الكورس' });
+    // Check enrollment or free course access or teacher
+    if (!isTeacher(req.user)) {
+      if (!canAccessCourse(req.user, course_id)) {
+        return res.status(403).json({ error: 'غير مسموح. يجب الاشتراك في الكورس أولاً' });
+      }
     }
 
     const result = db.prepare(
       'INSERT INTO course_discussions (course_id, lesson_id, user_id, content) VALUES (?, ?, ?, ?)'
-    ).run(course_id, lesson_id || null, req.user.id, content);
+    ).run(course_id, lesson_id || null, req.user.id, cleanContent);
 
     const newDisc = db.prepare(`
       SELECT d.*, u.name as user_name, u.role as user_role, u.avatar 
@@ -89,7 +96,9 @@ router.post('/:id/replies', authMiddleware, (req, res) => {
     const { content } = req.body;
     const discussionId = req.params.id;
 
-    if (!content) return res.status(400).json({ error: 'الرد فارغ' });
+    const cleanReply = String(content || '').trim();
+    if (!cleanReply) return res.status(400).json({ error: 'الرد فارغ' });
+    if (cleanReply.length > 2000) return res.status(400).json({ error: 'الرد طويل جداً (الحد الأقصى 2000 حرف)' });
 
     const discussion = db.prepare('SELECT course_id FROM course_discussions WHERE id = ?').get(discussionId);
     if (!discussion) return res.status(404).json({ error: 'السؤال غير موجود' });
@@ -97,19 +106,18 @@ router.post('/:id/replies', authMiddleware, (req, res) => {
     const course = db.prepare('SELECT allow_student_replies FROM courses WHERE id = ?').get(discussion.course_id);
 
     // Permission checks
-    if (req.user.role === 'student') {
-      const enrolled = db.prepare('SELECT id, is_suspended FROM enrollments WHERE user_id = ? AND course_id = ?').get(req.user.id, discussion.course_id);
-      if (!enrolled) return res.status(403).json({ error: 'يجب الاشتراك في الكورس' });
-      if (enrolled.is_suspended) return res.status(403).json({ error: 'تم إيقاف حسابك من هذا الكورس' });
-      
-      if (!course.allow_student_replies) {
+    if (!isTeacher(req.user)) {
+      if (!canAccessCourse(req.user, discussion.course_id)) {
+        return res.status(403).json({ error: 'يجب الاشتراك في الكورس' });
+      }
+      if (!course || !course.allow_student_replies) {
         return res.status(403).json({ error: 'المدرس لم يسمح بردود الطلاب في هذا الكورس' });
       }
     }
 
     const result = db.prepare(
       'INSERT INTO discussion_replies (discussion_id, user_id, content) VALUES (?, ?, ?)'
-    ).run(discussionId, req.user.id, content);
+    ).run(discussionId, req.user.id, cleanReply);
 
     const newReply = db.prepare(`
       SELECT r.*, u.name as user_name, u.role as user_role, u.avatar 

@@ -110,6 +110,10 @@ router.put('/:id', authMiddleware, teacherMiddleware, (req, res) => {
     if (expires_at !== undefined) { query += 'expires_at = ?, '; params.push(expires_at ? new Date(expires_at).toISOString() : null); }
     if (is_active !== undefined) { query += 'is_active = ?, '; params.push(is_active); }
 
+    if (params.length === 0) {
+      return res.status(400).json({ error: 'لا توجد حقول للتحديث' });
+    }
+
     // remove trailing comma and space
     query = query.slice(0, -2) + ' WHERE id = ?';
     params.push(req.params.id);

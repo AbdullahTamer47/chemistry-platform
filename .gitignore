@@ -9,6 +9,8 @@ dist-ssr/
 *.local
 
 # Database & SQLite WAL files
+data.db
+*.db
 *.db-wal
 *.db-shm
 backups/
@@ -17,6 +19,8 @@ backups/
 .env
 .env*.local
 agentrouter-config/
+.vercel/
+.claude/
 
 # Uploads
 uploads/*
@@ -24,6 +28,7 @@ uploads/*
 
 # Temporary / Scratch data
 *.log
+*.patch
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
@@ -43,7 +48,7 @@ yarn-error.log*
 .DS_Store
 Thumbs.db
 
-# AI-tooling scratch (contained a leaked API key; never commit)
+# AI-tooling scratch
 opencode.json
 scratch/
 scripts/

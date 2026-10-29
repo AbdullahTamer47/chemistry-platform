@@ -44,6 +44,26 @@ export function renderCertificates() {
           </div>
         </div>
 
+        <!-- CERTIFICATE VERIFICATION LOOKUP BAR -->
+        <div class="card" style="padding:18px 22px;margin-bottom:24px;border:1.5px solid var(--border);background:var(--bg-card);">
+          <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:14px;">
+            <div>
+              <h3 style="font-size:1rem;font-weight:800;margin:0 0 4px;display:flex;align-items:center;gap:8px;color:var(--text-primary);">
+                <span class="material-symbols-rounded" style="color:var(--primary);">verified</span>
+                التحقق الرسمي من صحة الشهادة (Certificate Verification)
+              </h3>
+              <p style="font-size:0.8rem;color:var(--text-secondary);margin:0;">أدخل الكود المرجعي المطبوع على الشهادة (مثال: CERT-ZRA-...) للتأكد من توثيقها في سجلات المنصة</p>
+            </div>
+            <form id="verifyCertForm" style="display:flex;gap:8px;flex-wrap:wrap;flex:1;max-width:420px;">
+              <input type="text" id="verifyCertInput" class="form-input" placeholder="CERT-ZRA-..." dir="ltr" required style="flex:1;min-width:180px;font-family:monospace;text-transform:uppercase;">
+              <button type="submit" class="btn btn-primary btn-sm" style="gap:6px;padding:0 18px;">
+                <span class="material-symbols-rounded">manage_search</span> تحقق الآن
+              </button>
+            </form>
+          </div>
+          <div id="verifyCertResult" style="margin-top:12px;display:none;"></div>
+        </div>
+
         <div id="certificatesContainer">
           <div class="loading-spinner"><div class="spinner"></div></div>
         </div>
@@ -56,6 +76,38 @@ export async function initCertificates() {
   initNavbar();
   const container = document.getElementById('certificatesContainer');
   if (!container) return;
+
+  const verifyForm = document.getElementById('verifyCertForm');
+  const verifyResult = document.getElementById('verifyCertResult');
+  verifyForm?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const code = document.getElementById('verifyCertInput')?.value.trim().toUpperCase();
+    if (!code || !verifyResult) return;
+    verifyResult.style.display = 'block';
+    verifyResult.innerHTML = `<div style="font-size:0.85rem;color:var(--text-muted);padding:8px;">جاري التحقق من السجلات الرسمية...</div>`;
+    try {
+      const cert = await api.verifyCertificate(encodeURIComponent(code));
+      verifyResult.innerHTML = `
+        <div style="padding:14px 18px;border-radius:12px;background:rgba(16,185,129,0.1);border:1.5px solid var(--success);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;">
+          <div>
+            <div style="font-weight:800;color:var(--success);font-size:0.95rem;display:flex;align-items:center;gap:6px;">
+              <span class="material-symbols-rounded">verified</span> شهادة أصلية موثقة ومعتمدة بالمنصة
+            </div>
+            <div style="font-size:0.85rem;color:var(--text-primary);margin-top:4px;">
+              الطالب: <strong>${esc(cert.student_name)}</strong> (${esc(cert.grade || '')}) · الاختبار: <strong>${esc(cert.exam_title)}</strong> · النسبة: <strong>${cert.percentage}%</strong>
+            </div>
+          </div>
+          <span class="badge badge-success" dir="ltr" style="font-family:monospace;">${esc(cert.cert_code)}</span>
+        </div>
+      `;
+    } catch (err) {
+      verifyResult.innerHTML = `
+        <div style="padding:12px 16px;border-radius:10px;background:rgba(239,68,68,0.1);border:1px solid var(--error);color:var(--error);font-weight:700;font-size:0.86rem;">
+          ❌ ${esc(err.message || 'رمز الشهادة غير مسجل في قاعدة البيانات')}
+        </div>
+      `;
+    }
+  });
 
   try {
     const certs = await api.getMyCertificates();

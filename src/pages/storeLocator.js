@@ -1,4 +1,4 @@
-import { esc } from '../utils/helpers.js';
+import { esc, formatWhatsAppPhone } from '../utils/helpers.js';
 import { renderNavbar, initNavbar } from '../components/navbar.js';
 import { renderPublicHeader, initPublicHeader } from '../components/publicHeader.js';
 import { isLoggedIn, isTeacher } from '../utils/auth.js';
@@ -95,7 +95,8 @@ function renderMainContent(logged, teacher) {
 
 export function renderStoreLocator() {
   const logged = isLoggedIn();
-  const teacher = isTeacher();
+  const isAdminRoute = window.location.hash.includes('admin/stores');
+  const teacher = isTeacher() && isAdminRoute;
 
   if (!logged) {
     return `
@@ -108,12 +109,20 @@ export function renderStoreLocator() {
     `;
   }
 
-  const activePage = teacher ? (window.location.hash.includes('admin/stores') ? 'admin-stores' : 'store-locator') : 'store-locator';
+  const activePage = teacher ? 'admin-stores' : 'store-locator';
 
   return `
     <div class="app-layout">
       ${renderNavbar(activePage)}
       <main class="main-content" style="max-width: 1200px; margin: 0 auto; padding: 32px 24px 60px;">
+        ${isTeacher() && !isAdminRoute ? `
+          <div class="card" style="padding:12px 18px;margin-bottom:18px;border-radius:12px;border:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
+            <span style="font-size:0.86rem;font-weight:700;color:var(--text-secondary);">👁️ أنت تشاهد الآن صفحة المنافذ بوضع معاينة الطالب.</span>
+            <a href="#/admin/stores" class="btn btn-sm btn-primary" style="font-size:0.78rem;gap:4px;">
+              <span class="material-symbols-rounded">edit_square</span> العودة لوضع الإدارة
+            </a>
+          </div>
+        ` : ''}
         ${renderMainContent(true, teacher)}
       </main>
     </div>
@@ -122,7 +131,7 @@ export function renderStoreLocator() {
 
 export async function initStoreLocator() {
   const logged = isLoggedIn();
-  const teacher = isTeacher();
+  const teacher = isTeacher() && window.location.hash.includes('admin/stores');
 
   if (logged) {
     initNavbar();
@@ -199,11 +208,11 @@ export async function initStoreLocator() {
           const mapQuery = encodeURIComponent(`${store.name} ${store.address} ${store.governorate}`);
           const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${mapQuery}`;
           const cleanPhone = (store.phone || '').replace(/\D/g, '');
-          const cleanWa = (store.whatsapp || store.phone || '').replace(/\D/g, '');
+          const cleanWa = formatWhatsAppPhone(store.whatsapp || store.phone || '');
           const waMessage = encodeURIComponent(`السلام عليكم، هل مذكرات وكروت شحن منصة د. زياد رمزي عياد للكيمياء متوفرة لديكم الآن في ${store.name}؟`);
-          const waUrl = `https://wa.me/2${cleanWa.replace(/^0+/, '')}?text=${waMessage}`;
+          const waUrl = `https://wa.me/${cleanWa}?text=${waMessage}`;
           const displayRating = typeof store.rating === 'number' ? store.rating.toFixed(1) : '4.9';
-          const reviewCount = store.reviews_count || 50;
+          const reviewCount = store.reviews_count || 0;
 
           return `
             <div class="card store-card" style="padding:22px;display:flex;flex-direction:column;justify-content:space-between;border:1px solid var(--border-light);border-radius:16px;box-shadow:0 4px 18px rgba(0,0,0,0.03);transition:transform 0.2s, box-shadow 0.2s;">

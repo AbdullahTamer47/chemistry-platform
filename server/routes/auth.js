@@ -154,7 +154,13 @@ router.post('/login', loginLimiter, (req, res) => {
 // Get current user profile
 router.get('/me', authMiddleware, (req, res) => {
   try {
-    const user = db.prepare('SELECT id, name, phone, role, grade, parent_phone, parent_phone_secondary, avatar, created_at FROM users WHERE id = ?').get(req.user.id);
+    const user = db.prepare(`
+      SELECT u.id, u.name, u.phone, u.role, u.grade, u.parent_phone, u.parent_phone_secondary, u.avatar, u.created_at,
+             COALESCE(sw.balance, 0) as balance
+      FROM users u
+      LEFT JOIN student_wallets sw ON sw.user_id = u.id
+      WHERE u.id = ?
+    `).get(req.user.id);
     if (!user) return res.status(404).json({ error: 'المستخدم غير موجود' });
     res.json(user);
   } catch (err) {
@@ -166,9 +172,22 @@ router.get('/me', authMiddleware, (req, res) => {
 router.put(['/me', '/profile'], authMiddleware, (req, res) => {
   try {
     const { name, grade, parent_phone, parent_phone_secondary } = req.body;
+    const cleanedName = name !== undefined ? cleanName(name) : null;
+    if (name !== undefined && (!cleanedName || cleanedName.length < 3)) {
+      return res.status(400).json({ error: 'يرجى إدخال اسم ثلاثي صحيح' });
+    }
+    const normParent1 = parent_phone !== undefined ? (parent_phone ? normalizePhone(parent_phone) : '') : null;
+    const normParent2 = parent_phone_secondary !== undefined ? (parent_phone_secondary ? normalizePhone(parent_phone_secondary) : '') : null;
+
     db.prepare('UPDATE users SET name = COALESCE(?, name), grade = COALESCE(?, grade), parent_phone = COALESCE(?, parent_phone), parent_phone_secondary = COALESCE(?, parent_phone_secondary) WHERE id = ?')
-      .run(name, grade, parent_phone, parent_phone_secondary, req.user.id);
-    const user = db.prepare('SELECT id, name, phone, role, grade, parent_phone, parent_phone_secondary, avatar, created_at FROM users WHERE id = ?').get(req.user.id);
+      .run(cleanedName, grade ?? null, normParent1, normParent2, req.user.id);
+    const user = db.prepare(`
+      SELECT u.id, u.name, u.phone, u.role, u.grade, u.parent_phone, u.parent_phone_secondary, u.avatar, u.created_at,
+             COALESCE(sw.balance, 0) as balance
+      FROM users u
+      LEFT JOIN student_wallets sw ON sw.user_id = u.id
+      WHERE u.id = ?
+    `).get(req.user.id);
     res.json(user);
   } catch (err) {
     res.status(500).json({ error: 'حدث خطأ في تحديث الملف الشخصي' });
@@ -201,19 +220,31 @@ router.get('/dashboard', authMiddleware, (req, res) => {
     const userId = req.user.id;
 
     // Fetch user with balance
-    const user = db.prepare('SELECT id, name, role, phone, grade, parent_phone, avatar, created_at FROM users WHERE id = ?').get(userId);
+    const user = db.prepare(`
+      SELECT u.id, u.name, u.role, u.phone, u.grade, u.parent_phone, u.parent_phone_secondary, u.avatar, u.created_at,
+             COALESCE(sw.balance, 0) as balance
+      FROM users u
+      LEFT JOIN student_wallets sw ON sw.user_id = u.id
+      WHERE u.id = ?
+    `).get(userId);
 
     // Stats
     const examsStats = db.prepare(
       'SELECT COUNT(*) as exams_taken, ROUND(AVG(score), 1) as avg_score FROM exam_attempts WHERE user_id = ? AND completed_at IS NOT NULL'
     ).get(userId);
 
-    // Rank in leaderboard
-    const allScores = db.prepare(
-      'SELECT user_id, ROUND(AVG(score), 1) as avg FROM exam_attempts WHERE completed_at IS NOT NULL GROUP BY user_id ORDER BY avg DESC'
-    ).all();
-    const userRankIdx = allScores.findIndex(r => r.user_id === userId);
-    const rank = userRankIdx >= 0 ? userRankIdx + 1 : allScores.length + 1;
+    // Rank in leaderboard (efficient SQL rank query)
+    const userAvg = examsStats.avg_score || 0;
+    const higherCount = db.prepare(`
+      SELECT COUNT(*) as c FROM (
+        SELECT user_id, ROUND(AVG(score), 1) as avg
+        FROM exam_attempts
+        WHERE completed_at IS NOT NULL
+        GROUP BY user_id
+        HAVING avg > ?
+      )
+    `).get(userAvg)?.c || 0;
+    const rank = higherCount + 1;
 
     // Active courses with progress
     const activeCourses = db.prepare(`

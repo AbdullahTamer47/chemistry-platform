@@ -137,3 +137,12 @@ export function formatCurrency(amount) {
   return `${amount} جنيه`;
 }
 
+/** Normalize an Egyptian phone number into international WhatsApp digits (201XXXXXXXXX). */
+export function formatWhatsAppPhone(phone) {
+  const digits = String(phone ?? '').replace(/\D/g, '');
+  if (!digits) return '';
+  if (digits.startsWith('20')) return digits;
+  return `20${digits.replace(/^0+/, '')}`;
+}
+
+

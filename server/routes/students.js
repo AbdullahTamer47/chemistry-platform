@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import bcrypt from 'bcryptjs';
 import db from '../db.js';
 import { authMiddleware, teacherMiddleware } from '../middleware/auth.js';
 
@@ -106,7 +107,6 @@ router.get('/analytics', authMiddleware, (req, res) => {
 
     const totalExamsTaken = attempts.length;
     let totalScore = 0;
-    let totalPossible = 0;
     let passedCount = 0;
     let maxPercent = 0;
     let minPercent = 100;
@@ -115,12 +115,11 @@ router.get('/analytics', authMiddleware, (req, res) => {
 
     const progression = attempts.map((a, idx) => {
       const pts = a.total_points > 0 ? a.total_points : 100;
-      const pct = Math.round((a.score / pts) * 100);
+      const pct = Math.max(0, Math.min(100, Math.round(Number(a.score) || 0)));
       const passed = pct >= (a.passing_score || 60);
       if (passed) passedCount++;
 
-      totalScore += a.score;
-      totalPossible += pts;
+      totalScore += pct;
 
       if (pct >= maxPercent) {
         maxPercent = pct;
@@ -137,7 +136,7 @@ router.get('/analytics', authMiddleware, (req, res) => {
         exam_id: a.exam_id,
         exam_title: a.exam_title,
         course_title: a.course_title || 'كيمياء',
-        score: a.score,
+        score: pct,
         total_points: pts,
         percent: pct,
         passed,
@@ -150,7 +149,7 @@ router.get('/analytics', authMiddleware, (req, res) => {
       minPercent = 0;
     }
 
-    const averagePercent = totalPossible > 0 ? Math.round((totalScore / totalPossible) * 100) : 0;
+    const averagePercent = totalExamsTaken > 0 ? Math.round(totalScore / totalExamsTaken) : 0;
 
     // 3. Weekly activity (last 7 days breakdown)
     const dayNames = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
@@ -252,14 +251,21 @@ router.get('/:id/whatsapp-report', authMiddleware, teacherMiddleware, (req, res)
     let whatsapp_parent_url = null;
     let whatsapp_parent_secondary_url = null;
 
+    const formatWa = (ph) => {
+      const digits = String(ph || '').replace(/\D/g, '');
+      if (!digits) return '';
+      if (digits.startsWith('20')) return digits;
+      return `20${digits.replace(/^0+/, '')}`;
+    };
+
     if (student.parent_phone) {
       const text = encodeURIComponent(`السلام عليكم ورحمة الله، ولي أمر الطالب/ة ${student.name}.\n\n${msg}`);
-      whatsapp_parent_url = `https://wa.me/20${student.parent_phone.replace(/^0+/, '')}?text=${text}`;
+      whatsapp_parent_url = `https://wa.me/${formatWa(student.parent_phone)}?text=${text}`;
     }
 
     if (student.parent_phone_secondary) {
       const textSecondary = encodeURIComponent(`السلام عليكم ورحمة الله، والدة الطالب/ة ${student.name}.\n\n${msg}`);
-      whatsapp_parent_secondary_url = `https://wa.me/20${student.parent_phone_secondary.replace(/^0+/, '')}?text=${textSecondary}`;
+      whatsapp_parent_secondary_url = `https://wa.me/${formatWa(student.parent_phone_secondary)}?text=${textSecondary}`;
     }
 
     res.json({
@@ -302,22 +308,22 @@ router.put('/:id', authMiddleware, teacherMiddleware, (req, res) => {
   try {
     const { name, phone, grade, parent_phone, password } = req.body;
     let query = 'UPDATE users SET name=COALESCE(?,name), phone=COALESCE(?,phone), grade=COALESCE(?,grade), parent_phone=COALESCE(?,parent_phone)';
-    const params = [name, phone, grade, parent_phone];
+    const params = [name ?? null, phone ?? null, grade ?? null, parent_phone ?? null];
     if (password) {
-      import('bcryptjs').then(bcrypt => {
-        const hash = bcrypt.hashSync(password, 10);
-        db.prepare(query + ', password=? WHERE id=? AND role=?').run(...params, hash, req.params.id, 'student');
-        res.json({ message: 'تم التحديث بنجاح' });
-      });
-      return;
+      if (String(password).length < 6) {
+        return res.status(400).json({ error: 'كلمة المرور يجب أن تكون 6 أحرف على الأقل' });
+      }
+      const hash = bcrypt.hashSync(String(password), 10);
+      db.prepare(query + ', password=? WHERE id=? AND role=?').run(...params, hash, req.params.id, 'student');
+      return res.json({ message: 'تم التحديث بنجاح' });
     } else {
       query += ' WHERE id=? AND role=?';
       params.push(req.params.id, 'student');
       db.prepare(query).run(...params);
-      res.json({ message: 'تم التحديث بنجاح' });
+      return res.json({ message: 'تم التحديث بنجاح' });
     }
   } catch (err) {
-    if (err.message.includes('UNIQUE')) return res.status(400).json({ error: 'رقم الهاتف مستخدم بالفعل' });
+    if (err.message && err.message.includes('UNIQUE')) return res.status(400).json({ error: 'رقم الهاتف مستخدم بالفعل' });
     res.status(500).json({ error: 'حدث خطأ في تحديث الطالب' });
   }
 });

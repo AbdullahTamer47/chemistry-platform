@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import crypto from 'crypto';
 import db from '../db.js';
-import { authMiddleware, teacherMiddleware, canAccessCourse, isTeacher } from '../middleware/auth.js';
+import { authMiddleware, teacherMiddleware, canAccessCourse, isTeacher, rateLimit } from '../middleware/auth.js';
 
 const router = Router();
 
@@ -45,7 +45,7 @@ router.get('/', authMiddleware, (req, res) => {
         (SELECT COUNT(*) FROM exam_attempts WHERE exam_id = e.id AND user_id = ?) as my_attempts,
         (SELECT MAX(score) FROM exam_attempts WHERE exam_id = e.id AND user_id = ?) as my_best_score
         FROM exams e LEFT JOIN courses c ON e.course_id = c.id
-        INNER JOIN enrollments en ON en.course_id = e.course_id AND en.user_id = ?
+        INNER JOIN enrollments en ON en.course_id = e.course_id AND en.user_id = ? AND en.is_suspended = 0
         WHERE e.is_active = 1 ORDER BY e.created_at DESC`).all(req.user.id, req.user.id, req.user.id);
     }
     res.json(exams);
@@ -91,7 +91,7 @@ router.get('/certificates/my', authMiddleware, (req, res) => {
 });
 
 // Public: verify certificate code
-router.get('/certificates/verify/:certCode', (req, res) => {
+router.get('/certificates/verify/:certCode', rateLimit(30, 60_000), (req, res) => {
   try {
     const cert = db.prepare(`
       SELECT c.*, e.title as exam_title, u.name as student_name, u.grade, cr.title as course_title
@@ -201,6 +201,89 @@ router.post('/adaptive-mistakes-quiz', authMiddleware, (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'حدث خطأ في استخراج بنك الأخطاء' });
+  }
+});
+
+// Student: Submit Adaptive Mistakes Quiz for server-side grading
+router.post('/adaptive-mistakes-quiz/submit', authMiddleware, (req, res) => {
+  try {
+    const { question_ids, answers, time_spent } = req.body;
+    if (!Array.isArray(question_ids) || question_ids.length === 0 || question_ids.length > 30) {
+      return res.status(400).json({ error: 'قائمة الأسئلة غير صالحة' });
+    }
+    const cleanIds = question_ids.map(id => Number(id)).filter(id => Number.isInteger(id) && id > 0);
+    if (cleanIds.length === 0) {
+      return res.status(400).json({ error: 'لا توجد أسئلة للتصحيح' });
+    }
+
+    const placeholders = cleanIds.map(() => '?').join(',');
+    const questions = db.prepare(`SELECT * FROM questions WHERE id IN (${placeholders})`).all(...cleanIds);
+    const ansMap = (answers && typeof answers === 'object') ? answers : {};
+
+    let totalPoints = 0;
+    let earnedPoints = 0;
+
+    const results = cleanIds.map(qId => {
+      const q = questions.find(item => item.id === qId);
+      if (!q) return null;
+      let options = null;
+      if (q.options) {
+        try { options = JSON.parse(q.options); } catch (e) {}
+      }
+      const pts = Number(q.points) || 1;
+      totalPoints += pts;
+
+      const uAns = ansMap[q.id];
+      let isCorrect = false;
+      if (q.type === 'mcq' || q.type === 'true_false') {
+        isCorrect = String(uAns) === String(q.correct_answer);
+      } else if (q.type === 'fill_blank') {
+        isCorrect = String(uAns || '').trim().toLowerCase() === String(q.correct_answer).trim().toLowerCase();
+      } else if (q.type === 'ordering') {
+        isCorrect = JSON.stringify(uAns) === q.correct_answer;
+      } else if (q.type === 'multi_select') {
+        try {
+          const correctArr = JSON.parse(q.correct_answer);
+          isCorrect = Array.isArray(uAns) && JSON.stringify([...uAns].sort()) === JSON.stringify([...correctArr].sort());
+        } catch (e) {}
+      }
+
+      const qEarned = isCorrect ? pts : 0;
+      earnedPoints += qEarned;
+
+      return {
+        id: q.id,
+        text: q.text,
+        type: q.type,
+        options,
+        image_url: q.image_url,
+        user_answer: uAns,
+        correct_answer: q.correct_answer,
+        is_correct: isCorrect,
+        points: pts,
+        earned_points: qEarned,
+        explanation: q.explanation,
+        pedagogical_feedback: !isCorrect && q.explanation ? {
+          reinforcement: q.explanation,
+          learning_action: 'راجع هذه النقطة جيداً وتأكد من إتقان الفكرة العلمية قبل الاختبار القادم.'
+        } : null,
+        is_essay: q.type === 'essay'
+      };
+    }).filter(Boolean);
+
+    const score = totalPoints > 0 ? Math.round((earnedPoints / totalPoints) * 100) : 0;
+    res.json({
+      score,
+      earned_points: earnedPoints,
+      total_points: totalPoints,
+      passed: score >= 60,
+      time_spent: Math.max(0, Number(time_spent) || 0),
+      is_graded: 1,
+      results
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'حدث خطأ أثناء تصحيح التدريب العلاجي' });
   }
 });
 
@@ -595,7 +678,19 @@ router.post(['/attempt/:id/grade-essay', '/attempt/:id/grade', '/attempts/:id/gr
     if (!attempt) return res.status(404).json({ error: 'المحاولة غير موجودة' });
 
     const exam = db.prepare('SELECT * FROM exams WHERE id = ?').get(attempt.exam_id);
-    const questions = db.prepare('SELECT * FROM questions WHERE exam_id = ?').all(attempt.exam_id);
+    let questions;
+    if (attempt.question_ids) {
+      try {
+        const qIds = JSON.parse(attempt.question_ids);
+        if (Array.isArray(qIds) && qIds.length > 0) {
+          const placeholders = qIds.map(() => '?').join(',');
+          questions = db.prepare(`SELECT * FROM questions WHERE id IN (${placeholders}) ORDER BY order_num`).all(...qIds);
+        }
+      } catch (e) {}
+    }
+    if (!questions) {
+      questions = db.prepare('SELECT * FROM questions WHERE exam_id = ? ORDER BY order_num').all(attempt.exam_id);
+    }
     let userAnswers = {};
     try { userAnswers = attempt.answers ? JSON.parse(attempt.answers) : {}; } catch (e) {}
 
@@ -630,10 +725,11 @@ router.post(['/attempt/:id/grade-essay', '/attempt/:id/grade', '/attempts/:id/gr
 
     db.prepare(`
       UPDATE exam_attempts
-      SET score = ?, essay_grades = ?, teacher_feedback = ?, is_graded = 1
+      SET score = ?, total_points = ?, essay_grades = ?, teacher_feedback = ?, is_graded = 1
       WHERE id = ?
     `).run(
       newScore,
+      totalPoints,
       essay_grades ? JSON.stringify(essay_grades) : null,
       teacher_feedback || null,
       attempt.id
@@ -642,7 +738,7 @@ router.post(['/attempt/:id/grade-essay', '/attempt/:id/grade', '/attempts/:id/gr
     // Auto-issue Certificate if passed upon teacher grading
     if (newScore >= (exam?.passing_score || 60)) {
       const tier = newScore === 100 ? 'gold' : newScore >= 90 ? 'silver' : 'bronze';
-      const certCode = `CERT-ZRA-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+      const certCode = `CERT-ZRA-${crypto.randomBytes(6).toString('hex').toUpperCase()}`;
       try {
         db.prepare(`
           INSERT INTO certificates (cert_code, user_id, exam_id, attempt_id, score, total_points, percentage, tier)
@@ -762,7 +858,7 @@ function formatAttemptReview(attempt, exam, user) {
     if (q.type === 'essay') {
       const manualGrade = essayGrades && essayGrades[q.id] ? Number(essayGrades[q.id].points) : 0;
       questionEarned = Math.min(Math.max(0, manualGrade), q.points);
-      teacherComment = essayGrades && essayGrades[q.id] ? essayGrades[q.id].notes : null;
+      teacherComment = essayGrades && essayGrades[q.id] ? (essayGrades[q.id].comment || essayGrades[q.id].notes || null) : null;
       isCorrect = questionEarned > 0;
     } else if (q.type === 'mcq' || q.type === 'true_false') {
       isCorrect = String(uAns) === String(q.correct_answer);
@@ -813,7 +909,7 @@ function formatAttemptReview(attempt, exam, user) {
     };
   });
 
-  const rank = db.prepare('SELECT COUNT(*) + 1 as rank FROM exam_attempts WHERE exam_id = ? AND score > ? AND user_id != ?').get(exam.id, attempt.score, user.id);
+  const rank = db.prepare('SELECT COUNT(DISTINCT user_id) + 1 as rank FROM exam_attempts WHERE exam_id = ? AND score > ? AND user_id != ?').get(exam.id, attempt.score, user.id);
 
   return {
     attempt_id: attempt.id,

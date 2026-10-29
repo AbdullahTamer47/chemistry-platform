@@ -132,7 +132,20 @@ router.post('/:id(\\d+)/subscribe', authMiddleware, (req, res) => {
         if (voucher.is_used) throw new Error('تم استخدام هذا الكود مسبقاً');
         if (voucher.amount < pkg.price) throw new Error(`قيمة الكارت (${voucher.amount} ج) أقل من سعر الباقة (${pkg.price} ج)`);
 
-        db.prepare('UPDATE wallet_vouchers SET is_used = 1, used_by = ?, used_at = CURRENT_TIMESTAMP WHERE id = ?').run(req.user.id, voucher.id);
+        const upd = db.prepare('UPDATE wallet_vouchers SET is_used = 1, used_by = ?, used_at = CURRENT_TIMESTAMP WHERE id = ? AND is_used = 0').run(req.user.id, voucher.id);
+        if (upd.changes === 0) throw new Error('تم استخدام هذا الكود مسبقاً');
+
+        const remainder = Number(voucher.amount) - Number(pkg.price);
+        if (remainder > 0) {
+          db.prepare(`
+            INSERT INTO student_wallets (user_id, balance) VALUES (?, ?)
+            ON CONFLICT(user_id) DO UPDATE SET balance = balance + excluded.balance, updated_at = CURRENT_TIMESTAMP
+          `).run(req.user.id, remainder);
+          db.prepare(`
+            INSERT INTO wallet_transactions (user_id, amount, type, description, reference_code)
+            VALUES (?, ?, 'credit', ?, ?)
+          `).run(req.user.id, remainder, `متبقي كارت شحن بعد تفعيل ${pkg.title}`, voucher.code);
+        }
       } else {
         // Direct deduction from student wallet
         let wallet = db.prepare('SELECT balance FROM student_wallets WHERE user_id = ?').get(req.user.id);
@@ -164,7 +177,7 @@ router.post('/:id(\\d+)/subscribe', authMiddleware, (req, res) => {
       const enrollCourse = db.prepare(`
         INSERT INTO enrollments (user_id, course_id, expires_at)
         VALUES (?, ?, ?)
-        ON CONFLICT(user_id, course_id) DO UPDATE SET expires_at = excluded.expires_at, is_suspended = 0
+        ON CONFLICT(user_id, course_id) DO UPDATE SET expires_at = excluded.expires_at
       `);
 
       courseIds.forEach(cId => {
@@ -283,8 +296,7 @@ router.post('/stores/:id/rate', authMiddleware, (req, res) => {
       WHERE store_id = ?
     `).get(store.id);
 
-    const baseCount = (store.reviews_count && store.reviews_count > 10) ? store.reviews_count : 0;
-    const totalCount = Math.max(stats.count, baseCount);
+    const totalCount = stats.count || 1;
     const exactRating = Number((stats.avg_rating || rating).toFixed(1));
 
     db.prepare('UPDATE bookstores SET rating = ?, reviews_count = ? WHERE id = ?').run(exactRating, totalCount, store.id);

@@ -168,7 +168,7 @@ router.put('/:id', authMiddleware, teacherMiddleware, (req, res) => {
         if (!exists) {
           db.prepare('INSERT INTO enrollments (user_id, course_id, payment_id, expires_at) VALUES (?, ?, ?, ?)').run(p.user_id, p.course_id, p.id, expiresAt);
         } else if (expiresAt) {
-          db.prepare('UPDATE enrollments SET expires_at = ?, is_suspended = 0 WHERE id = ?').run(expiresAt, exists.id);
+          db.prepare('UPDATE enrollments SET expires_at = ? WHERE id = ?').run(expiresAt, exists.id);
         }
 
         db.prepare('INSERT INTO notifications (user_id, title, message, type) VALUES (?, ?, ?, ?)').run(
@@ -212,7 +212,7 @@ router.get('/wallet/balance', authMiddleware, (req, res) => {
 
     const activeFawryOrder = db.prepare(`
       SELECT * FROM fawry_orders
-      WHERE user_id = ? AND status = 'pending' AND expires_at > CURRENT_TIMESTAMP
+      WHERE user_id = ? AND status = 'pending' AND datetime(expires_at) > datetime('now')
       ORDER BY created_at DESC LIMIT 1
     `).get(req.user.id);
 
@@ -238,7 +238,7 @@ router.post('/fawry/generate', authMiddleware, (req, res) => {
     // Check if there is already an active pending order
     const existing = db.prepare(`
       SELECT * FROM fawry_orders
-      WHERE user_id = ? AND status = 'pending' AND expires_at > CURRENT_TIMESTAMP
+      WHERE user_id = ? AND status = 'pending' AND datetime(expires_at) > datetime('now')
       ORDER BY created_at DESC LIMIT 1
     `).get(req.user.id);
 
@@ -265,6 +265,8 @@ router.post('/fawry/generate', authMiddleware, (req, res) => {
       VALUES (?, ?, ?, 'pending', ?)
     `).run(req.user.id, amount, reference_code, expiresAt);
 
+    const fawryMerchant = db.prepare("SELECT value FROM platform_settings WHERE key = 'fawry_merchant'").get()?.value || '788';
+
     const order = {
       id: insert.lastInsertRowid,
       amount,
@@ -273,7 +275,7 @@ router.post('/fawry/generate', authMiddleware, (req, res) => {
       reference_code,
       status: 'pending',
       expires_at: expiresAt,
-      service_code: '788'
+      service_code: fawryMerchant
     };
 
     res.status(201).json({
@@ -300,10 +302,13 @@ router.post('/wallet/charge-voucher', authMiddleware, (req, res) => {
     }
 
     const tx = db.transaction(() => {
-      // 1. Mark voucher as used
-      db.prepare(`
-        UPDATE wallet_vouchers SET is_used = 1, used_by = ?, used_at = CURRENT_TIMESTAMP WHERE id = ?
+      // 1. Mark voucher as used atomically
+      const upd = db.prepare(`
+        UPDATE wallet_vouchers SET is_used = 1, used_by = ?, used_at = CURRENT_TIMESTAMP WHERE id = ? AND is_used = 0
       `).run(req.user.id, voucher.id);
+      if (upd.changes === 0) {
+        throw new Error('هذا الكارت تم استخدامه وشحنه مسبقاً');
+      }
 
       // 2. Add to wallet
       db.prepare(`

@@ -1,4 +1,4 @@
-﻿/**
+/**
  * dom.js — Safe DOM Utilities
  *
  * Provides guard-wrapped versions of common DOM operations.

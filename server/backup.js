@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import db from './db.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DB_PATH = path.join(__dirname, '..', 'data.db');
@@ -9,13 +10,17 @@ const BACKUP_DIR = path.join(__dirname, '..', 'backups');
 export function createDatabaseBackup() {
   try {
     if (!fs.existsSync(DB_PATH)) {
-      console.warn('⚠️ chemistry.db does not exist yet. Skipping backup.');
+      console.warn('⚠️ data.db does not exist yet. Skipping backup.');
       return null;
     }
 
     if (!fs.existsSync(BACKUP_DIR)) {
       fs.mkdirSync(BACKUP_DIR, { recursive: true });
     }
+
+    try {
+      db.pragma('wal_checkpoint(TRUNCATE)');
+    } catch (e) {}
 
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
     const backupName = `chemistry_backup_${timestamp}.db`;

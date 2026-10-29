@@ -1,9 +1,11 @@
 import fs from 'fs';
 import path from 'path';
+import crypto from 'crypto';
+import bcrypt from 'bcryptjs';
 import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const dbPath = path.join(__dirname, '..', 'data.db');
+const dbPath = process.env.DB_PATH || path.join(__dirname, '..', 'data.db');
 
 let db;
 const isVercel = !!process.env.VERCEL || !!process.env.AWS_LAMBDA_FUNCTION_NAME;
@@ -14,7 +16,7 @@ if (!isVercel) {
     const { default: Database } = await import(/* @vite-ignore */ mod);
     db = new Database(dbPath);
     try {
-      db.pragma('journal_mode = WAL');
+      if (dbPath !== ':memory:') db.pragma('journal_mode = WAL');
       db.pragma('temp_store = MEMORY');
       db.pragma('foreign_keys = ON');
     } catch (e) {}
@@ -34,25 +36,37 @@ if (!db) {
     SQL = await initSqlJs();
   }
   let buffer = null;
-  const candidatePaths = [
-    '/tmp/data.db',
-    path.join(process.cwd(), 'data.db'),
-    dbPath,
-    path.join(__dirname, 'data.db'),
-    path.join(__dirname, '..', 'data.db')
-  ];
-  for (const cp of candidatePaths) {
-    if (fs.existsSync(cp)) {
-      try {
-        const candidateBuf = fs.readFileSync(cp);
-        if (candidateBuf && candidateBuf.length > 0) {
-          buffer = candidateBuf;
-          break;
-        }
-      } catch (e) {}
+  if (dbPath !== ':memory:') {
+    const candidatePaths = [
+      '/tmp/data.db',
+      dbPath,
+      path.join(process.cwd(), 'data.db'),
+      path.join(__dirname, 'data.db'),
+      path.join(__dirname, '..', 'data.db')
+    ];
+    for (const cp of candidatePaths) {
+      if (fs.existsSync(cp)) {
+        try {
+          const candidateBuf = fs.readFileSync(cp);
+          if (candidateBuf && candidateBuf.length > 0) {
+            buffer = candidateBuf;
+            break;
+          }
+        } catch (e) {}
+      }
     }
   }
   const rawDb = buffer ? new SQL.Database(buffer) : new SQL.Database();
+  try { rawDb.exec('PRAGMA foreign_keys = ON'); } catch (e) {}
+  let txDepth = 0;
+
+  const persistIfNeeded = () => {
+    if (txDepth === 0 && (process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME)) {
+      try {
+        fs.writeFileSync('/tmp/data.db', Buffer.from(rawDb.export()));
+      } catch (e) {}
+    }
+  };
 
   db = {
     prepare(sql) {
@@ -95,11 +109,7 @@ if (!db) {
           const lastInsertRowid = lastRowIdRes[0]?.values[0][0] ?? 0;
           const changesRes = rawDb.exec("SELECT changes() as c");
           const changes = changesRes[0]?.values[0][0] ?? 0;
-          if (process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME) {
-            try {
-              fs.writeFileSync('/tmp/data.db', Buffer.from(rawDb.export()));
-            } catch (e) {}
-          }
+          persistIfNeeded();
           return { changes, lastInsertRowid };
         }
       };
@@ -112,13 +122,21 @@ if (!db) {
     },
     transaction(fn) {
       return function(...args) {
-        rawDb.exec('BEGIN TRANSACTION');
+        const isOuter = txDepth === 0;
+        const spName = `sp_${txDepth}`;
+        txDepth++;
+        rawDb.exec(isOuter ? 'BEGIN TRANSACTION' : `SAVEPOINT ${spName}`);
         try {
           const res = fn(...args);
-          rawDb.exec('COMMIT');
+          rawDb.exec(isOuter ? 'COMMIT' : `RELEASE SAVEPOINT ${spName}`);
+          txDepth--;
+          persistIfNeeded();
           return res;
         } catch (err) {
-          try { rawDb.exec('ROLLBACK'); } catch (e) {}
+          try {
+            rawDb.exec(isOuter ? 'ROLLBACK' : `ROLLBACK TO SAVEPOINT ${spName}`);
+          } catch (e) {}
+          txDepth = Math.max(0, txDepth - 1);
           throw err;
         }
       };
@@ -516,9 +534,28 @@ db.exec(`
     address TEXT NOT NULL,
     phone TEXT NOT NULL,
     rating REAL DEFAULT 4.9,
-    reviews_count INTEGER DEFAULT 120,
+    reviews_count INTEGER DEFAULT 0,
     whatsapp TEXT,
     is_active INTEGER DEFAULT 1
+  );
+
+  CREATE TABLE IF NOT EXISTS lesson_notes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    lesson_id INTEGER NOT NULL REFERENCES lessons(id) ON DELETE CASCADE,
+    timestamp_sec INTEGER DEFAULT 0,
+    content TEXT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+
+  CREATE TABLE IF NOT EXISTS audit_logs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    actor_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    action TEXT NOT NULL,
+    target_type TEXT,
+    target_id TEXT,
+    details TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
 `);
 
@@ -542,17 +579,150 @@ try {
   if (storeCount === 0) {
     const insertStore = db.prepare(`INSERT INTO bookstores (name, governorate, address, phone, rating, reviews_count, whatsapp) VALUES (?, ?, ?, ?, ?, ?, ?)`);
     const initialStores = [
-      ['مكتبة الأوائل الفجالة', 'القاهرة', 'شارع كامل صدقي، الفجالة، الأزبكية', '01019882233', 4.9, 142, '201019882233'],
-      ['سنتر ومكتبة الأهرام التعليمية', 'الجيزة', 'شارع مراد، ميدان الجيزة بجوار محطة المترو', '01123445566', 4.8, 98, '201123445566'],
-      ['مكتبة الإسكندر الأكبر', 'الإسكندرية', 'شارع سوتر، أمام المجمع النظري، الشاطبي', '01234556677', 5.0, 210, '201234556677'],
-      ['مكتبة النور للطباعة والنشر', 'الدقهلية', 'شارع جيهان، أمام بوابة جامعة المنصورة', '01098877665', 4.9, 115, '201098877665'],
-      ['مكتبة الجمهورية والسنتر الحديث', 'الشرقية', 'ميدان القومية، الزقازيق', '01155667788', 4.7, 84, '201155667788'],
-      ['مكتبة ابن سينا والمطبوعات', 'الغربية', 'شارع البحر، أمام محطة قطار طنطا', '01022334455', 4.8, 76, '201022334455'],
-      ['مكتبة المستقبل والجامعة', 'أسيوط', 'شارع الجمهورية، أمام جامعة أسيوط القديمة', '01299887711', 4.9, 93, '201299887711']
+      ['مكتبة الأوائل الفجالة', 'القاهرة', 'شارع كامل صدقي، الفجالة، الأزبكية', '01019882233', 5.0, 0, '201019882233'],
+      ['سنتر ومكتبة الأهرام التعليمية', 'الجيزة', 'شارع مراد، ميدان الجيزة بجوار محطة المترو', '01123445566', 5.0, 0, '201123445566'],
+      ['مكتبة الإسكندر الأكبر', 'الإسكندرية', 'شارع سوتر، أمام المجمع النظري، الشاطبي', '01234556677', 5.0, 0, '201234556677'],
+      ['مكتبة النور للطباعة والنشر', 'الدقهلية', 'شارع جيهان، أمام بوابة جامعة المنصورة', '01098877665', 5.0, 0, '201098877665'],
+      ['مكتبة الجمهورية والسنتر الحديث', 'الشرقية', 'ميدان القومية، الزقازيق', '01155667788', 5.0, 0, '201155667788'],
+      ['مكتبة ابن سينا والمطبوعات', 'الغربية', 'شارع البحر، أمام محطة قطار طنطا', '01022334455', 5.0, 0, '201022334455'],
+      ['مكتبة المستقبل والجامعة', 'أسيوط', 'شارع الجمهورية، أمام جامعة أسيوط القديمة', '01299887711', 5.0, 0, '201299887711']
     ];
     initialStores.forEach(s => insertStore.run(...s));
   }
 } catch (e) { console.error('Seed stores error', e); }
+
+// Auto-seed initial curriculum if courses table is empty (ensures fresh or serverless environments work out of the box)
+try {
+  const courseCount = db.prepare('SELECT COUNT(*) as c FROM courses').get().c;
+  if (courseCount === 0 && process.env.SKIP_AUTO_SEED !== '1') {
+    let teacher = db.prepare("SELECT id FROM users WHERE phone = '01000000000'").get();
+    let teacherId;
+    if (teacher) {
+      teacherId = teacher.id;
+    } else {
+      const initialTeacherPass = process.env.TEACHER_INITIAL_PASSWORD || crypto.randomBytes(12).toString('base64url');
+      const hashed = bcrypt.hashSync(initialTeacherPass, 10);
+      const tRes = db.prepare('INSERT INTO users (name, phone, password, role, grade) VALUES (?, ?, ?, ?, ?)')
+        .run('د. زياد رمزي عياد', '01000000000', hashed, 'teacher', 'ثالثة ثانوي');
+      teacherId = tRes.lastInsertRowid;
+    }
+
+    const insertCourse = db.prepare(`
+      INSERT INTO courses (title, description, grade, price, original_price, duration_days, course_type, badge_text, is_free, teacher_id, sequential_access, allow_student_replies)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    const c1Id = insertCourse.run(
+      'الباب الأول: كيمياء العناصر الانتقالية واستخلاص الحديد',
+      'شرح تفصيلي متكامل للسلسلة الانتقالية الأولى، التوزيع الإلكتروني، الخواص المغناطيسية والألوان، خامات الحديد واستخلاصه وتفاعلات أكاسيده.',
+      'ثالثة ثانوي', 150, 220, 365, 'monthly', 'الأكثر طلباً 🔥', 0, teacherId, 0, 1
+    ).lastInsertRowid;
+
+    const c2Id = insertCourse.run(
+      'أساسيات الكيمياء والتأسيس المنهجي الشامل (مجاني)',
+      'كورس تمهيدي شامل لجميع المفاهيم الأساسية: كتابة الصيغ الكيميائية، وزن المعادلات، وحساب أعداد التأكسد والمول.',
+      'ثالثة ثانوي', 0, 0, 365, 'monthly', 'مجاني للجميع 🎁', 1, teacherId, 0, 1
+    ).lastInsertRowid;
+
+    const c3Id = insertCourse.run(
+      'الباب الخامس: الكيمياء العضوية من الصفر للاحتراف',
+      'تغطية شاملة للهيدروكربونات الأليفاتية والأروماتية ومشتقات الهيدروكربونات مع مخططات التفاعلات الذهبية.',
+      'ثالثة ثانوي', 250, 350, 365, 'quarterly', 'شامل المخططات 🧪', 0, teacherId, 0, 1
+    ).lastInsertRowid;
+
+    const c4Id = insertCourse.run(
+      'بنية الذرة والجدول الدوري الحديث والروابط الكيميائية',
+      'شرح وافٍ لنظريات بنية الذرة وأعداد الكم الأربعة وتدرج الخواص في الجدول الدوري لطلاب الصف الثاني الثانوي.',
+      'ثانية ثانوي', 120, 160, 365, 'term', 'منهج الترم الأول', 0, teacherId, 0, 1
+    ).lastInsertRowid;
+
+    const ch1Id = db.prepare('INSERT INTO chapters (course_id, title, order_num) VALUES (?, ?, ?)').run(c1Id, 'الفصل الأول: الخواص العامة للسلسلة الانتقالية الأولى', 1).lastInsertRowid;
+    const ch2Id = db.prepare('INSERT INTO chapters (course_id, title, order_num) VALUES (?, ?, ?)').run(c1Id, 'الفصل الثاني: كيمياء الحديد وتفاعلات الأكاسيد', 2).lastInsertRowid;
+    const chFreeId = db.prepare('INSERT INTO chapters (course_id, title, order_num) VALUES (?, ?, ?)').run(c2Id, 'الوحدة التأسيسية: الصيغ الكيميائية والمعادلات', 1).lastInsertRowid;
+    const chOrgId = db.prepare('INSERT INTO chapters (course_id, title, order_num) VALUES (?, ?, ?)').run(c3Id, 'الجزء الأول: الهيدروكربونات (الألكانات والألكينات والألكاينات)', 1).lastInsertRowid;
+    const chSec2Id = db.prepare('INSERT INTO chapters (course_id, title, order_num) VALUES (?, ?, ?)').run(c4Id, 'الفصل الأول: بنية الذرة وأعداد الكم', 1).lastInsertRowid;
+
+    const insLesson = db.prepare(`
+      INSERT INTO lessons (chapter_id, course_id, title, description, video_url, duration, order_num, is_free, max_views)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+    insLesson.run(ch1Id, c1Id, 'المحاضرة 1: التوزيع الإلكتروني وحالات التأكسد الشائعة', 'نتناول في هذه المحاضرة قاعدة هوند ومبدأ البناء التصاعدي، وحالات استقرار عناصر الكروم والنحاس.', 'https://www.youtube.com/watch?v=dQw4w9WgXcQ', 45, 1, 1, 8);
+    insLesson.run(ch1Id, c1Id, 'المحاضرة 2: الخواص البارامغناطيسية والدايامغناطيسية والأيونات الملونة', 'شرح العلاقة بين عدد الإلكترونات المفردة في الأوربيتالات وعزم الدوران المغناطيسي.', 'https://www.youtube.com/watch?v=dQw4w9WgXcQ', 50, 2, 0, 8);
+    insLesson.run(ch2Id, c1Id, 'المحاضرة 3: خامات الحديد وأفران الاختزال (الفرن العالي ومدركس)', 'مقارنة شاملة بين الفرن العالي وفرن مدركس وإنتاج الصلب.', 'https://www.youtube.com/watch?v=dQw4w9WgXcQ', 55, 1, 0, 8);
+    insLesson.run(chFreeId, c2Id, 'تأسيس 1: التكافؤات وكتابة الصيغ الكيميائية للمركبات', 'أساسيات لا غنى عنها لكل طالب ثانوية عامة في كتابة الصيغ الكيميائية بدقة.', 'https://www.youtube.com/watch?v=dQw4w9WgXcQ', 35, 1, 1, 15);
+    insLesson.run(chFreeId, c2Id, 'تأسيس 2: وزن المعادلات الكيميائية وحساب المول والكتلة المولية', 'تدريبات عملية على وزن أصعب المعادلات وحسابات المول.', 'https://www.youtube.com/watch?v=dQw4w9WgXcQ', 40, 2, 1, 15);
+    insLesson.run(chOrgId, c3Id, 'عضوية 1: مقدمة الكيمياء العضوية وتسمية الألكانات بنظام الأيوباك', 'بداية قوية للكيمياء العضوية وقواعد تسمية المركبات العضوية خطوة بخطوة.', 'https://www.youtube.com/watch?v=dQw4w9WgXcQ', 60, 1, 1, 8);
+    insLesson.run(chSec2Id, c4Id, 'المحاضرة 1: تطور مفهوم بنية الذرة ونموذج بور الذري', 'شرح تجارب رذرفورد وطومسون ونموذج بور الذري.', 'https://www.youtube.com/watch?v=dQw4w9WgXcQ', 42, 1, 1, 8);
+
+    const exam1Id = db.prepare(`
+      INSERT INTO exams (course_id, chapter_id, title, description, duration_minutes, max_attempts, passing_score, is_active, order_num)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(c1Id, ch1Id, 'اختبار إلكتروني شامل على الخواص العامة والتوزيع الإلكتروني', 'اختبار تقييمي لقياس فهم التوزيع الإلكتروني وأعداد التأكسد والخواص المغناطيسية والألوان.', 20, 3, 60, 1, 3).lastInsertRowid;
+
+    const insQ = db.prepare(`
+      INSERT INTO questions (exam_id, type, text, options, correct_answer, explanation, points, order_num)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+    insQ.run(
+      exam1Id, 'mcq',
+      'عنصر انتقالي رئيسي من السلسلة الأولى يحتوي مركبه على أيون X³⁺ بتوزيع إلكتروني [Ar] 3d⁵، فما هو العدد الذري لهذا العنصر؟',
+      JSON.stringify([
+        { id: 'opt1', text: '26 (الحديد Fe)' },
+        { id: 'opt2', text: '25 (المنجنيز Mn)' },
+        { id: 'opt3', text: '27 (الكوبالت Co)' },
+        { id: 'opt4', text: '24 (الكروم Cr)' }
+      ]),
+      'opt1',
+      'الحديد Fe عدده الذري 26 وتوزيعه الذري [Ar] 4s² 3d⁶. عند فقد 3 إلكترونات يصبح توزيعه [Ar] 3d⁵.',
+      2, 1
+    );
+    insQ.run(
+      exam1Id, 'true_false',
+      'تتميز جميع عناصر السلسلة الانتقالية الأولى بامتلاكها حالة التأكسد (+2) ما عدا عنصر السكانديوم Sc الذي يمتلك حالة وحيدة هي (+3).',
+      null, 'true',
+      'صحيح، لأن السكانديوم يفقد إلكتروني 4s وإلكترون 3d دفعة واحدة للوصول إلى التركيب الثابت للغاز الخامل [Ar].',
+      1, 2
+    );
+    insQ.run(
+      exam1Id, 'fill_blank',
+      'العنصر الانتقالي الوحيد في السلسلة الأولى الذي جميع مركباته ومحاليله غير ملونة ودايامغناطيسية هو عنصر الـ...',
+      null, 'سكانديوم',
+      'عنصر السكانديوم Sc في حالة التأكسد +3 يخلو مداره 3d تماماً من الإلكترونات (3d⁰).',
+      2, 3
+    );
+
+    const examFreeId = db.prepare(`
+      INSERT INTO exams (course_id, chapter_id, title, description, duration_minutes, max_attempts, passing_score, is_active, order_num)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(c2Id, chFreeId, 'اختبار تحديد المستوى في أساسيات الكيمياء (مجاني)', 'اختبر مستواك في الصيغ الكيميائية وأعداد التأكسد وحسابات المول.', 15, 5, 60, 1, 3).lastInsertRowid;
+
+    insQ.run(
+      examFreeId, 'mcq',
+      'ما هي الكتلة المولية لمركب هيدروكسيد الكالسيوم Ca(OH)₂ علماً بأن (Ca=40, O=16, H=1)؟',
+      JSON.stringify([
+        { id: 'opt1', text: '74 جم/مول' },
+        { id: 'opt2', text: '57 جم/مول' },
+        { id: 'opt3', text: '58 جم/مول' },
+        { id: 'opt4', text: '90 جم/مول' }
+      ]),
+      'opt1',
+      'الكتلة المولية = 40 + 2 × (16 + 1) = 40 + 34 = 74 جم/مول.',
+      2, 1
+    );
+
+    db.prepare(`
+      INSERT INTO live_sessions (title, course_id, description, scheduled_at, duration_minutes, meeting_link, status)
+      VALUES (?, ?, ?, datetime('now', '+2 days'), ?, ?, ?)
+    `).run(
+      'بث مباشر: مراجعة شاملة وحل مسائل الباب الأول العليا',
+      c1Id,
+      'حصة تفاعلية مباشرة مع د. زياد رمزي عياد لمراجعة تكات الباب الأول والإجابة على استفسارات الطلاب.',
+      75,
+      'https://meet.google.com/demo-chem-zra',
+      'upcoming'
+    );
+  }
+} catch (e) { console.error('Auto-seed curriculum error', e); }
 
 // Create indexes for better query performance
 const indexes = [
@@ -566,6 +736,7 @@ const indexes = [
   'CREATE INDEX IF NOT EXISTS idx_live_sessions_scheduled ON live_sessions(scheduled_at)',
   'CREATE INDEX IF NOT EXISTS idx_enrollments_user ON enrollments(user_id)',
   'CREATE INDEX IF NOT EXISTS idx_enrollments_course ON enrollments(course_id)',
+  'CREATE INDEX IF NOT EXISTS idx_lesson_notes_user_lesson ON lesson_notes(user_id, lesson_id)',
 ];
 for (const idx of indexes) {
   try { db.exec(idx); } catch (e) { /* index may already exist */ }

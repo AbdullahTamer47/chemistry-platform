@@ -206,7 +206,7 @@ export async function initDashboard() {
                 <div style="display: flex; gap: 10px; align-items: flex-start;">
                   <span class="material-symbols-rounded" style="font-size:1.1rem; color:${color}; margin-top:2px;">${icon}</span>
                   <div>
-                    <div style="font-size: 0.82rem; font-weight: 600; color: var(--text-primary); line-height: 1.4;">${act.action}</div>
+                    <div style="font-size: 0.82rem; font-weight: 600; color: var(--text-primary); line-height: 1.4;">${esc(act.action)}</div>
                     <div style="font-size: 0.7rem; color: var(--text-muted); margin-top: 2px;">${new Date(act.date).toLocaleDateString('ar-EG', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</div>
                   </div>
                 </div>

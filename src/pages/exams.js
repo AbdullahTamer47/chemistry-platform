@@ -325,14 +325,14 @@ export async function initExamTake(id) {
       const currentFill = answers[q.id] || '';
       optionsHtml = `
         <div style="width: 100%;">
-          <input type="text" class="form-input fill-blank-input" data-qid="${q.id}" value="${currentFill}" placeholder="اكتب إجابتك الكيميائية الدقيقة هنا..." style="max-width: 100%;">
+          <input type="text" class="form-input fill-blank-input" data-qid="${q.id}" value="${esc(currentFill)}" placeholder="اكتب إجابتك الكيميائية الدقيقة هنا..." style="max-width: 100%;">
         </div>
       `;
     } else if (q.type === 'multi_select' && q.options) {
       const letters = ['أ', 'ب', 'ج', 'د', 'هـ'];
       const curArr = Array.isArray(answers[q.id]) ? answers[q.id] : [];
       optionsHtml = q.options.map((o, oi) => `
-        <div class="option-item multi-option ${curArr.includes(o.id) ? 'selected' : ''}" data-qid="${q.id}" data-val="${o.id}">
+        <div class="option-item multi-option ${curArr.includes(o.id) ? 'selected' : ''}" data-qid="${q.id}" data-val="${esc(o.id)}">
           <span class="option-letter">${letters[oi]}</span>
           <span class="option-text">${escRich(o.text)}</span>
         </div>
@@ -347,7 +347,7 @@ export async function initExamTake(id) {
             <span class="material-symbols-rounded" style="vertical-align:middle; font-size:1.1rem; color:var(--primary);">edit_note</span>
             أجب كتابة أو ارفع صورة لإجابتك الورقية وحلك بالمعادلات:
           </div>
-          <textarea class="form-input essay-text-input" data-qid="${q.id}" rows="3" placeholder="اكتب خطوات الحل أو الإجابة النموذجية هنا بالتفصيل..." style="width:100%; resize:vertical; line-height:1.6; font-size:0.9rem;">${currText}</textarea>
+          <textarea class="form-input essay-text-input" data-qid="${q.id}" rows="3" placeholder="اكتب خطوات الحل أو الإجابة النموذجية هنا بالتفصيل..." style="width:100%; resize:vertical; line-height:1.6; font-size:0.9rem;">${esc(currText)}</textarea>
           
           <div style="margin-top:10px; display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
             <label class="btn btn-secondary btn-sm" style="cursor:pointer; display:inline-flex; align-items:center; gap:6px;">
@@ -359,7 +359,7 @@ export async function initExamTake(id) {
             </span>
           </div>
           <div id="essayImgPreview_${q.id}" style="margin-top:10px; ${currImg ? '' : 'display:none;'}">
-            <img src="${currImg}" id="essayImgTag_${q.id}" alt="صورة إجابة الطالب" style="max-height:160px; border-radius:var(--radius-md); border:1px solid var(--border-light); box-shadow:var(--shadow-sm);" />
+            <img src="${esc(currImg)}" id="essayImgTag_${q.id}" alt="صورة إجابة الطالب" style="max-height:160px; border-radius:var(--radius-md); border:1px solid var(--border-light); box-shadow:var(--shadow-sm);" />
           </div>
         </div>
       `;
@@ -378,11 +378,13 @@ export async function initExamTake(id) {
         </div>
         
         <div class="question-text" style="margin-bottom: 20px;">${escRich(q.text)}</div>
-        ${q.image_url ? `<div style="margin-bottom:18px;"><img src="${q.image_url}" alt="توضيح السؤال" style="max-width:100%;max-height:320px;border-radius:var(--radius-md);border:1px solid var(--border-light);box-shadow:var(--shadow-sm);" /></div>` : ''}
+        ${q.image_url ? `<div style="margin-bottom:18px;"><img src="${esc(q.image_url)}" alt="توضيح السؤال" style="max-width:100%;max-height:320px;border-radius:var(--radius-md);border:1px solid var(--border-light);box-shadow:var(--shadow-sm);" /></div>` : ''}
         <div class="question-options">${optionsHtml}</div>
       </div>
     `;
   }
+
+  let autoSaveTimer = null;
 
   function tick() {
     // Derive from the deadline, not from counting ticks: immune to throttled background tabs.
@@ -394,6 +396,7 @@ export async function initExamTake(id) {
     }
     if (timeLeft <= 0) {
       clearInterval(timerInterval);
+      if (autoSaveTimer) clearInterval(autoSaveTimer);
       showToast('انتهى وقت الامتحان! جاري التسليم التلقائي...', 'warning');
       submitExam();
       return false;
@@ -415,6 +418,7 @@ export async function initExamTake(id) {
 
   function leaveExamPage() {
     clearInterval(timerInterval);
+    if (autoSaveTimer) clearInterval(autoSaveTimer);
     document.removeEventListener('visibilitychange', tickOnVisible);
     unsecureExam();
   }
@@ -431,7 +435,8 @@ export async function initExamTake(id) {
 
   function bindEvents() {
     // Auto save timer
-    const autoSaveTimer = setInterval(saveDraft, 15000);
+    if (autoSaveTimer) clearInterval(autoSaveTimer);
+    autoSaveTimer = setInterval(saveDraft, 15000);
 
     // MCQ / True False Selection
     document.querySelectorAll('.option-item:not(.multi-option)').forEach(opt => {
@@ -632,6 +637,7 @@ export async function initExamTake(id) {
 
   async function submitExam() {
     clearInterval(timerInterval);
+    if (autoSaveTimer) clearInterval(autoSaveTimer);
     document.removeEventListener('visibilitychange', tickOnVisible);
     window.removeEventListener('hashchange', leaveExamPage);
     unsecureExam();
@@ -644,42 +650,21 @@ export async function initExamTake(id) {
     }
 
     if (id === 'adaptive') {
-      let earned = 0;
-      let total = 0;
-      const results = exam.questions.map(q => {
-        total += (q.points || 1);
-        const uAns = answers[q.id];
-        let isCorrect = false;
-        if (q.type === 'mcq' || q.type === 'true_false') {
-          isCorrect = String(uAns) === String(q.correct_answer);
-        } else if (q.type === 'fill_blank') {
-          isCorrect = String(uAns || '').trim().toLowerCase() === String(q.correct_answer || '').trim().toLowerCase();
+      try {
+        const result = await api.submitAdaptiveQuiz({
+          question_ids: exam.questions.map(q => q.id),
+          answers,
+          time_spent: timeTaken
+        });
+        localStorage.removeItem(draftKey);
+        renderResult({ ...result, rank: 1 }, timeTaken);
+      } catch (err) {
+        showToast(err.message || 'تعذر تصحيح الاختبار العلاجي', 'error');
+        if (submitBtn) {
+          submitBtn.disabled = false;
+          submitBtn.innerHTML = '<span class="material-symbols-rounded">send</span> تسليم الامتحان';
         }
-        if (isCorrect) earned += (q.points || 1);
-        return {
-          question_id: q.id,
-          text: q.text,
-          type: q.type,
-          options: q.options,
-          image_url: q.image_url,
-          points: q.points || 1,
-          user_answer: uAns,
-          correct_answer: q.correct_answer,
-          explanation: q.explanation,
-          is_correct: isCorrect
-        };
-      });
-      const score = total > 0 ? Math.round((earned / total) * 100) : 100;
-      localStorage.removeItem(draftKey);
-      renderResult({
-        score,
-        earned_points: earned,
-        total_points: total,
-        passed: score >= 60,
-        is_graded: 1,
-        results,
-        rank: 1
-      }, timeTaken);
+      }
       return;
     }
 
@@ -751,7 +736,7 @@ export function renderResult(result, timeTaken) {
           <div style="display:flex; align-items:center; gap:8px; font-weight:800; color:var(--primary); font-size:0.95rem; margin-bottom:6px;">
             <span class="material-symbols-rounded">rate_review</span> تقييم وتوجيهات المعلم (د. زياد رمزي):
           </div>
-          <p style="margin:0; font-size:0.88rem; line-height:1.7; color:var(--text-primary); white-space:pre-wrap;">${result.teacher_feedback}</p>
+          <p style="margin:0; font-size:0.88rem; line-height:1.7; color:var(--text-primary); white-space:pre-wrap;">${esc(result.teacher_feedback)}</p>
         </div>
       ` : ''}
 
@@ -821,13 +806,17 @@ export function renderResult(result, timeTaken) {
             </div>
 
             <div class="question-text" style="margin-bottom:16px;">${escRich(r.text)}</div>
-            ${r.image_url ? `<div style="margin-bottom:16px;"><img src="${r.image_url}" alt="توضيح السؤال" style="max-width:100%;max-height:280px;border-radius:var(--radius-md);border:1px solid var(--border-light);" /></div>` : ''}
+            ${r.image_url ? `<div style="margin-bottom:16px;"><img src="${esc(r.image_url)}" alt="توضيح السؤال" style="max-width:100%;max-height:280px;border-radius:var(--radius-md);border:1px solid var(--border-light);" /></div>` : ''}
 
             <!-- Options render for MCQ -->
             ${(r.type === 'mcq' || r.type === 'multi_select') && r.options 
               ? r.options.map((o, oi) => {
+                  let multiCorrect = [];
+                  if (r.type === 'multi_select' && r.correct_answer) {
+                    try { multiCorrect = JSON.parse(r.correct_answer); } catch (e) {}
+                  }
                   const isCorrectOpt = r.type === 'multi_select' 
-                    ? (r.correct_answer && JSON.parse(r.correct_answer).includes(o.id)) 
+                    ? (Array.isArray(multiCorrect) && multiCorrect.includes(o.id)) 
                     : o.id === r.correct_answer;
                     
                   const isUserOpt = r.type === 'multi_select' 
@@ -864,8 +853,8 @@ export function renderResult(result, timeTaken) {
             ${r.type === 'fill_blank' 
               ? `
               <div style="font-size:0.85rem; color:var(--text-secondary); background:var(--bg-secondary); padding:10px 14px; border-radius:var(--radius-md); font-weight:600;">
-                <div>إجابتك المسجلة: <strong style="color:var(--text-primary); font-family:monospace;">${r.user_answer || '(لم تكتب إجابة)'}</strong></div>
-                <div style="margin-top:6px;">الإجابة النموذجية الصحيحة: <strong style="color:var(--primary); font-family:monospace;">${r.correct_answer}</strong></div>
+                <div>إجابتك المسجلة: <strong style="color:var(--text-primary); font-family:monospace;">${esc(r.user_answer || '(لم تكتب إجابة)')}</strong></div>
+                <div style="margin-top:6px;">الإجابة النموذجية الصحيحة: <strong style="color:var(--primary); font-family:monospace;">${esc(r.correct_answer || '')}</strong></div>
               </div>
               ` 
               : ''
@@ -887,13 +876,13 @@ export function renderResult(result, timeTaken) {
 
                 ${r.teacher_comment ? `
                   <div style="background:rgba(16,185,129,0.08); border-right:3px solid var(--success); padding:8px 12px; border-radius:4px; color:var(--text-primary); margin-bottom:10px; font-weight:600; font-size:0.82rem;">
-                    ✍️ <strong>ملاحظة المعلم على إجابتك:</strong> ${r.teacher_comment}
+                    ✍️ <strong>ملاحظة المعلم على إجابتك:</strong> ${esc(r.teacher_comment)}
                   </div>
                 ` : ''}
                 
                 ${r.ai_feedback ? `
                   <div style="color:var(--text-secondary); margin-bottom:10px; font-weight:600; font-size:0.82rem;">
-                    💡 <strong>ملاحظات المراجعة:</strong> ${r.ai_feedback}
+                    💡 <strong>ملاحظات المراجعة:</strong> ${esc(r.ai_feedback)}
                   </div>
                 ` : ''}
 
@@ -905,8 +894,8 @@ export function renderResult(result, timeTaken) {
                   ${(typeof r.user_answer === 'object' && r.user_answer?.image_url) ? `
                     <div style="margin-top:10px;">
                       <span style="font-size:0.75rem; color:var(--text-muted); display:block; margin-bottom:4px;">صورة الحل بالورقة والقلم المرفقة (اضغط للتكبير):</span>
-                      <a href="${r.user_answer.image_url}" target="_blank">
-                        <img src="${r.user_answer.image_url}" alt="صورة حل الطالب" style="max-height:200px; border-radius:var(--radius-sm); border:1px solid var(--border-light); cursor:zoom-in;" />
+                      <a href="${esc(r.user_answer.image_url)}" target="_blank">
+                        <img src="${esc(r.user_answer.image_url)}" alt="صورة حل الطالب" style="max-height:200px; border-radius:var(--radius-sm); border:1px solid var(--border-light); cursor:zoom-in;" />
                       </a>
                     </div>
                   ` : ''}
@@ -939,11 +928,11 @@ export function renderResult(result, timeTaken) {
                   <span>توجيه علمي لتثبيت المفهوم الكيميائي:</span>
                 </div>
                 <div style="color:var(--text-primary); margin-bottom:6px;">
-                  ${r.pedagogical_feedback.reinforcement}
+                  ${esc(r.pedagogical_feedback.reinforcement)}
                 </div>
                 <div style="font-weight:700; color:#059669; font-size:0.78rem; display:flex; align-items:center; gap:4px;">
                   <span class="material-symbols-rounded" style="font-size:0.95rem;">assignment_turned_in</span>
-                  <span>الخطوة المقترحة للإتقان: ${r.pedagogical_feedback.learning_action}</span>
+                  <span>الخطوة المقترحة للإتقان: ${esc(r.pedagogical_feedback.learning_action)}</span>
                 </div>
               </div>
               ` 

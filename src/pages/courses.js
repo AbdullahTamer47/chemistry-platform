@@ -376,7 +376,7 @@ export async function initCourses() {
 
               <div class="course-card-badges-top">
                 <span class="course-card-stage-pill">
-                  <span class="material-symbols-rounded" style="font-size:0.95rem;color:var(--primary);">school</span> ${c.grade || 'ثانوية عامة'}
+                  <span class="material-symbols-rounded" style="font-size:0.95rem;color:var(--primary);">school</span> ${esc(c.grade || 'ثانوية عامة')}
                 </span>
                 <span class="course-card-type-pill" style="${typeBadgeColor}">
                   ${typeLabel}

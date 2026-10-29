@@ -278,5 +278,5 @@ db.prepare("INSERT INTO notifications (user_id, title, message, type) VALUES (NU
 db.prepare("INSERT INTO notifications (user_id, title, message, type) VALUES (?, 'كود اشتراك تجريبي جاهز', 'استخدم كود CHEM2025 لتفعيل كورس الباب الأول مجاناً للتجربة!', 'info')").run(studentId);
 
 console.log('Database successfully seeded with realistic Chemistry course and exam data!');
-console.log('Teacher: 01000000000 / teacher123');
-console.log('Student: 01111111111 / student123 (Try code CHEM2025 in #/wallet)');
+console.log(`Teacher: 01000000000 / ${TEACHER_PLAIN}`);
+console.log(`Student: 01111111111 / ${STUDENT_PLAIN} (Try code CHEM2025 in #/wallet)`);

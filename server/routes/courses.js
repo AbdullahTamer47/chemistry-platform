@@ -47,7 +47,7 @@ router.get('/:id', optionalAuth, (req, res) => {
     // video_url is only ever handed out via the signed video-token endpoint (teachers see it for editing)
     const lessons = db.prepare('SELECT * FROM lessons WHERE course_id = ?').all(course.id)
       .map(l => (isTeacher(req.user) ? l : { ...l, video_url: undefined }));
-    const exams = db.prepare('SELECT * FROM exams WHERE course_id = ? AND chapter_id IS NOT NULL').all(course.id);
+    const exams = db.prepare('SELECT * FROM exams WHERE course_id = ?').all(course.id);
     
     // Fetch progress if user is logged in
     let completedItemIds = new Set();
@@ -66,6 +66,7 @@ router.get('/:id', optionalAuth, (req, res) => {
     ].sort((a, b) => a.order_num - b.order_num);
 
     let isPreviousCompleted = true; // First item is always unlocked
+    const chapterIdSet = new Set(chapters.map(ch => ch.id));
 
     // Group items by chapter and apply sequential access
     chapters.forEach(ch => {
@@ -83,6 +84,28 @@ router.get('/:id', optionalAuth, (req, res) => {
         return { ...item, is_locked: isLocked, is_completed: isCompleted };
       });
     });
+
+    // Ensure items with chapter_id == null or orphaned chapter_id are still displayed
+    const unchapteredItems = allItems.filter(item => !item.chapter_id || !chapterIdSet.has(item.chapter_id)).map(item => {
+      let isLocked = false;
+      if (course.sequential_access && !isPreviousCompleted && !course.is_free) {
+        isLocked = true;
+      }
+      const itemKey = `${item.item_type}_${item.id}`;
+      const isCompleted = completedItemIds.has(itemKey);
+      isPreviousCompleted = isCompleted;
+      return { ...item, is_locked: isLocked, is_completed: isCompleted };
+    });
+
+    if (unchapteredItems.length > 0) {
+      chapters.push({
+        id: 0,
+        course_id: course.id,
+        title: 'محاضرات واختبارات عامة',
+        order_num: 999,
+        items: unchapteredItems
+      });
+    }
 
     let totalItems = 0;
     let completedItems = 0;
@@ -203,7 +226,7 @@ router.get('/my/enrolled', authMiddleware, (req, res) => {
       (SELECT COUNT(*) FROM lesson_progress WHERE user_id = ? AND lesson_id IN (SELECT id FROM lessons WHERE course_id = c.id) AND completed = 1) as completed_lessons
       FROM courses c
       INNER JOIN enrollments e ON c.id = e.course_id
-      WHERE e.user_id = ?
+      WHERE e.user_id = ? AND e.is_suspended = 0
       ORDER BY e.activated_at DESC
     `).all(req.user.id, req.user.id);
     res.json(courses);

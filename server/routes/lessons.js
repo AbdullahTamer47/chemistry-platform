@@ -72,6 +72,12 @@ router.get('/saved', authMiddleware, (req, res) => {
 router.post('/:id/bookmark', authMiddleware, (req, res) => {
   try {
     const lessonId = req.params.id;
+    const lesson = db.prepare('SELECT id, course_id, is_free FROM lessons WHERE id = ?').get(lessonId);
+    if (!lesson) return res.status(404).json({ error: 'الدرس غير موجود' });
+    if (!isTeacher(req.user) && !lesson.is_free && !canAccessCourse(req.user, lesson.course_id)) {
+      return res.status(403).json({ error: 'يجب الاشتراك في الكورس أولاً لحفظ هذا الدرس' });
+    }
+
     const exists = db.prepare('SELECT id FROM saved_lessons WHERE user_id = ? AND lesson_id = ?').get(req.user.id, lessonId);
     if (exists) {
       db.prepare('DELETE FROM saved_lessons WHERE id = ?').run(exists.id);
@@ -83,6 +89,74 @@ router.post('/:id/bookmark', authMiddleware, (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'حدث خطأ في حفظ الفيديو' });
+  }
+});
+
+// Student: get personal timestamped notes for a lesson
+router.get('/:id/notes', authMiddleware, (req, res) => {
+  try {
+    const notes = db.prepare('SELECT * FROM lesson_notes WHERE user_id = ? AND lesson_id = ? ORDER BY timestamp_sec ASC, id DESC').all(req.user.id, req.params.id);
+    res.json(notes);
+  } catch (err) {
+    res.status(500).json({ error: 'حدث خطأ في جلب الملاحظات' });
+  }
+});
+
+// Student: add a personal timestamped note
+router.post('/:id/notes', authMiddleware, (req, res) => {
+  try {
+    const lesson = db.prepare('SELECT id, course_id, is_free FROM lessons WHERE id = ?').get(req.params.id);
+    if (!lesson) return res.status(404).json({ error: 'الدرس غير موجود' });
+    if (!isTeacher(req.user) && !lesson.is_free && !canAccessCourse(req.user, lesson.course_id)) {
+      return res.status(403).json({ error: 'غير مصرح' });
+    }
+
+    const content = String(req.body.content || '').trim();
+    if (!content) return res.status(400).json({ error: 'يرجى كتابة نص الملاحظة' });
+    if (content.length > 1000) return res.status(400).json({ error: 'الملاحظة طويلة جداً (الحد الأقصى 1000 حرف)' });
+
+    const timestamp_sec = Math.max(0, Math.min(86400, parseInt(req.body.timestamp_sec, 10) || 0));
+    const result = db.prepare('INSERT INTO lesson_notes (user_id, lesson_id, timestamp_sec, content) VALUES (?, ?, ?, ?)')
+      .run(req.user.id, lesson.id, timestamp_sec, content);
+    const created = db.prepare('SELECT * FROM lesson_notes WHERE id = ?').get(result.lastInsertRowid);
+    res.status(201).json(created);
+  } catch (err) {
+    res.status(500).json({ error: 'حدث خطأ في حفظ الملاحظة' });
+  }
+});
+
+// Student: delete a personal note
+router.delete('/:id/notes/:noteId', authMiddleware, (req, res) => {
+  try {
+    db.prepare('DELETE FROM lesson_notes WHERE id = ? AND user_id = ? AND lesson_id = ?')
+      .run(req.params.noteId, req.user.id, req.params.id);
+    res.json({ message: 'تم حذف الملاحظة' });
+  } catch (err) {
+    res.status(500).json({ error: 'حدث خطأ في حذف الملاحظة' });
+  }
+});
+
+// Verify a signed video token and resolve stream URL
+router.get('/video/:token', authMiddleware, (req, res) => {
+  try {
+    const record = db.prepare(`
+      SELECT vt.*, l.video_url
+      FROM video_tokens vt
+      JOIN lessons l ON vt.lesson_id = l.id
+      WHERE vt.token = ? AND vt.user_id = ? AND datetime(vt.expires_at) > datetime('now')
+    `).get(req.params.token, req.user.id);
+
+    if (!record) {
+      return res.status(403).json({ error: 'انتهت صلاحية جلسة المشاهدة أو التوكن غير صالح' });
+    }
+    res.json({
+      valid: true,
+      lesson_id: record.lesson_id,
+      video_url: record.video_url,
+      expires_at: record.expires_at
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'حدث خطأ في التحقق من التوكن' });
   }
 });
 

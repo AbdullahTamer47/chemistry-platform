@@ -3,7 +3,7 @@ import { api } from '../utils/api.js';
 import { getUser } from '../utils/auth.js';
 import { showToast } from '../components/toast.js';
 import { confirmModal } from '../components/modal.js';
-import { sanitize } from '../utils/helpers.js';
+import { esc, sanitize, safeUrl, formatTime } from '../utils/helpers.js';
 
 export function renderLesson(id) {
   return `
@@ -129,10 +129,10 @@ export async function initLesson(id) {
               </div>
             </div>
             <div style="display:flex; gap:8px;">
-              <a href="${lesson.pdf_url}" target="_blank" rel="noopener noreferrer" class="btn btn-outline btn-sm" style="display:inline-flex; align-items:center; gap:6px;">
+              <a href="${safeUrl(lesson.pdf_url)}" target="_blank" rel="noopener noreferrer" class="btn btn-outline btn-sm" style="display:inline-flex; align-items:center; gap:6px;">
                 <span class="material-symbols-rounded">visibility</span> معاينة الملف
               </a>
-              <a href="${lesson.pdf_url}" download class="btn btn-primary btn-sm" style="display:inline-flex; align-items:center; gap:6px;">
+              <a href="${safeUrl(lesson.pdf_url)}" download class="btn btn-primary btn-sm" style="display:inline-flex; align-items:center; gap:6px;">
                 <span class="material-symbols-rounded">download</span> تحميل المذكرة
               </a>
             </div>
@@ -141,6 +141,27 @@ export async function initLesson(id) {
         ` 
         : ''
       }
+
+      <!-- Personal Timestamped Study Notes Card -->
+      <div class="card" style="margin-bottom: 24px; border: 1.5px solid var(--border);">
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:14px;">
+          <h3 class="card-title" style="margin:0; display:flex; align-items:center; gap:8px;">
+            <span class="material-symbols-rounded" style="color:var(--accent)">edit_note</span>
+            ملاحظاتي الشخصية الموقوتة على المحاضرة
+          </h3>
+          <span style="font-size:0.76rem; color:var(--text-muted); font-weight:600;">سجّل أهم النقاط والمعادلات مع الدقيقة للرجوع إليها ليلة الامتحان</span>
+        </div>
+        <form id="lessonNoteForm" style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:16px;">
+          <input type="text" id="noteTimeInput" class="form-input" placeholder="الدقيقة (مثال 12:30)" dir="ltr" style="width:140px; text-align:center; font-family:monospace;">
+          <input type="text" id="noteContentInput" class="form-input" placeholder="اكتب ملاحظتك أو المعادلة المهمة هنا..." required style="flex:1; min-width:200px;">
+          <button type="submit" class="btn btn-primary btn-sm" style="gap:6px; padding:0 18px;">
+            <span class="material-symbols-rounded">add_task</span> حفظ الملاحظة
+          </button>
+        </form>
+        <div id="lessonNotesList">
+          <div style="font-size:0.82rem; color:var(--text-muted); text-align:center; padding:10px;">جاري تحميل ملاحظاتك...</div>
+        </div>
+      </div>
 
       <!-- Lesson Discussions Form -->
       <div class="card">
@@ -229,6 +250,78 @@ export async function initLesson(id) {
       moveWm();
       wmInterval = setInterval(moveWm, 4000);
     }
+
+    const cleanupLessonListeners = () => {
+      document.removeEventListener('keydown', preventKeys);
+      if (wmInterval) clearInterval(wmInterval);
+    };
+    window.addEventListener('hashchange', cleanupLessonListeners, { once: true });
+
+    // Load & bind personal timestamped study notes
+    const parseTimeSec = (val) => {
+      const s = String(val || '').trim();
+      if (!s) return 0;
+      if (s.includes(':')) {
+        const parts = s.split(':').map(n => parseInt(n, 10) || 0);
+        return parts.length === 3 ? (parts[0] * 3600 + parts[1] * 60 + parts[2]) : (parts[0] * 60 + (parts[1] || 0));
+      }
+      return (parseInt(s, 10) || 0) * 60;
+    };
+
+    const loadLessonNotes = async () => {
+      const notesEl = document.getElementById('lessonNotesList');
+      if (!notesEl) return;
+      try {
+        const notes = await api.getLessonNotes(id);
+        if (!notes || notes.length === 0) {
+          notesEl.innerHTML = `<div style="font-size:0.82rem; color:var(--text-muted); text-align:center; padding:12px; background:var(--bg-secondary); border-radius:10px;">لم تسجل أي ملاحظات على هذه المحاضرة بعد.</div>`;
+          return;
+        }
+        notesEl.innerHTML = notes.map(n => `
+          <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; padding:10px 14px; background:var(--bg-secondary); border-radius:10px; margin-bottom:8px; border-right:3px solid var(--accent);">
+            <div style="display:flex; align-items:center; gap:10px; flex:1; min-width:0;">
+              <span class="badge badge-warning" dir="ltr" style="font-family:monospace; font-size:0.78rem; flex-shrink:0;">⏱ ${formatTime(n.timestamp_sec || 0)}</span>
+              <span style="font-size:0.88rem; color:var(--text-primary); font-weight:600; word-break:break-word;">${esc(n.content)}</span>
+            </div>
+            <button type="button" class="btn btn-ghost btn-sm delete-note-btn" data-nid="${n.id}" style="color:var(--error); padding:4px;" title="حذف الملاحظة">
+              <span class="material-symbols-rounded" style="font-size:1.1rem;">delete</span>
+            </button>
+          </div>
+        `).join('');
+
+        notesEl.querySelectorAll('.delete-note-btn').forEach(btn => {
+          btn.addEventListener('click', async () => {
+            try {
+              await api.deleteLessonNote(id, btn.dataset.nid);
+              loadLessonNotes();
+              showToast('تم حذف الملاحظة', 'success');
+            } catch (err) { showToast(err.message, 'error'); }
+          });
+        });
+      } catch (e) {
+        notesEl.innerHTML = '';
+      }
+    };
+    loadLessonNotes();
+
+    document.getElementById('lessonNoteForm')?.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const timeInp = document.getElementById('noteTimeInput');
+      const contentInp = document.getElementById('noteContentInput');
+      if (!contentInp?.value.trim()) return;
+      try {
+        await api.addLessonNote(id, {
+          timestamp_sec: parseTimeSec(timeInp?.value),
+          content: contentInp.value.trim()
+        });
+        if (timeInp) timeInp.value = '';
+        contentInp.value = '';
+        loadLessonNotes();
+        showToast('تم حفظ ملاحظتك بنجاح 📝', 'success');
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    });
 
     // Completion toggle
     const markBtn = document.getElementById('markCompleteBtn');

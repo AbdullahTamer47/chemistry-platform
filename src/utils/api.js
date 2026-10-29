@@ -226,5 +226,11 @@ export const api = {
 
   // Pillar 5: Adaptive Mistakes Quiz
   getAdaptiveMistakesQuiz: () => request('/exams/adaptive-mistakes-quiz', { method: 'POST' }),
+  submitAdaptiveQuiz: (body) => request('/exams/adaptive-mistakes-quiz/submit', { method: 'POST', body }),
+
+  // Lesson Personal Study Notes
+  getLessonNotes: (lessonId) => request(`/lessons/${lessonId}/notes`),
+  addLessonNote: (lessonId, body) => request(`/lessons/${lessonId}/notes`, { method: 'POST', body }),
+  deleteLessonNote: (lessonId, noteId) => request(`/lessons/${lessonId}/notes/${noteId}`, { method: 'DELETE' }),
 };
 

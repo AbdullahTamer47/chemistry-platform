@@ -329,7 +329,7 @@ export async function initMyResults() {
                     <div style="font-weight:800; color:var(--primary); display:flex; align-items:center; gap:6px; margin-bottom:4px;">
                       <span class="material-symbols-rounded" style="font-size:1.1rem;">rate_review</span> ملاحظات المعلم (د. زياد رمزي):
                     </div>
-                    <p style="margin:0; color:var(--text-primary); line-height:1.6; white-space:pre-wrap;">${a.teacher_feedback}</p>
+                    <p style="margin:0; color:var(--text-primary); line-height:1.6; white-space:pre-wrap;">${esc(a.teacher_feedback)}</p>
                   </div>
                 ` : ''}
 

@@ -633,7 +633,7 @@ export async function initAdminStudents() {
               ? details.lesson_progress.map(l => `
                 <div style="display:flex;justify-content:space-between;align-items:center;background:var(--bg-secondary);padding:10px;border-radius:6px;margin-bottom:8px">
                   <div>
-                    <strong style="font-size:0.9rem">${l.lesson_title}</strong>
+                    <strong style="font-size:0.9rem">${escA(l.lesson_title)}</strong>
                     <div style="font-size:0.75rem;color:var(--text-muted)">${escA(l.course_title)}</div>
                   </div>
                   <div style="text-align:left">
@@ -696,7 +696,7 @@ export async function initAdminStudents() {
             showModal('تعديل بيانات الطالب', `
               <div class="form-group"><label class="form-label">الاسم</label><input type="text" class="form-input" id="esName" value="${escA(s.name)}" required></div>
               <div class="form-group"><label class="form-label">رقم الهاتف</label><input type="text" class="form-input" id="esPhone" value="${escA(s.phone)}" required dir="ltr"></div>
-              <div class="form-group"><label class="form-label">رقم ولي الأمر</label><input type="text" class="form-input" id="esParent" value="${s.parent_phone || ''}" dir="ltr"></div>
+              <div class="form-group"><label class="form-label">رقم ولي الأمر</label><input type="text" class="form-input" id="esParent" value="${escA(s.parent_phone || '')}" dir="ltr"></div>
               <div class="form-group"><label class="form-label">المرحلة</label><select class="form-select" id="esGrade">${gradesList.map(g => `<option value="${g}" ${s.grade===g?'selected':''}>${g}</option>`).join('')}</select></div>
               <div class="form-group"><label class="form-label">كلمة مرور جديدة (اتركها فارغة لعدم التغيير)</label><input type="password" class="form-input" id="esPass"></div>
               ${enrollmentsHtml}
@@ -744,7 +744,7 @@ export async function initAdminStudents() {
             showModal(`تقرير ولي الأمر (واتساب) — ${escA(s.name)}`, `
               <div style="text-align:right;">
                 <p style="font-size:0.85rem; color:var(--text-secondary); margin-bottom:12px;">نص التقرير الجاهز للإرسال:</p>
-                <div style="background:var(--bg-secondary); border:1px solid var(--border-light); border-radius:8px; padding:12px; font-size:0.85rem; line-height:1.6; white-space:pre-wrap; margin-bottom:16px;">${rep.report_text}</div>
+                <div style="background:var(--bg-secondary); border:1px solid var(--border-light); border-radius:8px; padding:12px; font-size:0.85rem; line-height:1.6; white-space:pre-wrap; margin-bottom:16px;">${escA(rep.report_text)}</div>
                 <div style="display:flex; flex-direction:column; gap:10px;">
                   ${rep.whatsapp_parent_url ? `
                     <a href="${rep.whatsapp_parent_url}" target="_blank" class="btn btn-primary btn-block" style="background:#25D366; border-color:#25D366; gap:8px;">

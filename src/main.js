@@ -213,8 +213,8 @@ async function initProfile(navId) {
                 ${['سادسة ابتدائي','أولى إعدادي','ثانية إعدادي','ثالثة إعدادي','أولى ثانوي','ثانية ثانوي','ثالثة ثانوي'].map(g => `<option value="${g}" ${user.grade===g?'selected':''}>${g}</option>`).join('')}
               </select>
             </div>
-            <div class="form-group"><label class="form-label">رقم هاتف الأب (ولي الأمر الأساسي)</label><input type="tel" class="form-input" id="pParent" value="${user.parent_phone || ''}" dir="ltr" placeholder="01XXXXXXXXX"></div>
-            <div class="form-group"><label class="form-label">رقم هاتف الأم (ولي الأمر الثاني لمتابعة الدرجات)</label><input type="tel" class="form-input" id="pParentSecondary" value="${user.parent_phone_secondary || ''}" dir="ltr" placeholder="01XXXXXXXXX"></div>
+            <div class="form-group"><label class="form-label">رقم هاتف الأب (ولي الأمر الأساسي)</label><input type="tel" class="form-input" id="pParent" value="${esc(user.parent_phone || '')}" dir="ltr" placeholder="01XXXXXXXXX"></div>
+            <div class="form-group"><label class="form-label">رقم هاتف الأم (ولي الأمر الثاني لمتابعة الدرجات)</label><input type="tel" class="form-input" id="pParentSecondary" value="${esc(user.parent_phone_secondary || '')}" dir="ltr" placeholder="01XXXXXXXXX"></div>
             <button type="submit" class="btn btn-primary btn-block"><span class="material-symbols-rounded">save</span> حفظ التعديلات</button>
           </form>
         </div>
@@ -252,6 +252,11 @@ async function initProfile(navId) {
           parent_phone_secondary: updated.parent_phone_secondary
         });
         localStorage.setItem('user', JSON.stringify(stored));
+        // Update sidebar user info in DOM immediately
+        const sbName = document.querySelector('.sidebar-user-name');
+        const sbRole = document.querySelector('.sidebar-user-role');
+        if (sbName) sbName.textContent = updated.name;
+        if (sbRole && stored.role === 'student') sbRole.textContent = updated.grade || 'طالب';
         showToast('تم تحديث البيانات بنجاح', 'success');
       } catch (err) { showToast(err.message, 'error'); }
     });
@@ -326,13 +331,7 @@ const routes = {
     }, 
     auth: true 
   },
-  '/packages': { 
-    render: () => {
-      window.location.hash = '#/courses';
-      return renderCourses();
-    }, 
-    init: initCourses 
-  },
+  '/packages': { render: renderPackages, init: initPackages },
   '/store-locator': { render: renderStoreLocator, init: initStoreLocator },
   '/notifications': { render: renderNotifications, init: initNotifications, auth: true },
   '/profile': { render: renderProfile, init: initProfile, auth: true },

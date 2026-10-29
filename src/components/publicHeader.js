@@ -96,18 +96,22 @@ export function renderPublicHeader(activeNav = 'home') {
   `;
 }
 
+let publicScrollHandler = null;
+let publicKeyHandler = null;
+
 export function initPublicHeader() {
   const header = document.getElementById('landingHeader');
   if (header) {
-    const handleScroll = () => {
+    if (publicScrollHandler) window.removeEventListener('scroll', publicScrollHandler);
+    publicScrollHandler = () => {
       if (window.scrollY > 40) {
         header.classList.add('scrolled');
       } else {
         header.classList.remove('scrolled');
       }
     };
-    handleScroll();
-    window.addEventListener('scroll', handleScroll, { passive: true });
+    publicScrollHandler();
+    window.addEventListener('scroll', publicScrollHandler, { passive: true });
   }
 
   // Mobile drawer controls
@@ -136,11 +140,13 @@ export function initPublicHeader() {
     link.addEventListener('click', closeDrawer);
   });
 
-  document.addEventListener('keydown', (e) => {
+  if (publicKeyHandler) document.removeEventListener('keydown', publicKeyHandler);
+  publicKeyHandler = (e) => {
     if (e.key === 'Escape' && drawer?.classList.contains('open')) {
       closeDrawer();
     }
-  });
+  };
+  document.addEventListener('keydown', publicKeyHandler);
 
   const darkToggle = document.getElementById('landingDarkToggle');
   if (darkToggle) {

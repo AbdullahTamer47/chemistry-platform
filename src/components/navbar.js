@@ -139,6 +139,8 @@ export function renderNavbar(currentPage) {
   `;
 }
 
+let navbarKeyHandler = null;
+
 export function initNavbar() {
   const btn = document.getElementById('mobileMenuBtn');
   const sidebar = document.getElementById('sidebar');
@@ -174,12 +176,14 @@ export function initNavbar() {
     });
   }
 
-  // Close on Escape key
-  document.addEventListener('keydown', (e) => {
+  // Close on Escape key (replace previous listener to avoid leak)
+  if (navbarKeyHandler) document.removeEventListener('keydown', navbarKeyHandler);
+  navbarKeyHandler = (e) => {
     if (e.key === 'Escape' && sidebar?.classList.contains('open')) {
       closeMobileSidebar();
     }
-  });
+  };
+  document.addEventListener('keydown', navbarKeyHandler);
 
   if (logoutBtn) {
     logoutBtn.addEventListener('click', () => {

@@ -123,11 +123,11 @@ export async function initAdminExamDetail(id) {
             ${q.type === 'essay' ? `
               <div style="margin-top:12px;font-size:0.86rem;background:rgba(217,119,6,0.06);border:1px dashed rgba(217,119,6,0.3);padding:10px 14px;border-radius:8px;">
                 <strong style="color:#b45309">الإجابة النموذجية / معايير التصحيح:</strong>
-                <p style="margin-top:4px;color:var(--text-primary);white-space:pre-wrap;">${q.correct_answer || 'لم يتم تحديد إجابة نموذجية'}</p>
+                <p style="margin-top:4px;color:var(--text-primary);white-space:pre-wrap;">${esc(q.correct_answer || 'لم يتم تحديد إجابة نموذجية')}</p>
               </div>
             ` : `
               <div style="margin-top:10px;font-size:0.86rem;color:var(--success);font-weight:700">
-                <strong>الإجابة الصحيحة:</strong> ${q.type === 'multi_select' ? JSON.parse(q.correct_answer || '[]').join(', ') : (q.correct_answer === 'true' ? 'صح' : q.correct_answer === 'false' ? 'خطأ' : q.correct_answer || '-')}
+                <strong>الإجابة الصحيحة:</strong> ${esc(q.type === 'multi_select' ? (() => { try { return JSON.parse(q.correct_answer || '[]').join(', '); } catch { return q.correct_answer; } })() : (q.correct_answer === 'true' ? 'صح' : q.correct_answer === 'false' ? 'خطأ' : q.correct_answer || '-'))}
               </div>
             `}
 
@@ -299,14 +299,14 @@ export async function initAdminExamDetail(id) {
     } else if (type === 'fill_blank') {
       area.innerHTML = `
         <div class="form-group"><label class="form-label">الإجابة الصحيحة المقبولة</label>
-          <input type="text" class="form-input" id="qCorrectFB" value="${q ? q.correct_answer : ''}" placeholder="الكلمة أو الرقم الصحيح بدقة..." required>
+          <input type="text" class="form-input" id="qCorrectFB" value="${esc(q ? q.correct_answer : '')}" placeholder="الكلمة أو الرقم الصحيح بدقة..." required>
         </div>
       `;
     } else if (type === 'essay') {
       area.innerHTML = `
         <div class="form-group" style="background:rgba(217,119,6,0.06);padding:14px;border-radius:10px;border:1px dashed rgba(217,119,6,0.3);">
           <label class="form-label" style="color:#b45309;font-weight:700;">الإجابة النموذجية ومعايير توزيع الدرجات (مرجع للمعلم أثناء التصحيح)</label>
-          <textarea class="form-input" id="qCorrectEssay" rows="3" placeholder="اكتب خطوات الحل النموذجية وتوزيع الدرجات هنا لتسهيل مراجعة إجابات الطلاب...">${q ? q.correct_answer || '' : ''}</textarea>
+          <textarea class="form-input" id="qCorrectEssay" rows="3" placeholder="اكتب خطوات الحل النموذجية وتوزيع الدرجات هنا لتسهيل مراجعة إجابات الطلاب...">${esc(q ? q.correct_answer || '' : '')}</textarea>
           <div style="font-size:0.78rem;color:var(--text-muted);margin-top:6px;display:flex;align-items:center;gap:6px;">
             <span class="material-symbols-rounded" style="font-size:1rem;color:var(--primary);">info</span>
             <span>الطالب سيتمكن من كتابة الحل نصياً، أو تصوير ورقة إجابته المكتوبة باليد ورفعها. وستظهر لك للمراجعة والتصحيح.</span>
@@ -623,9 +623,9 @@ export async function initAdminExamDetail(id) {
                     <div style="font-size:0.8rem;color:var(--text-muted);margin-top:8px;">(لم يقم الطالب برفع صورة ورقية)</div>
                   `}
 
-                  <div style="margin-top:14px;background:#fff;padding:12px;border-radius:8px;border:1px solid var(--border);">
+                  <div style="margin-top:14px;background:var(--bg-secondary);padding:12px;border-radius:8px;border:1px solid var(--border);">
                     <div style="font-size:0.82rem;font-weight:800;color:var(--text-secondary);margin-bottom:4px;">الإجابة النموذجية المحددة بالسؤال:</div>
-                    <div style="font-size:0.85rem;color:var(--text-muted);">${q.correct_answer || 'لا توجد'}</div>
+                    <div style="font-size:0.85rem;color:var(--text-muted);">${esc(q.correct_answer || 'لا توجد')}</div>
                   </div>
 
                   <!-- Grading inputs -->
@@ -639,7 +639,7 @@ export async function initAdminExamDetail(id) {
                     </div>
                     <div style="flex:1;min-width:200px;">
                       <label class="form-label" style="font-weight:700;">ملاحظة أو توجيه للطالب على هذا السؤال</label>
-                      <input type="text" class="form-input essay-comment-input" data-qid="${q.id}" value="${currentEssayComment}" placeholder="مثال: أحسنت في المعادلة، ولكن انتبه لوزن الأكسجين...">
+                      <input type="text" class="form-input essay-comment-input" data-qid="${q.id}" value="${esc(currentEssayComment)}" placeholder="مثال: أحسنت في المعادلة، ولكن انتبه لوزن الأكسجين...">
                     </div>
                   </div>
                 </div>
@@ -647,8 +647,8 @@ export async function initAdminExamDetail(id) {
                 <!-- Auto graded review -->
                 <div style="background:var(--bg-secondary);padding:10px 14px;border-radius:8px;font-size:0.85rem;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
                   <div>
-                    <span>إجابة الطالب: <strong>${userAns !== undefined ? String(userAns) : '(لم يجب)'}</strong></span>
-                    <span style="margin-right:16px;">الصحيح: <strong style="color:var(--success);">${q.correct_answer}</strong></span>
+                    <span>إجابة الطالب: <strong>${esc(userAns !== undefined ? String(userAns) : '(لم يجب)')}</strong></span>
+                    <span style="margin-right:16px;">الصحيح: <strong style="color:var(--success);">${esc(q.correct_answer)}</strong></span>
                   </div>
                   <span class="badge ${String(userAns) === String(q.correct_answer) ? 'badge-success' : 'badge-danger'}">
                     ${String(userAns) === String(q.correct_answer) ? `+${q.points} درجة` : '0 درجة'}
@@ -662,7 +662,7 @@ export async function initAdminExamDetail(id) {
         <!-- General Feedback -->
         <div class="form-group" style="margin-top:16px;">
           <label class="form-label" style="font-weight:800;">ملاحظات عامة وتوجيه شامل للطالب من أ/ زياد رمزي</label>
-          <textarea class="form-input" id="teacherOverallFeedback" rows="2" placeholder="اكتب تقييمك الشامل للطالب وتوجيهات المذاكرة...">${attempt.teacher_feedback || ''}</textarea>
+          <textarea class="form-input" id="teacherOverallFeedback" rows="2" placeholder="اكتب تقييمك الشامل للطالب وتوجيهات المذاكرة...">${esc(attempt.teacher_feedback || '')}</textarea>
         </div>
 
         <div style="display:flex;gap:12px;margin-top:20px;">
