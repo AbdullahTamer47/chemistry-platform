@@ -635,7 +635,6 @@ export async function initExamTake(id) {
     document.removeEventListener('visibilitychange', tickOnVisible);
     window.removeEventListener('hashchange', leaveExamPage);
     unsecureExam();
-    localStorage.removeItem(draftKey);
     const timeTaken = Math.floor((Date.now() - startTime) / 1000);
     
     const submitBtn = document.getElementById('submitExamBtn');
@@ -671,6 +670,7 @@ export async function initExamTake(id) {
         };
       });
       const score = total > 0 ? Math.round((earned / total) * 100) : 100;
+      localStorage.removeItem(draftKey);
       renderResult({
         score,
         earned_points: earned,
@@ -685,6 +685,7 @@ export async function initExamTake(id) {
 
     try {
       const result = await api.submitExam(id, { answers, time_spent: timeTaken });
+      localStorage.removeItem(draftKey);
       renderResult(result, timeTaken);
     } catch (err) {
       showToast(err.message, 'error');

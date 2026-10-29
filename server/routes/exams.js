@@ -306,16 +306,17 @@ router.post('/:id/submit', authMiddleware, (req, res) => {
     }
 
     let serverTimeSpent = time_spent || 0;
+    let isLate = 0;
     if (session && session.started_at) {
       const startedAt = parseSqliteDate(session.started_at);
       const serverElapsed = Math.floor((Date.now() - startedAt) / 1000);
       serverTimeSpent = Math.max(serverElapsed, time_spent || 0);
 
-      // F-03: Reject submission if duration exceeded (with 60-second grace period)
+      // F-03: Accept late submissions, grade normally, and flag with late = 1
       if (!isTeacher(req.user) && exam.duration_minutes && exam.duration_minutes > 0) {
         const allowedSeconds = exam.duration_minutes * 60 + 60;
         if (serverElapsed > allowedSeconds) {
-          return res.status(400).json({ error: 'انتهى وقت الامتحان. لا يمكن تسليم الإجابات بعد انتهاء المهلة المحددة.' });
+          isLate = 1;
         }
       }
     }
@@ -435,9 +436,9 @@ router.post('/:id/submit', authMiddleware, (req, res) => {
     const pedagogicalSummary = JSON.stringify(results.filter(r => r.pedagogical_feedback).map(r => ({ q_id: r.question_id, feedback: r.pedagogical_feedback })));
 
     const result = db.prepare(`
-      INSERT INTO exam_attempts (exam_id, user_id, answers, score, total_points, time_spent, is_graded, question_ids, pedagogical_feedback, completed_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-    `).run(exam.id, req.user.id, JSON.stringify(answers || {}), score, totalPoints, serverTimeSpent, isGraded, questionIdsJson, pedagogicalSummary);
+      INSERT INTO exam_attempts (exam_id, user_id, answers, score, total_points, time_spent, is_graded, question_ids, pedagogical_feedback, late, completed_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+    `).run(exam.id, req.user.id, JSON.stringify(answers || {}), score, totalPoints, serverTimeSpent, isGraded, questionIdsJson, pedagogicalSummary, isLate);
 
     // Clear exam session on successful submission
     db.prepare('DELETE FROM exam_sessions WHERE user_id = ? AND exam_id = ?').run(req.user.id, exam.id);
@@ -529,6 +530,7 @@ router.post('/:id/submit', authMiddleware, (req, res) => {
       rank: rank.rank,
       passed: score >= exam.passing_score,
       is_graded: isGraded,
+      late: isLate,
       certificate,
       course_id: exam.course_id,
       next_item,

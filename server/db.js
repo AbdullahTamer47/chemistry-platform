@@ -206,7 +206,8 @@ db.exec(`
     total_points INTEGER DEFAULT 0,
     started_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     completed_at DATETIME,
-    time_spent INTEGER DEFAULT 0
+    time_spent INTEGER DEFAULT 0,
+    late INTEGER DEFAULT 0
   );
 
   CREATE TABLE IF NOT EXISTS enrollments (
@@ -423,10 +424,11 @@ db.exec(`
   );
 `);
 
-// Add essay grading columns to exam_attempts
+// Add essay grading and late columns to exam_attempts
 addColumnIfMissing('exam_attempts', 'essay_grades', 'TEXT');
 addColumnIfMissing('exam_attempts', 'teacher_feedback', 'TEXT');
 addColumnIfMissing('exam_attempts', 'is_graded', 'INTEGER DEFAULT 1');
+addColumnIfMissing('exam_attempts', 'late', 'INTEGER DEFAULT 0');
 
 // Wave A & Phase 1 migrations
 addColumnIfMissing('lessons', 'pdf_url', 'TEXT');
