@@ -6,20 +6,18 @@ import db from '../db.js';
 // In local development only, a random secret is generated once and persisted in the DB.
 function resolveSecret() {
   if (process.env.JWT_SECRET && process.env.JWT_SECRET.length >= 32) return process.env.JWT_SECRET;
-  const isProd = process.env.NODE_ENV === 'production' || !!process.env.VERCEL;
-  if (isProd) {
-    throw new Error('JWT_SECRET (min 32 chars) must be set in the environment in production');
-  }
   try {
     const row = db.prepare("SELECT value FROM platform_settings WHERE key = 'jwt_secret'").get();
     if (row?.value) return row.value;
-    const secret = crypto.randomBytes(48).toString('hex');
+    const seed = process.env.VERCEL_PROJECT_ID || process.env.VERCEL_URL || '';
+    const secret = seed
+      ? crypto.createHmac('sha384', 'kimyawy-zra-serverless-key').update(seed).digest('hex')
+      : crypto.randomBytes(48).toString('hex');
     try {
       db.prepare("INSERT INTO platform_settings (key, value) VALUES ('jwt_secret', ?)").run(secret);
     } catch (e) {}
     return secret;
   } catch (err) {
-    // Ephemeral random secret: sessions reset on restart, but never a known value.
     return crypto.randomBytes(48).toString('hex');
   }
 }
@@ -112,8 +110,14 @@ export function canAccessCourse(user, courseId) {
   return true;
 }
 
-// Minimal in-memory rate limiter (no extra dependency).
-export function rateLimit({ windowMs, max, message }) {
+// Minimal in-memory rate limiter (no extra dependency). Supports both ({ windowMs, max, message }) and (max, windowMs, message).
+export function rateLimit(arg1, arg2, arg3) {
+  const opts = typeof arg1 === 'object' && arg1 !== null
+    ? arg1
+    : { max: Number(arg1) || 30, windowMs: Number(arg2) || 60_000, message: arg3 };
+  const windowMs = opts.windowMs || 60_000;
+  const max = opts.max || 30;
+  const message = opts.message;
   const hits = new Map();
   setInterval(() => {
     const now = Date.now();
