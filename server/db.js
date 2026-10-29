@@ -762,28 +762,46 @@ try {
 let purgedFakeData = false;
 if (process.env.SEED_TEST_DATA !== '1') {
   try {
-    const alreadyPurged = db.prepare("SELECT value FROM platform_settings WHERE key = 'purged_all_fake_courses_v3'").get();
+    const alreadyPurged = db.prepare("SELECT value FROM platform_settings WHERE key = 'purged_all_fake_courses_v4'").get();
     if (!alreadyPurged) {
-      db.prepare('DELETE FROM lesson_progress').run();
-      db.prepare('DELETE FROM lessons').run();
-      db.prepare('DELETE FROM chapters').run();
-      db.prepare('DELETE FROM exam_results').run();
-      db.prepare('DELETE FROM questions').run();
-      db.prepare('DELETE FROM exams').run();
-      db.prepare('DELETE FROM enrollments').run();
-      db.prepare('DELETE FROM live_sessions').run();
-      db.prepare('DELETE FROM courses').run();
-      db.prepare('DELETE FROM packages').run();
-      db.prepare('DELETE FROM bookstores').run();
-      db.prepare("INSERT OR REPLACE INTO platform_settings (key, value) VALUES ('purged_all_fake_courses_v3', '1')").run();
+      db.exec('PRAGMA foreign_keys = OFF');
+      const tablesToClear = [
+        'discussion_replies',
+        'discussions',
+        'lesson_notes',
+        'bookmarks',
+        'lesson_progress',
+        'lessons',
+        'chapters',
+        'exam_results',
+        'exam_attempts',
+        'certificates',
+        'questions',
+        'exams',
+        'code_usage',
+        'activation_codes',
+        'course_reviews',
+        'enrollments',
+        'live_sessions',
+        'courses',
+        'packages',
+        'bookstores'
+      ];
+      for (const tbl of tablesToClear) {
+        try { db.prepare(`DELETE FROM ${tbl}`).run(); } catch (e) {}
+      }
+      db.exec('PRAGMA foreign_keys = ON');
+      db.prepare("INSERT OR REPLACE INTO platform_settings (key, value) VALUES ('purged_all_fake_courses_v4', '1')").run();
       purgedFakeData = true;
       if (pgSql) {
         try {
           await pgSql.query('DELETE FROM pg_courses');
+          await pgSql.query('DELETE FROM pg_enrollments');
         } catch (e) {}
       }
     }
   } catch (e) {
+    try { db.exec('PRAGMA foreign_keys = ON'); } catch (_) {}
     console.warn('Purge fake seed warning:', e.message);
   }
 }
