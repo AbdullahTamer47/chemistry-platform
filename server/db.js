@@ -762,33 +762,24 @@ try {
 let purgedFakeData = false;
 if (process.env.SEED_TEST_DATA !== '1') {
   try {
-    const alreadyPurged = db.prepare("SELECT value FROM platform_settings WHERE key = 'purged_fake_seed_v2'").get();
+    const alreadyPurged = db.prepare("SELECT value FROM platform_settings WHERE key = 'purged_all_fake_courses_v3'").get();
     if (!alreadyPurged) {
-      const fakeCourseTitles = [
-        'الباب الأول: كيمياء العناصر الانتقالية واستخلاص الحديد',
-        'أساسيات الكيمياء والتأسيس المنهجي الشامل (مجاني)',
-        'الباب الخامس: الكيمياء العضوية من الصفر للاحتراف',
-        'بنية الذرة والجدول الدوري الحديث والروابط الكيميائية'
-      ];
-      for (const title of fakeCourseTitles) {
-        const fc = db.prepare('SELECT id FROM courses WHERE title = ?').get(title);
-        if (fc) {
-          db.prepare('DELETE FROM lessons WHERE course_id = ?').run(fc.id);
-          db.prepare('DELETE FROM chapters WHERE course_id = ?').run(fc.id);
-          db.prepare('DELETE FROM exams WHERE course_id = ?').run(fc.id);
-          db.prepare('DELETE FROM enrollments WHERE course_id = ?').run(fc.id);
-          db.prepare('DELETE FROM live_sessions WHERE course_id = ?').run(fc.id);
-          db.prepare('DELETE FROM courses WHERE id = ?').run(fc.id);
-        }
-      }
-      db.prepare("DELETE FROM packages WHERE title LIKE 'باقة الـ 3 شهور الشاملة في الكيمياء%'").run();
-      db.prepare("DELETE FROM live_sessions WHERE meeting_link = 'https://meet.google.com/demo-chem-zra'").run();
+      db.prepare('DELETE FROM lesson_progress').run();
+      db.prepare('DELETE FROM lessons').run();
+      db.prepare('DELETE FROM chapters').run();
+      db.prepare('DELETE FROM exam_results').run();
+      db.prepare('DELETE FROM questions').run();
+      db.prepare('DELETE FROM exams').run();
+      db.prepare('DELETE FROM enrollments').run();
+      db.prepare('DELETE FROM live_sessions').run();
+      db.prepare('DELETE FROM courses').run();
+      db.prepare('DELETE FROM packages').run();
       db.prepare('DELETE FROM bookstores').run();
-      db.prepare("INSERT OR REPLACE INTO platform_settings (key, value) VALUES ('purged_fake_seed_v2', '1')").run();
+      db.prepare("INSERT OR REPLACE INTO platform_settings (key, value) VALUES ('purged_all_fake_courses_v3', '1')").run();
       purgedFakeData = true;
       if (pgSql) {
         try {
-          await pgSql.query('DELETE FROM pg_courses WHERE title = ANY($1)', [fakeCourseTitles]);
+          await pgSql.query('DELETE FROM pg_courses');
         } catch (e) {}
       }
     }
