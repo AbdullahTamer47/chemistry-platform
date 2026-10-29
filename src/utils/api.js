@@ -47,14 +47,19 @@ async function request(endpoint, options = {}) {
   }
   clearTimeout(timeoutId);
 
-  // 401 Session Handling (Recommended by gpt-6.1-sol)
+  // 401 Session Handling
   if (res.status === 401) {
     const isAuthEndpoint = endpoint.includes('/auth/login') || endpoint.includes('/auth/register');
     if (!isAuthEndpoint) {
       localStorage.removeItem('token');
       localStorage.removeItem('user');
-      if (!window.location.hash.includes('/login') && !window.location.hash.includes('/register')) {
-        window.location.hash = '#/login';
+      const currentPath = window.location.pathname;
+      if (!currentPath.includes('/login') && !currentPath.includes('/register')) {
+        if (typeof window.navigateTo === 'function') {
+          window.navigateTo('/login');
+        } else {
+          window.history.pushState(null, '', '/login');
+        }
       }
       throw new Error('انتهت الجلسة - يرجى تسجيل الدخول مرة أخرى');
     }
@@ -74,7 +79,10 @@ async function request(endpoint, options = {}) {
       || (typeof data?.message === 'string' && data.message)
       || (typeof data === 'string' && data)
       || (res.status === 404 ? 'الخدمة المطلوبة غير متوفرة حالياً (404)' : `حدث خطأ في الخادم (${res.status})`);
-    throw new Error(errorMsg);
+    const err = new Error(errorMsg);
+    err.status = res.status;
+    err.data = data;
+    throw err;
   }
   return data;
 }
@@ -122,6 +130,9 @@ export const api = {
   getExams: () => request('/exams'),
   getCourseExams: (courseId) => request(`/exams/course/${courseId}`),
   getExamForTaking: (id) => request(`/exams/${id}/take`),
+  lockExamExit: (id, reason) => request(`/exams/${id}/lock-exit`, { method: 'POST', body: { reason } }),
+  requestExamRetake: (id, reason) => request(`/exams/${id}/request-retake`, { method: 'POST', body: { reason } }),
+  allowExamRetake: (id, user_id) => request(`/exams/${id}/allow-retake`, { method: 'POST', body: { user_id } }),
   getExam: (id) => request(`/exams/${id}/details`),
   getExamSubmissions: (id) => request(`/exams/${id}/submissions`),
   gradeEssaySubmission: (attemptId, body) => request(`/exams/attempt/${attemptId}/grade-essay`, { method: 'POST', body }),
@@ -198,12 +209,15 @@ export const api = {
     return request('/upload', { method: 'POST', body: fd });
   },
 
-  // Pillar 1: Wallet & Instant Fawry & Vouchers
+  // Pillar 1: Wallet & Paymob & Vouchers
   getWalletBalance: () => request('/payments/wallet/balance'),
-  generateFawry: (amount) => request('/payments/fawry/generate', { method: 'POST', body: { amount } }),
+  paymobCheckout: (body) => request('/payments/paymob/checkout', { method: 'POST', body }),
   chargeVoucher: (voucher_code) => request('/payments/wallet/charge-voucher', { method: 'POST', body: { voucher_code } }),
   getVouchers: () => request('/payments/vouchers'),
   generateVouchers: (body) => request('/payments/vouchers/generate', { method: 'POST', body }),
+
+  // Parent Portal
+  parentPortalLookup: (body) => request('/students/parent-portal', { method: 'POST', body }),
 
   // Pillar 2: Visual Analytics
   getStudentAnalytics: () => request('/students/analytics'),

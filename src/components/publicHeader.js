@@ -10,25 +10,24 @@ export function renderPublicHeader(activeNav = 'home') {
     <header class="landing-header" id="landingHeader">
       <!-- Right Side Actions (RTL Start) -->
       <div class="landing-header-right">
-        <!-- Mobile hamburger toggle button (shown on <= 992px) -->
         <button class="landing-menu-btn" id="landingMenuBtn" aria-label="فتح القائمة الرئيسية" title="القائمة">
           <span class="material-symbols-rounded">menu</span>
         </button>
 
         ${logged
-          ? `<a href="#/${teacher ? 'admin' : 'dashboard'}" class="btn-sakr-solid header-auth-btn"><span class="material-symbols-rounded" style="font-size:1.15rem;">dashboard</span> ${teacher ? 'لوحة المعلم' : 'لوحة الطالب'}</a>
+          ? `<a href="/${teacher ? 'admin' : 'dashboard'}" class="btn-sakr-solid header-auth-btn"><span class="material-symbols-rounded" style="font-size:1.15rem;">dashboard</span> ${teacher ? 'لوحة المعلم' : 'لوحة الطالب'}</a>
              <button class="btn-sakr-outline header-logout-btn" id="landingLogoutBtn"><span class="material-symbols-rounded" style="font-size:1.15rem;">logout</span> خروج</button>`
-          : `<a href="#/register" class="btn-sakr-solid header-auth-btn">حساب جديد</a>
-             <a href="#/login" class="btn-sakr-outline header-login-btn">دخول</a>`
+          : `<a href="/register" class="btn-sakr-solid header-auth-btn">حساب جديد</a>
+             <a href="/login" class="btn-sakr-outline header-login-btn">دخول</a>`
         }
       </div>
 
       <!-- Center Navigation Links (Desktop) -->
       <nav class="landing-nav">
-        <a href="#/" class="landing-nav-link ${activeNav === 'home' ? 'active' : ''}" data-nav="hero">الرئيسية</a>
-        <a href="#/courses" class="landing-nav-link ${activeNav === 'courses' ? 'active' : ''}">الكورسات</a>
-        <a href="#/store-locator" class="landing-nav-link ${activeNav === 'store-locator' ? 'active' : ''}">دليل المكتبات</a>
-        <a href="#reviews" class="landing-nav-link ${activeNav === 'reviews' ? 'active' : ''}" data-scroll="reviews">آراء الطلاب</a>
+        <a href="/" class="landing-nav-link ${activeNav === 'home' ? 'active' : ''}" data-nav="hero">الرئيسية</a>
+        <a href="/courses" class="landing-nav-link ${activeNav === 'courses' ? 'active' : ''}">الكورسات</a>
+        <a href="/lab" class="landing-nav-link ${activeNav === 'lab' ? 'active' : ''}">المختبر الكيميائي</a>
+        <a href="/parent-portal" class="landing-nav-link ${activeNav === 'parent-portal' ? 'active' : ''}">بوابة ولي الأمر</a>
         <a href="#faq" class="landing-nav-link ${activeNav === 'faq' ? 'active' : ''}" data-scroll="faq">الأسئلة الشائعة</a>
       </nav>
 
@@ -38,7 +37,7 @@ export function renderPublicHeader(activeNav = 'home') {
           <span class="material-symbols-rounded sun-icon">light_mode</span>
           <span class="material-symbols-rounded moon-icon">dark_mode</span>
         </button>
-        <a href="#/" class="landing-logo">
+        <a href="/" class="landing-logo">
           <img src="${zraLogoFace}" alt="Z.R.A" class="logo-face-img" style="height: 38px;" />
           <img src="${zraLogoText}" alt="Z.R.A" class="logo-text-img" style="height: 28px; margin-right: 6px;" />
         </a>
@@ -59,17 +58,17 @@ export function renderPublicHeader(activeNav = 'home') {
       </div>
 
       <nav class="landing-drawer-nav">
-        <a href="#/" class="landing-drawer-link ${activeNav === 'home' ? 'active' : ''}" data-drawer-nav="hero">
+        <a href="/" class="landing-drawer-link ${activeNav === 'home' ? 'active' : ''}" data-drawer-nav="hero">
           <span class="material-symbols-rounded">home</span> الرئيسية
         </a>
-        <a href="#/courses" class="landing-drawer-link ${activeNav === 'courses' ? 'active' : ''}">
+        <a href="/courses" class="landing-drawer-link ${activeNav === 'courses' ? 'active' : ''}">
           <span class="material-symbols-rounded">school</span> الكورسات
         </a>
-        <a href="#/store-locator" class="landing-drawer-link ${activeNav === 'store-locator' ? 'active' : ''}">
-          <span class="material-symbols-rounded">storefront</span> دليل المكتبات ومنافذ الشحن
+        <a href="/lab" class="landing-drawer-link ${activeNav === 'lab' ? 'active' : ''}">
+          <span class="material-symbols-rounded">science</span> المختبر الكيميائي التفاعلي
         </a>
-        <a href="#reviews" class="landing-drawer-link ${activeNav === 'reviews' ? 'active' : ''}" data-scroll="reviews">
-          <span class="material-symbols-rounded">reviews</span> آراء وتكريمات الطلاب
+        <a href="/parent-portal" class="landing-drawer-link ${activeNav === 'parent-portal' ? 'active' : ''}">
+          <span class="material-symbols-rounded">family_restroom</span> بوابة متابعة ولي الأمر
         </a>
         <a href="#faq" class="landing-drawer-link ${activeNav === 'faq' ? 'active' : ''}" data-scroll="faq">
           <span class="material-symbols-rounded">help</span> الأسئلة الشائعة
@@ -78,16 +77,16 @@ export function renderPublicHeader(activeNav = 'home') {
 
       <div class="landing-drawer-actions">
         ${logged
-          ? `<a href="#/${teacher ? 'admin' : 'dashboard'}" class="btn-sakr-solid" style="width:100%;justify-content:center;">
+          ? `<a href="/${teacher ? 'admin' : 'dashboard'}" class="btn-sakr-solid" style="width:100%;justify-content:center;">
                <span class="material-symbols-rounded">dashboard</span> ${teacher ? 'لوحة المعلم والإدارة' : 'لوحة الطالب التعليمية'}
              </a>
              <button class="btn-sakr-outline" id="drawerLogoutBtn" style="width:100%;justify-content:center;margin-top:8px;">
                <span class="material-symbols-rounded">logout</span> تسجيل الخروج
              </button>`
-          : `<a href="#/register" class="btn-sakr-solid" style="width:100%;justify-content:center;">
+          : `<a href="/register" class="btn-sakr-solid" style="width:100%;justify-content:center;">
                <span class="material-symbols-rounded">person_add</span> إنشاء حساب جديد
              </a>
-             <a href="#/login" class="btn-sakr-outline" style="width:100%;justify-content:center;margin-top:8px;">
+             <a href="/login" class="btn-sakr-outline" style="width:100%;justify-content:center;margin-top:8px;">
                <span class="material-symbols-rounded">login</span> تسجيل الدخول
              </a>`
         }
@@ -114,7 +113,6 @@ export function initPublicHeader() {
     window.addEventListener('scroll', publicScrollHandler, { passive: true });
   }
 
-  // Mobile drawer controls
   const menuBtn = document.getElementById('landingMenuBtn');
   const drawer = document.getElementById('landingMobileDrawer');
   const overlay = document.getElementById('landingDrawerOverlay');
@@ -179,7 +177,6 @@ export function initPublicHeader() {
     });
   }
 
-  // Handle in-page scroll links
   document.querySelectorAll('[data-scroll]').forEach(link => {
     link.addEventListener('click', (e) => {
       const targetId = link.getAttribute('data-scroll');
@@ -196,7 +193,7 @@ export function initPublicHeader() {
 
   const homeNavLink = document.querySelector('[data-nav="hero"], [data-drawer-nav="hero"]');
   homeNavLink?.addEventListener('click', (e) => {
-    if (window.location.hash === '#/' || window.location.hash === '') {
+    if (window.location.pathname === '/') {
       e.preventDefault();
       closeDrawer();
       window.scrollTo({ top: 0, behavior: 'smooth' });

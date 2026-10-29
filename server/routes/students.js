@@ -1,13 +1,116 @@
 import { Router } from 'express';
 import bcrypt from 'bcryptjs';
 import db from '../db.js';
-import { authMiddleware, teacherMiddleware } from '../middleware/auth.js';
+import { authMiddleware, teacherMiddleware, rateLimit } from '../middleware/auth.js';
 
 const router = Router();
+const parentPortalLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 40, message: 'محاولات استعلام كثيرة، يرجى الانتظار قليلاً' });
+
+function normalizeDigits(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d))
+    .replace(/\s|-/g, '');
+}
 
 // ======================================================
 // IMPORTANT: All SPECIFIC routes MUST come before /:id
 // ======================================================
+
+// Public Parent Portal Lookup (verifies student_phone + parent_phone)
+router.post('/parent-portal', parentPortalLimiter, (req, res) => {
+  try {
+    const studentPhone = normalizeDigits(req.body.student_phone);
+    const parentPhone = normalizeDigits(req.body.parent_phone);
+
+    if (!studentPhone || !parentPhone) {
+      return res.status(400).json({ error: 'يرجى إدخال رقم هاتف الطالب ورقم هاتف ولي الأمر المسجلين بالمنصة' });
+    }
+
+    const student = db.prepare(`
+      SELECT id, name, phone, grade, parent_phone, created_at
+      FROM users
+      WHERE role = 'student' AND phone = ? AND (parent_phone = ? OR parent_phone_secondary = ?)
+    `).get(studentPhone, parentPhone, parentPhone);
+
+    if (!student) {
+      return res.status(404).json({ error: 'لم يتم العثور على بيانات مطابقة. تأكد من إدخال رقم هاتف الطالب ورقم هاتف ولي الأمر المسجل بالحساب بشكل صحيح.' });
+    }
+
+    const courses = db.prepare(`
+      SELECT c.id, c.title, c.grade, e.activated_at, e.is_suspended,
+        (SELECT COUNT(*) FROM lessons WHERE course_id = c.id) as total_lessons,
+        (SELECT COUNT(*) FROM lesson_progress WHERE user_id = ? AND lesson_id IN (SELECT id FROM lessons WHERE course_id = c.id) AND completed = 1) as completed_lessons
+      FROM courses c
+      INNER JOIN enrollments e ON c.id = e.course_id
+      WHERE e.user_id = ?
+      ORDER BY e.activated_at DESC
+    `).all(student.id, student.id).map(c => ({
+      ...c,
+      progress: c.total_lessons > 0 ? Math.round((c.completed_lessons / c.total_lessons) * 100) : 0
+    }));
+
+    const exams = db.prepare(`
+      SELECT ea.id, ea.exam_id, ea.score, ea.total_points, ea.time_spent, ea.completed_at, ea.is_graded, ea.teacher_feedback,
+             e.title as exam_title, e.passing_score, e.exam_type, c.title as course_title
+      FROM exam_attempts ea
+      JOIN exams e ON ea.exam_id = e.id
+      LEFT JOIN courses c ON e.course_id = c.id
+      WHERE ea.user_id = ? AND ea.completed_at IS NOT NULL
+      ORDER BY ea.completed_at DESC
+    `).all(student.id).map(a => ({
+      ...a,
+      passed: Number(a.score) >= (a.passing_score || 60)
+    }));
+
+    const lockedExams = db.prepare(`
+      SELECT es.exam_id, es.started_at, es.lock_reason, es.retake_requested,
+             e.title as exam_title, c.title as course_title
+      FROM exam_sessions es
+      JOIN exams e ON es.exam_id = e.id
+      LEFT JOIN courses c ON e.course_id = c.id
+      WHERE es.user_id = ? AND es.is_locked = 1
+      ORDER BY es.started_at DESC
+    `).all(student.id);
+
+    const recentLessons = db.prepare(`
+      SELECT lp.completed, lp.views_count, lp.completed_at,
+             l.title as lesson_title, l.max_views, c.title as course_title
+      FROM lesson_progress lp
+      JOIN lessons l ON lp.lesson_id = l.id
+      LEFT JOIN courses c ON l.course_id = c.id
+      WHERE lp.user_id = ?
+      ORDER BY COALESCE(lp.completed_at, '1970-01-01') DESC, lp.id DESC
+      LIMIT 20
+    `).all(student.id);
+
+    const totalLessonsCount = courses.reduce((acc, c) => acc + (c.total_lessons || 0), 0);
+    const completedLessonsCount = courses.reduce((acc, c) => acc + (c.completed_lessons || 0), 0);
+    const avgScore = exams.length > 0
+      ? Math.round(exams.reduce((acc, e) => acc + (Number(e.score) || 0), 0) / exams.length)
+      : 0;
+
+    res.json({
+      student,
+      summary: {
+        enrolled_courses_count: courses.length,
+        total_lessons_count: totalLessonsCount,
+        completed_lessons_count: completedLessonsCount,
+        curriculum_percent: totalLessonsCount > 0 ? Math.round((completedLessonsCount / totalLessonsCount) * 100) : 0,
+        exams_taken: exams.length,
+        avg_score: avgScore,
+        locked_exams_count: lockedExams.length
+      },
+      courses,
+      exams,
+      locked_exams: lockedExams,
+      recent_lessons: recentLessons
+    });
+  } catch (err) {
+    console.error('Parent portal error:', err);
+    res.status(500).json({ error: 'حدث خطأ أثناء جلب تقرير متابعة الطالب' });
+  }
+});
 
 // Get dashboard stats (teacher)
 router.get('/stats/dashboard', authMiddleware, teacherMiddleware, (req, res) => {
@@ -263,17 +366,11 @@ router.get('/:id/whatsapp-report', authMiddleware, teacherMiddleware, (req, res)
       whatsapp_parent_url = `https://wa.me/${formatWa(student.parent_phone)}?text=${text}`;
     }
 
-    if (student.parent_phone_secondary) {
-      const textSecondary = encodeURIComponent(`السلام عليكم ورحمة الله، والدة الطالب/ة ${student.name}.\n\n${msg}`);
-      whatsapp_parent_secondary_url = `https://wa.me/${formatWa(student.parent_phone_secondary)}?text=${textSecondary}`;
-    }
-
     res.json({
       student_id: student.id,
       student_name: student.name,
       report_text: msg,
-      whatsapp_parent_url,
-      whatsapp_parent_secondary_url
+      whatsapp_parent_url
     });
   } catch (err) {
     console.error(err);

@@ -6,6 +6,7 @@ import path from 'node:path';
 // Use an isolated temporary database for testing
 const tempDbPath = path.join(os.tmpdir(), `kimyawy_test_${Date.now()}_${Math.random().toString(36).slice(2)}.db`);
 process.env.DB_PATH = tempDbPath;
+process.env.SEED_TEST_DATA = '1';
 process.env.JWT_SECRET = 'test_secret_key_for_automated_verification_suite_2026_zra';
 process.env.TEACHER_INITIAL_PASSWORD = 'TeacherStrongPassword!2026';
 

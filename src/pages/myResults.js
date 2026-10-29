@@ -14,25 +14,21 @@ export function renderMyResults() {
             <p class="page-subtitle">مخطط إنجاز المنهج، مسار تطور درجاتك عبر العام، وشهادات التفوق المعتمدة</p>
           </div>
           <div style="display:flex;gap:10px;flex-wrap:wrap;">
-            <a href="#/certificates" class="btn btn-outline" style="gap:6px;">
+            <a href="/certificates" class="btn btn-outline" style="gap:6px;">
               <span class="material-symbols-rounded" style="color:var(--warning);">workspace_premium</span> شهاداتي المعتمدة
             </a>
-            <a href="#/exams" class="btn btn-primary" style="gap:6px;">
+            <a href="/exams" class="btn btn-primary" style="gap:6px;">
               <span class="material-symbols-rounded">assignment</span> الامتحانات المتاحة
             </a>
           </div>
         </div>
 
-        <!-- VISUAL ANALYTICS CONTAINER -->
         <div id="visualAnalyticsContainer" style="margin-bottom:28px;"></div>
-
-        <!-- STATS CARDS -->
         <div id="resultsStatsContainer" style="margin-bottom:28px;"></div>
 
-        <!-- ADAPTIVE MISTAKES BANNER -->
-        <div id="adaptiveQuizBanner" class="card" style="margin-bottom:28px;background:linear-gradient(135deg, rgba(99,102,241,0.1), rgba(168,85,247,0.08));border:1px solid rgba(99,102,241,0.25);padding:20px 24px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:16px;">
+        <div id="adaptiveQuizBanner" class="card" style="margin-bottom:28px;background:linear-gradient(135deg, rgba(5,150,105,0.1), rgba(16,185,129,0.06));border:1px solid rgba(5,150,105,0.25);padding:20px 24px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:16px;">
           <div style="display:flex;align-items:center;gap:16px;">
-            <div class="stat-icon purple" style="width:48px;height:48px;border-radius:12px;">
+            <div class="stat-icon green" style="width:48px;height:48px;border-radius:12px;">
               <span class="material-symbols-rounded">psychology</span>
             </div>
             <div>
@@ -45,7 +41,6 @@ export function renderMyResults() {
           </button>
         </div>
 
-        <!-- TABS & FILTER -->
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; flex-wrap:wrap; gap:12px;">
           <div class="tabs" id="resultsFilterTabs" style="margin:0;">
             <button class="tab active" data-filter="all">جميع المحاولات (<span id="countAll">0</span>)</button>
@@ -69,7 +64,6 @@ export async function initMyResults() {
   const analyticsEl = document.getElementById('visualAnalyticsContainer');
   if (!listEl) return;
 
-  // Bind Adaptive Mistakes Quiz button
   document.getElementById('startAdaptiveMistakesBtn')?.addEventListener('click', async () => {
     const btn = document.getElementById('startAdaptiveMistakesBtn');
     btn.disabled = true;
@@ -79,10 +73,10 @@ export async function initMyResults() {
       if (!data.questions || data.questions.length === 0) {
         showToast(data.message || 'لا توجد أخطاء مسجلة بحسابك حالياً. ممتاز!', 'info');
       } else {
-        // Store adaptive test in session and navigate to exam take
         sessionStorage.setItem('adaptive_quiz', JSON.stringify(data));
-        showToast(`تم تجهيز ${data.count} سؤال من أخطائك السابقة للتدريب!`, 'success');
-        window.location.hash = '#/exams/adaptive/take';
+        showToast(`تم تجهيز ${data.count} سؤال من أخطائك السابقة للتدريب`, 'success');
+        if (window.navigateTo) window.navigateTo('/exams/adaptive/take');
+        else window.location.href = '/exams/adaptive/take';
       }
     } catch (err) {
       showToast(err.message, 'error');
@@ -98,21 +92,16 @@ export async function initMyResults() {
       api.getStudentAnalytics().catch(() => null)
     ]);
 
-    // RENDER VISUAL CHARTS (DONUT + BAR CHART)
     if (analytics) {
       const c = analytics.curriculum || { percent: 0, completed_lessons: 0, total_lessons: 0, remaining_lessons: 0 };
       const e = analytics.exams || { average_percent: 0, max_percent: 0, min_percent: 0, total_taken: 0, passed_count: 0 };
       const prog = analytics.progression || [];
-      const weekly = analytics.weekly_activity || [];
 
-      // Calculate SVG Donut stroke-dasharray (circumference = 2 * PI * 45 ≈ 283)
       const circumference = 283;
       const progressOffset = circumference - (circumference * (c.percent / 100));
 
       analyticsEl.innerHTML = `
         <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(min(100%, 280px), 1fr));gap:16px;">
-
-          <!-- 1. CURRICULUM DONUT CHART -->
           <div class="card" style="padding:clamp(16px, 3vw, 24px);display:flex;flex-direction:column;justify-content:space-between;">
             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
               <h3 style="font-size:1.05rem;font-weight:800;margin:0;display:flex;align-items:center;gap:8px;">
@@ -123,19 +112,16 @@ export async function initMyResults() {
             </div>
 
             <div style="display:flex;align-items:center;justify-content:space-around;gap:20px;flex-wrap:wrap;margin:10px 0;">
-              <!-- Animated SVG Donut -->
               <div style="position:relative;width:150px;height:150px;display:flex;align-items:center;justify-content:center;">
                 <svg width="150" height="150" viewBox="0 0 100 100" style="transform:rotate(-90deg);">
-                  <!-- Background Track -->
                   <circle cx="50" cy="50" r="45" fill="none" stroke="var(--bg-secondary)" stroke-width="10" />
-                  <!-- Progress Track -->
                   <circle cx="50" cy="50" r="45" fill="none" stroke="url(#donutGradient)" stroke-width="10"
                     stroke-dasharray="${circumference}" stroke-dashoffset="${progressOffset}"
                     stroke-linecap="round" style="transition:stroke-dashoffset 1.2s ease;" />
                   <defs>
                     <linearGradient id="donutGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                      <stop offset="0%" stop-color="#38bdf8" />
-                      <stop offset="100%" stop-color="#6366f1" />
+                      <stop offset="0%" stop-color="#10b981" />
+                      <stop offset="100%" stop-color="#059669" />
                     </linearGradient>
                   </defs>
                 </svg>
@@ -145,10 +131,9 @@ export async function initMyResults() {
                 </div>
               </div>
 
-              <!-- Metrics Legend -->
               <div style="display:flex;flex-direction:column;gap:12px;font-size:0.85rem;">
                 <div style="display:flex;align-items:center;gap:10px;">
-                  <div style="width:12px;height:12px;border-radius:3px;background:linear-gradient(135deg, #38bdf8, #6366f1);"></div>
+                  <div style="width:12px;height:12px;border-radius:3px;background:linear-gradient(135deg, #10b981, #059669);"></div>
                   <span style="color:var(--text-secondary);">المحاضرات المكتملة:</span>
                   <strong style="color:var(--text-primary);">${c.completed_lessons} محاضرة</strong>
                 </div>
@@ -164,14 +149,8 @@ export async function initMyResults() {
                 </div>
               </div>
             </div>
-
-            <div style="font-size:0.78rem;color:var(--text-muted);background:var(--bg-secondary);padding:10px 14px;border-radius:8px;margin-top:12px;">
-              <span class="material-symbols-rounded" style="font-size:0.95rem;vertical-align:middle;color:var(--primary);">lightbulb</span>
-              استمر في إتمام المحاضرات والواجبات لتصل نسبة إنجازك إلى 100% وتحصل على وسام الإتقان!
-            </div>
           </div>
 
-          <!-- 2. SCORE PROGRESSION BAR CHART -->
           <div class="card" style="padding:24px;display:flex;flex-direction:column;justify-content:space-between;">
             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
               <h3 style="font-size:1.05rem;font-weight:800;margin:0;display:flex;align-items:center;gap:8px;">
@@ -183,7 +162,6 @@ export async function initMyResults() {
               </div>
             </div>
 
-            <!-- Bar Chart Container -->
             <div style="min-height:160px;display:flex;align-items:flex-end;gap:12px;padding:16px 8px;background:var(--bg-secondary);border-radius:12px;overflow-x:auto;">
               ${prog.length === 0 ? `
                 <div style="width:100%;text-align:center;color:var(--text-muted);font-size:0.85rem;padding:30px 0;">
@@ -204,14 +182,12 @@ export async function initMyResults() {
               }).join('')}
             </div>
 
-            <!-- Trend Indicators -->
             <div style="display:flex;align-items:center;justify-content:space-between;margin-top:14px;font-size:0.8rem;color:var(--text-secondary);flex-wrap:wrap;gap:8px;">
-              <div>أعلى نتيجة: <strong style="color:var(--success);">${e.max_percent}%</strong> ${e.best_exam ? `(${esc(e.best_exam.title.slice(0, 15))}...)` : ''}</div>
+              <div>أعلى نتيجة: <strong style="color:var(--success);">${e.max_percent}%</strong></div>
               <div>أضعف نتيجة: <strong style="color:var(--error);">${e.min_percent}%</strong></div>
               <div>نسبة النجاح: <strong style="color:var(--primary);">${e.total_taken > 0 ? Math.round((e.passed_count / e.total_taken) * 100) : 0}%</strong></div>
             </div>
           </div>
-
         </div>
       `;
     }
@@ -224,8 +200,8 @@ export async function initMyResults() {
             <span class="material-symbols-rounded" style="font-size:4.5rem;">history_edu</span>
           </div>
           <h3 style="font-weight:800; font-size:1.3rem; margin-bottom:8px;">لا يوجد سجل امتحانات بعد</h3>
-          <p style="color:var(--text-secondary); font-size:0.9rem; margin-bottom:24px;">لم تقم بتسليم أي اختبار أو كويز حتى الآن. ابدأ بحل أول امتحان لتسجيل درجاتك وترتيبك!</p>
-          <a href="#/exams" class="btn btn-primary" style="padding:10px 24px;">
+          <p style="color:var(--text-secondary); font-size:0.9rem; margin-bottom:24px;">لم تقم بتسليم أي اختبار أو واجب حتى الآن. ابدأ بحل أول امتحان لتسجيل درجاتك وترتيبك!</p>
+          <a href="/exams" class="btn btn-primary" style="padding:10px 24px;">
             <span class="material-symbols-rounded">rocket_launch</span> ابدأ بحل أول امتحان الآن
           </a>
         </div>
@@ -233,7 +209,6 @@ export async function initMyResults() {
       return;
     }
 
-    // Calculate metrics
     const totalTaken = attempts.length;
     const gradedAttempts = attempts.filter(a => a.is_graded === 1);
     const pendingAttempts = attempts.filter(a => a.is_graded === 0);
@@ -273,7 +248,7 @@ export async function initMyResults() {
           <div class="stat-icon purple"><span class="material-symbols-rounded">rate_review</span></div>
           <div>
             <div class="stat-value">${gradedAttempts.length}</div>
-            <div class="stat-label">محاولات تم تدقيق مقاليها</div>
+            <div class="stat-label">محاولات معتمدة</div>
           </div>
         </div>
       </div>
@@ -303,7 +278,7 @@ export async function initMyResults() {
                     <div style="display:flex; align-items:center; gap:8px; margin-bottom:4px; flex-wrap:wrap;">
                       <h3 style="font-size:1.05rem; font-weight:800; color:var(--text-primary); margin:0;">${esc(a.exam_title)}</h3>
                       <span class="badge ${isGraded ? (passed ? 'badge-success' : 'badge-danger') : 'badge-warning'}" style="font-size:0.72rem; font-weight:700;">
-                        ${isGraded ? (passed ? 'اجتياز بنجاح ✨' : 'لم يحقق نسبة النجاح') : 'قيد تصحيح المقالي ⏳'}
+                        ${isGraded ? (passed ? 'اجتياز بنجاح' : 'لم يحقق نسبة النجاح') : 'قيد تصحيح المقالي'}
                       </span>
                       ${a.course_title ? `<span style="font-size:0.75rem; color:var(--text-muted); font-weight:600;">• ${esc(a.course_title)}</span>` : ''}
                     </div>
@@ -319,13 +294,13 @@ export async function initMyResults() {
                       ${a.score}%
                     </div>
                     <div style="font-size:0.68rem; color:var(--text-muted); font-weight:700;">
-                      ${isGraded ? 'الدرجة المعتمدة' : 'درجة أولية (مؤقتة)'}
+                      ${isGraded ? 'الدرجة المعتمدة' : 'درجة أولية'}
                     </div>
                   </div>
                 </div>
 
                 ${a.teacher_feedback ? `
-                  <div style="background:rgba(99,102,241,0.06); border:1px solid rgba(99,102,241,0.25); border-radius:10px; padding:12px 16px; font-size:0.85rem;">
+                  <div style="background:rgba(5,150,105,0.06); border:1px solid rgba(5,150,105,0.25); border-radius:10px; padding:12px 16px; font-size:0.85rem;">
                     <div style="font-weight:800; color:var(--primary); display:flex; align-items:center; gap:6px; margin-bottom:4px;">
                       <span class="material-symbols-rounded" style="font-size:1.1rem;">rate_review</span> ملاحظات المعلم (د. زياد رمزي):
                     </div>
@@ -333,15 +308,8 @@ export async function initMyResults() {
                   </div>
                 ` : ''}
 
-                <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; border-top:1px solid var(--border-light); padding-top:12px; margin-top:2px;">
-                  <div>
-                    ${passed && isGraded ? `
-                      <a href="#/certificates" class="btn btn-ghost btn-sm" style="color:var(--warning);gap:4px;font-weight:700;">
-                        <span class="material-symbols-rounded">workspace_premium</span> عرض وتحميل شهادة التقدير
-                      </a>
-                    ` : ''}
-                  </div>
-                  <a href="#/exams/${a.exam_id}/review" class="btn btn-primary btn-sm" style="display:inline-flex; align-items:center; gap:6px;">
+                <div style="display:flex; justify-content:flex-end; align-items:center; flex-wrap:wrap; gap:10px; border-top:1px solid var(--border-light); padding-top:12px; margin-top:2px;">
+                  <a href="/exams/${a.exam_id}/review" class="btn btn-primary btn-sm" style="display:inline-flex; align-items:center; gap:6px;">
                     <span class="material-symbols-rounded">visibility</span> عرض المراجعة والتصحيح الكامل
                   </a>
                 </div>
@@ -354,7 +322,6 @@ export async function initMyResults() {
 
     renderList(attempts);
 
-    // Tab filter switching
     document.querySelectorAll('#resultsFilterTabs .tab').forEach(tab => {
       tab.addEventListener('click', () => {
         document.querySelectorAll('#resultsFilterTabs .tab').forEach(t => t.classList.remove('active'));

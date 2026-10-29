@@ -117,9 +117,9 @@ export async function initCourseDetail(id) {
       <div class="course-bassthalk-container">
         <!-- Breadcrumbs Navigation -->
         <div class="course-bassthalk-breadcrumbs">
-          <a href="#/"><span class="material-symbols-rounded" style="font-size:1.1rem; vertical-align:middle;">home</span> الرئيسية</a>
+          <a href="/"><span class="material-symbols-rounded" style="font-size:1.1rem; vertical-align:middle;">home</span> الرئيسية</a>
           <span class="material-symbols-rounded" style="font-size:0.85rem;">arrow_back_ios</span>
-          <a href="#/courses">الكورسات</a>
+          <a href="/courses">الكورسات</a>
           <span class="material-symbols-rounded" style="font-size:0.85rem;">arrow_back_ios</span>
           <span style="color:var(--text-primary); font-weight:800;">${esc(course.title)}</span>
         </div>
@@ -209,12 +209,19 @@ export async function initCourseDetail(id) {
             <span class="material-symbols-rounded">assignment</span> الواجبات والامتحانات الدورية
             <span class="unit-header-badge" style="background:rgba(245, 158, 11, 0.15); color:#d97706; font-size:0.7rem;">${allExams.length}</span>
           </button>
-          <button class="course-bassthalk-tab-btn" data-tab="forum">
-            <span class="material-symbols-rounded">forum</span> منتدى النقاش وسؤال المعلم
-          </button>
-          <button id="open-chem-lab-btn" class="btn btn-sm" style="background:linear-gradient(135deg, #059669 0%, #10b981 100%); color:#fff; font-weight:800; border-radius:12px; margin-right:auto; gap:6px; box-shadow:0 4px 12px rgba(16, 185, 129, 0.25); cursor:pointer;">
-            <span class="material-symbols-rounded">science</span> المختبر وحاسبة المعادلات ⚗️
-          </button>
+          ${(course.live_sessions && course.live_sessions.length > 0) ? `
+            <button class="course-bassthalk-tab-btn" data-tab="live">
+              <span class="material-symbols-rounded">live_tv</span> الحصص اللايف (${course.live_sessions.length})
+            </button>
+          ` : ''}
+          ${(course.allow_student_replies || isTeacher()) ? `
+            <button class="course-bassthalk-tab-btn" data-tab="forum">
+              <span class="material-symbols-rounded">forum</span> منتدى النقاش وسؤال المعلم
+            </button>
+          ` : ''}
+          <a href="/lab" class="btn btn-sm" style="background:linear-gradient(135deg, #059669 0%, #10b981 100%); color:#fff; font-weight:800; border-radius:12px; margin-right:auto; gap:6px; box-shadow:0 4px 12px rgba(16, 185, 129, 0.25); text-decoration:none;">
+            <span class="material-symbols-rounded">science</span> المختبر وحاسبة المعادلات
+          </a>
         </div>
 
         <!-- Main Layout Grid -->
@@ -242,8 +249,10 @@ export async function initCourseDetail(id) {
                         const isExam = item.item_type === 'exam';
                         const isLocked = item.is_locked;
                         const isDone = item.is_completed;
+                        const hasPrereqExam = !isExam && item.prerequisite_exam_id;
+                        const prereqPassed = !hasPrereqExam || item.prerequisite_passed;
                         const link = enrolled && !isLocked 
-                          ? (isExam ? `#/exams/${item.id}/take` : `#/lessons/${item.id}`) 
+                          ? (isExam ? `/exams/${item.id}/take` : `/lessons/${item.id}`) 
                           : '';
 
                         return `
@@ -277,8 +286,15 @@ export async function initCourseDetail(id) {
                                     </span>
                                   ` : ''}
 
+                                  ${hasPrereqExam ? `
+                                    <span class="badge ${prereqPassed ? 'badge-success' : 'badge-warning'}" style="font-size:0.7rem; padding:2px 8px; display:inline-flex; align-items:center; gap:4px;">
+                                      <span class="material-symbols-rounded" style="font-size:0.85rem;">${prereqPassed ? 'task_alt' : 'quiz'}</span>
+                                      ${prereqPassed ? `اجتزت امتحان المحاضرة` : `يشترط حل امتحان المحاضرة (${item.prerequisite_passing_score || 60}%)`}
+                                    </span>
+                                  ` : ''}
+
                                   ${item.is_free ? '<span class="badge badge-success" style="font-size:0.68rem; padding:1px 6px;">حصة مجانية</span>' : ''}
-                                  ${isDone ? '<span class="badge badge-success" style="font-size:0.68rem; padding:1px 6px; font-weight:800;">تمت المشاهدة ✅</span>' : ''}
+                                  ${isDone ? '<span class="badge badge-success" style="font-size:0.68rem; padding:1px 6px; font-weight:800;"><span class="material-symbols-rounded" style="font-size:0.8rem;">done</span> تمت المشاهدة</span>' : ''}
                                 </div>
                               </div>
                             </div>
@@ -365,12 +381,9 @@ export async function initCourseDetail(id) {
                   <div style="background:rgba(5, 150, 105, 0.05); border:1px dashed rgba(5, 150, 105, 0.3); border-radius:14px; padding:24px; text-align:center;">
                     <span class="material-symbols-rounded" style="font-size:2.4rem; color:var(--primary); margin-bottom:8px;">picture_as_pdf</span>
                     <h4 style="font-weight:800; font-size:1rem; margin-bottom:6px;">المذكرات والملخصات ملحقة مع كل محاضرة</h4>
-                    <p style="font-size:0.84rem; color:var(--text-secondary); max-width:550px; margin:0 auto 14px;">
+                    <p style="font-size:0.84rem; color:var(--text-secondary); max-width:550px; margin:0 auto;">
                       يتم إرفاق مذكرة الشرح وتدريبات الواجب الخاصة بكل درس داخل صفحة الفيديو، ويمكنك تحميلها بضغطة زر فور دخول الحصة.
                     </p>
-                    <a href="#/store-locator" class="btn btn-outline btn-sm" style="gap:6px;">
-                      <span class="material-symbols-rounded">storefront</span> تصفح منافذ بيع المذكرات الورقية
-                    </a>
                   </div>
                 `}
               </div>
@@ -433,6 +446,42 @@ export async function initCourseDetail(id) {
                     <p>سيتم رفع الامتحانات التقييمية بالتزامن مع جدول الحصص.</p>
                   </div>
                 `}
+              </div>
+            </div>
+
+            <!-- TAB 3.5: COURSE LIVE SESSIONS -->
+            <div id="tab-pane-live" class="course-tab-pane" style="display:none;">
+              <div class="card">
+                <h3 style="font-size:1.15rem; font-weight:900; margin:0 0 14px; color:var(--text-primary); display:flex; align-items:center; gap:8px;">
+                  <span class="material-symbols-rounded" style="color:#ef4444;">live_tv</span> الحصص اللايف الخاصة بالكورس
+                </h3>
+                ${(course.live_sessions && course.live_sessions.length > 0) ? `
+                  <div style="display:flex; flex-direction:column; gap:12px;">
+                    ${course.live_sessions.map(ls => `
+                      <div style="display:flex; align-items:center; justify-content:space-between; padding:16px 20px; background:var(--bg-secondary); border-radius:16px; border:1px solid var(--border-light); flex-wrap:wrap; gap:14px;">
+                        <div>
+                          <div style="font-weight:900; font-size:0.96rem; color:var(--text-primary); margin-bottom:4px; display:flex; align-items:center; gap:8px;">
+                            <span class="material-symbols-rounded" style="color:${ls.status === 'live' ? '#ef4444' : 'var(--primary)'};">podcasts</span>
+                            ${esc(ls.title)}
+                            ${ls.status === 'live' ? '<span class="badge badge-danger">مباشر الآن</span>' : ''}
+                          </div>
+                          <div style="font-size:0.8rem; color:var(--text-secondary);">
+                            ${esc(ls.description || '')} • الموعد: ${ls.scheduled_at ? new Date(ls.scheduled_at).toLocaleString('ar-EG') : 'قريباً'}
+                          </div>
+                        </div>
+                        <div>
+                          ${ls.stream_url && enrolled ? `
+                            <a href="${esc(ls.stream_url)}" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-primary" style="gap:6px;">
+                              <span class="material-symbols-rounded">open_in_new</span> دخول البث المباشر
+                            </a>
+                          ` : `
+                            <span class="badge badge-warning" style="padding:6px 12px;">متاح للمشتركين بالكورس</span>
+                          `}
+                        </div>
+                      </div>
+                    `).join('')}
+                  </div>
+                ` : '<p style="color:var(--text-muted);">لا توجد حصص لايف مجدولة لهذا الكورس حالياً.</p>'}
               </div>
             </div>
 
@@ -615,7 +664,7 @@ export async function initCourseDetail(id) {
         btn.classList.add('active');
 
         // Show matching pane and hide others
-        ['curriculum', 'materials', 'exams', 'forum'].forEach(tabName => {
+        ['curriculum', 'materials', 'exams', 'live', 'forum'].forEach(tabName => {
           const pane = document.getElementById(`tab-pane-${tabName}`);
           if (pane) {
             pane.style.display = tabName === targetTab ? 'block' : 'none';
@@ -655,7 +704,7 @@ export async function initCourseDetail(id) {
         const isEnr = el.dataset.enrolled === '1';
 
         if (link) {
-          window.location.hash = link;
+          window.navigateTo ? window.navigateTo(link) : (window.location.href = link);
         } else if (!isEnr) {
           showToast('يرجى تفعيل الاشتراك في الكورس أولاً لمشاهدة هذا الدرس', 'warning');
           const codeInput = document.getElementById('activationCode');
@@ -838,7 +887,7 @@ export async function initCourseDetail(id) {
       walletEnrollBtn.innerHTML = '<span class="material-symbols-rounded spin-icon">sync</span> جاري الشراء...';
       try {
         const res = await api.enrollCourse(id);
-        showToast(res.message || 'تم الاشتراك بنجاح 🎉', 'success');
+        showToast(res.message || 'تم الاشتراك بنجاح', 'success');
         setTimeout(() => window.location.reload(), 1000);
       } catch (err) {
         showToast(err.message, 'error');

@@ -4,7 +4,6 @@ import { api } from '../utils/api.js';
 import { showToast } from '../components/toast.js';
 import { showModal } from '../components/modal.js';
 
-
 export function renderPackages() {
   return `
     <div class="app-layout">
@@ -12,15 +11,15 @@ export function renderPackages() {
       <main class="main-content">
         <div class="page-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:16px;">
           <div>
-            <h1 class="page-title"><span class="material-symbols-rounded" style="color:var(--primary)">view_carousel</span> باقات الـ 3 شهور والترم المخفضة</h1>
-            <p class="page-subtitle">اشترك في باقات مجمعة بخصم يصل إلى 30% مع وصول شامل لجميع المحاضرات والمذكرات وامتحانات الثانوية</p>
+            <h1 class="page-title"><span class="material-symbols-rounded" style="color:var(--primary)">view_carousel</span> الباقات المجمعة المخفضة</h1>
+            <p class="page-subtitle">اشترك في الباقات المجمعة بخصم مميز مع وصول شامل لجميع المحاضرات والمذكرات وامتحانات الثانوية</p>
           </div>
           <div style="display:flex;gap:10px;">
-            <a href="#/store-locator" class="btn btn-outline" style="gap:6px;">
-              <span class="material-symbols-rounded" style="color:var(--primary);">storefront</span> دليل المكتبات ومنافذ الشحن
+            <a href="/courses" class="btn btn-outline" style="gap:6px;">
+              <span class="material-symbols-rounded" style="color:var(--primary);">menu_book</span> الكورسات
             </a>
-            <a href="#/wallet" class="btn btn-primary" style="gap:6px;">
-              <span class="material-symbols-rounded">account_balance_wallet</span> شحن المحفظة
+            <a href="/wallet" class="btn btn-primary" style="gap:6px;">
+              <span class="material-symbols-rounded">account_balance_wallet</span> المحفظة والدفع
             </a>
           </div>
         </div>
@@ -45,8 +44,9 @@ export async function initPackages() {
       listEl.innerHTML = `
         <div class="card" style="text-align:center;padding:50px 24px;">
           <span class="material-symbols-rounded" style="font-size:3.5rem;color:var(--text-muted);margin-bottom:12px;">inventory_2</span>
-          <h3>لا توجد باقات متاحة حالياً</h3>
-          <p style="color:var(--text-secondary);">تابعنا قريباً لإطلاق باقات المراجعات النهائية والترم الثاني.</p>
+          <h3>لا توجد باقات مجمعة حالياً</h3>
+          <p style="color:var(--text-secondary);">يمكنك استعراض الكورسات المتاحة مباشرة من صفحة الكورسات.</p>
+          <a href="/courses" class="btn btn-primary" style="margin-top:14px;">تصفح الكورسات</a>
         </div>
       `;
       return;
@@ -62,11 +62,9 @@ export async function initPackages() {
             <div class="card" style="padding:0;overflow:hidden;border:1px solid var(--border-light);border-radius:18px;background:var(--bg-primary);box-shadow:0 12px 32px rgba(0,0,0,0.06);">
               <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(300px, 1fr));">
                 
-                <!-- Package Details Column -->
                 <div style="padding:32px 28px;display:flex;flex-direction:column;justify-content:space-between;">
                   <div>
                     <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap;">
-                      <span class="badge" style="background:#fef3c7; color:#92400e; font-size:0.8rem; font-weight:800; border:1px solid #fde68a;">محتوى 3 شهور كاملة من المنهج</span>
                       <span class="badge" style="background:#ecfdf5; color:#065f46; font-size:0.8rem; font-weight:800; border:1px solid #a7f3d0; display:inline-flex; align-items:center; gap:4px;">
                         <span class="material-symbols-rounded" style="font-size:0.95rem; vertical-align:middle;">all_inclusive</span> متاح طوال العام الدراسي
                       </span>
@@ -79,29 +77,8 @@ export async function initPackages() {
                     <p style="color:var(--text-secondary);font-size:0.88rem;line-height:1.6;margin-bottom:20px;">
                       ${esc(pkg.description)}
                     </p>
-
-                    <!-- Features bullets -->
-                    <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(180px, 1fr));gap:10px;margin-bottom:20px;font-size:0.84rem;">
-                      <div style="display:flex;align-items:center;gap:8px;">
-                        <span class="material-symbols-rounded" style="color:var(--success);font-size:1.1rem;">check_circle</span>
-                        <span>جميع المحاضرات والتدريبات</span>
-                      </div>
-                      <div style="display:flex;align-items:center;gap:8px;">
-                        <span class="material-symbols-rounded" style="color:var(--success);font-size:1.1rem;">check_circle</span>
-                        <span>حل امتحانات الوزارة السابقة</span>
-                      </div>
-                      <div style="display:flex;align-items:center;gap:8px;">
-                        <span class="material-symbols-rounded" style="color:var(--success);font-size:1.1rem;">check_circle</span>
-                        <span>المذكرات والواجبات PDF</span>
-                      </div>
-                      <div style="display:flex;align-items:center;gap:8px;">
-                        <span class="material-symbols-rounded" style="color:var(--success);font-size:1.1rem;">check_circle</span>
-                        <span>شهادات تفوق وتقرير ولي الأمر</span>
-                      </div>
-                    </div>
                   </div>
 
-                  <!-- Price & Subscribe Action -->
                   <div style="display:flex;align-items:center;justify-content:space-between;padding-top:20px;border-top:1px solid var(--border-light);flex-wrap:wrap;gap:16px;">
                     <div>
                       <div style="font-size:0.75rem;color:var(--text-muted);font-weight:700;">سعر الباقة الإجمالي:</div>
@@ -116,7 +93,7 @@ export async function initPackages() {
                         <span class="badge badge-success" style="padding:10px 16px;font-size:0.9rem;gap:6px;">
                           <span class="material-symbols-rounded">verified</span> مشترك ومفعّل بحسابك
                         </span>
-                        <a href="#/courses" class="btn btn-primary" style="padding:10px 20px;">
+                        <a href="/courses" class="btn btn-primary" style="padding:10px 20px;">
                           <span class="material-symbols-rounded">play_lesson</span> الدخول للمحاضرات
                         </a>
                       </div>
@@ -128,7 +105,6 @@ export async function initPackages() {
                   </div>
                 </div>
 
-                <!-- Included Courses Sidebar Column -->
                 <div style="background:var(--bg-secondary);padding:28px 24px;border-right:1px solid var(--border-light);">
                   <div style="font-weight:800;font-size:0.95rem;margin-bottom:14px;display:flex;align-items:center;gap:8px;">
                     <span class="material-symbols-rounded" style="color:var(--primary);">library_books</span>
@@ -159,14 +135,12 @@ export async function initPackages() {
       </div>
     `;
 
-    // Bind Subscribe Buttons
     document.querySelectorAll('.subscribe-pkg-btn').forEach(btn => {
       btn.addEventListener('click', async () => {
         const pkgId = btn.dataset.pkgId;
         const title = btn.dataset.pkgTitle;
         const price = Number(btn.dataset.pkgPrice);
 
-        // Fetch wallet balance
         let balance = 0;
         try {
           const w = await api.getWalletBalance();
@@ -186,52 +160,30 @@ export async function initPackages() {
                 </div>
               </div>
 
-              ${balance < price ? `
-                <div class="notice notice-warning" style="margin-bottom:16px;">
-                  <span class="material-symbols-rounded">warning</span>
-                  <div>
-                    <strong>رصيدك الحالي غير كافٍ للاشتراك المباشر!</strong>
-                    <div>يمكنك شحن محفظتك أولاً بفوري أو إدخال كود كارت شحن الباقة أدناه.</div>
-                  </div>
-                </div>
-              ` : `
-                <div class="notice notice-success" style="margin-bottom:16px;">
-                  <span class="material-symbols-rounded">check_circle</span>
-                  <div>رصيد محفظتك يغطي الاشتراك بالكامل. يمكنك الخصم والتفعيل فوراً!</div>
-                </div>
-              `}
-
               <div style="display:flex;flex-direction:column;gap:12px;">
                 <button type="button" class="btn btn-primary btn-block" id="modalPayWalletBtn" ${balance < price ? 'disabled' : ''} style="padding:12px;font-weight:800;gap:6px;">
                   <span class="material-symbols-rounded">account_balance_wallet</span> الدفع المباشر وخصم ${price} ج من المحفظة
                 </button>
 
-                <div style="text-align:center;font-size:0.8rem;color:var(--text-muted);position:relative;margin:8px 0;">
-                  <span style="background:var(--bg-primary);padding:0 12px;position:relative;z-index:1;">أو تفعيل بكود كارت الشحن</span>
-                  <hr style="border:0;border-top:1px solid var(--border-light);position:absolute;top:50%;left:0;right:0;margin:0;">
-                </div>
-
                 <div class="input-group">
                   <span class="material-symbols-rounded input-icon">key</span>
-                  <input type="text" class="form-input" id="modalVoucherCode" placeholder="كود كارت السنتر (مثال: KEM-350-PKG90)" dir="ltr">
+                  <input type="text" class="form-input" id="modalVoucherCode" placeholder="كود كارت السنتر" dir="ltr">
                 </div>
 
                 <button type="button" class="btn btn-outline btn-block" id="modalPayVoucherBtn" style="padding:10px;font-weight:800;gap:6px;">
                   <span class="material-symbols-rounded">qr_code</span> تفعيل الباقة بكود الكارت
                 </button>
 
-                <a href="#/wallet" class="btn btn-ghost btn-block" style="font-size:0.82rem;gap:4px;color:var(--primary);">
-                  <span class="material-symbols-rounded">bolt</span> التوجه لشحن المحفظة بفوري
+                <a href="/wallet" class="btn btn-ghost btn-block" style="font-size:0.82rem;gap:4px;color:var(--primary);">
+                  <span class="material-symbols-rounded">payments</span> التوجه لصفحة المحفظة وطرق الدفع
                 </a>
               </div>
             </div>
         `);
 
-        // Handle Direct Wallet Pay
         document.getElementById('modalPayWalletBtn')?.addEventListener('click', async () => {
           const mBtn = document.getElementById('modalPayWalletBtn');
           mBtn.disabled = true;
-          mBtn.innerHTML = '<span class="material-symbols-rounded spin-icon">sync</span> جاري خصم وتفعيل الباقة...';
           try {
             const res = await api.subscribePackage(pkgId, { payment_method: 'wallet' });
             showToast(res.message, 'success');
@@ -240,18 +192,15 @@ export async function initPackages() {
           } catch (err) {
             showToast(err.message, 'error');
             mBtn.disabled = false;
-            mBtn.innerHTML = '<span class="material-symbols-rounded">account_balance_wallet</span> الدفع المباشر وخصم من المحفظة';
           }
         });
 
-        // Handle Voucher Pay
         document.getElementById('modalPayVoucherBtn')?.addEventListener('click', async () => {
           const code = document.getElementById('modalVoucherCode').value.trim();
           if (!code) return showToast('اكتب كود الكارت أولاً', 'warning');
 
           const vBtn = document.getElementById('modalPayVoucherBtn');
           vBtn.disabled = true;
-          vBtn.innerHTML = '<span class="material-symbols-rounded spin-icon">sync</span> جاري التحقق من الكارت...';
           try {
             const res = await api.subscribePackage(pkgId, { payment_method: 'voucher', voucher_code: code });
             showToast(res.message, 'success');
@@ -260,10 +209,8 @@ export async function initPackages() {
           } catch (err) {
             showToast(err.message, 'error');
             vBtn.disabled = false;
-            vBtn.innerHTML = '<span class="material-symbols-rounded">qr_code</span> تفعيل الباقة بكود الكارت';
           }
         });
-
       });
     });
 

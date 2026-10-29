@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import db from '../db.js';
-import { authMiddleware, teacherMiddleware, optionalAuth, isTeacher } from '../middleware/auth.js';
+import { authMiddleware, teacherMiddleware, optionalAuth, isTeacher, canAccessCourse } from '../middleware/auth.js';
 
 const router = Router();
 
@@ -44,20 +44,39 @@ router.get('/:id', optionalAuth, (req, res) => {
     if (!course) return res.status(404).json({ error: 'الكورس غير موجود' });
 
     const chapters = db.prepare('SELECT * FROM chapters WHERE course_id = ? ORDER BY order_num').all(course.id);
-    // video_url is only ever handed out via the signed video-token endpoint (teachers see it for editing)
-    const lessons = db.prepare('SELECT * FROM lessons WHERE course_id = ?').all(course.id)
-      .map(l => (isTeacher(req.user) ? l : { ...l, video_url: undefined }));
     const exams = db.prepare('SELECT * FROM exams WHERE course_id = ?').all(course.id);
-    
-    // Fetch progress if user is logged in
+    const examById = new Map(exams.map(e => [e.id, e]));
+
+    // Fetch best exam scores if user is logged in
+    const bestExamScores = new Map();
     let completedItemIds = new Set();
     if (userId) {
       const lessonProgress = db.prepare('SELECT lesson_id FROM lesson_progress WHERE user_id = ? AND completed = 1').all(userId);
       lessonProgress.forEach(lp => completedItemIds.add(`lesson_${lp.lesson_id}`));
       
-      const examProgress = db.prepare('SELECT exam_id FROM exam_attempts WHERE user_id = ?').all(userId);
-      examProgress.forEach(ep => completedItemIds.add(`exam_${ep.exam_id}`));
+      const examProgress = db.prepare('SELECT exam_id, MAX(score) as best_score FROM exam_attempts WHERE user_id = ? AND completed_at IS NOT NULL GROUP BY exam_id').all(userId);
+      examProgress.forEach(ep => {
+        completedItemIds.add(`exam_${ep.exam_id}`);
+        bestExamScores.set(ep.exam_id, Number(ep.best_score || 0));
+      });
     }
+
+    // video_url is only ever handed out via the signed video-token endpoint (teachers see it for editing)
+    const lessons = db.prepare('SELECT * FROM lessons WHERE course_id = ?').all(course.id)
+      .map(l => {
+        const base = isTeacher(req.user) ? l : { ...l, video_url: undefined };
+        if (l.prerequisite_exam_id) {
+          const pExam = examById.get(l.prerequisite_exam_id) || db.prepare('SELECT id, title, passing_score FROM exams WHERE id = ?').get(l.prerequisite_exam_id);
+          if (pExam) {
+            const reqScore = l.prerequisite_passing_score || pExam.passing_score || 60;
+            const userBest = bestExamScores.get(pExam.id);
+            base.prerequisite_exam_title = pExam.title;
+            base.prerequisite_passing_score = reqScore;
+            base.prerequisite_passed = isTeacher(req.user) ? true : (userBest !== undefined && userBest >= reqScore);
+          }
+        }
+        return base;
+      });
 
     // Combine and sort
     let allItems = [
@@ -119,7 +138,17 @@ router.get('/:id', optionalAuth, (req, res) => {
     course.completed_items = completedItems;
 
     course.chapters = chapters;
+    course.exams = exams;
     course.total_lessons = lessons.length;
+
+    // Include live sessions attached to this course
+    const rawLiveSessions = db.prepare('SELECT * FROM live_sessions WHERE course_id = ? ORDER BY scheduled_at DESC').all(course.id);
+    const hasAccess = isTeacher(req.user) || course.is_free || (req.user && canAccessCourse(req.user, course.id));
+    course.live_sessions = rawLiveSessions.map(ls => {
+      if (hasAccess) return ls;
+      const { meeting_link, replay_url, ...rest } = ls;
+      return { ...rest, links_locked: true };
+    });
 
     res.json(course);
   } catch (err) {
@@ -195,7 +224,7 @@ router.post('/:id/enroll', authMiddleware, (req, res) => {
       // Send notification
       db.prepare('INSERT INTO notifications (user_id, title, message, type) VALUES (?, ?, ?, ?)').run(
         req.user.id,
-        'تم شراء الكورس بنجاح 🎉',
+        'تم شراء الكورس بنجاح',
         `تم خصم ${coursePrice} ج من محفظتك وتفعيل كورس "${course.title}". نتمنى لك دراسة ممتعة!`,
         'success'
       );
@@ -206,7 +235,7 @@ router.post('/:id/enroll', authMiddleware, (req, res) => {
     const updatedWallet = db.prepare('SELECT balance FROM student_wallets WHERE user_id = ?').get(req.user.id);
 
     res.json({
-      message: 'تم الاشتراك في الكورس بنجاح وخصم المبلغ من محفظتك 🎉',
+      message: 'تم الاشتراك في الكورس بنجاح وخصم المبلغ من محفظتك',
       course_title: course.title,
       new_balance: updatedWallet.balance,
       remaining_balance: updatedWallet.balance
@@ -271,7 +300,7 @@ router.put('/:id', authMiddleware, teacherMiddleware, (req, res) => {
   try {
     const { title, description, grade, price, is_free, thumbnail, allow_student_replies, sequential_access, course_type, duration_days, original_price, badge_text } = req.body;
     db.prepare(
-      'UPDATE courses SET title=COALESCE(?,title), description=COALESCE(?,description), grade=COALESCE(?,grade), price=COALESCE(?,price), is_free=COALESCE(?,is_free), thumbnail=COALESCE(?,thumbnail), allow_student_replies=COALESCE(?,allow_student_replies), sequential_access=COALESCE(?,sequential_access), course_type=COALESCE(?,course_type), duration_days=COALESCE(?,duration_days), original_price=COALESCE(?,original_price), badge_text=COALESCE(?,badge_text) WHERE id=?'
+      'UPDATE courses SET title=COALESCE(?,title), description=COALESCE(?,description), grade=COALESCE(?,grade), price=COALESCE(?,price), is_free=COALESCE(?,is_free), thumbnail=COALESCE(?,thumbnail), allow_student_replies=COALESCE(?,allow_student_replies), sequential_access=COALESCE(?,sequential_access), course_type=COALESCE(?,course_type), duration_days=COALESCE(?,duration_days), original_price=COALESCE(?,original_price), badge_text=COALESCE(?,badge_text), updated_at=CURRENT_TIMESTAMP WHERE id=?'
     ).run(
       title,
       description,

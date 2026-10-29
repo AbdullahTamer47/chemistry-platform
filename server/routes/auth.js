@@ -51,12 +51,12 @@ router.post('/register', registerLimiter, (req, res) => {
       return res.status(400).json({ error: 'رقم الهاتف غير صحيح (يجب أن يكون 11 رقماً يبدأ بـ 010 أو 011 أو 012 أو 015)' });
     }
 
-    if (cleanParentPhone && !/^01[0125][0-9]{8}$/.test(cleanParentPhone)) {
-      return res.status(400).json({ error: 'رقم هاتف ولي الأمر غير صحيح (يجب أن يتكون من 11 رقماً يبدأ بـ 01)' });
+    if (!cleanParentPhone || !/^01[0125][0-9]{8}$/.test(cleanParentPhone)) {
+      return res.status(400).json({ error: 'رقم هاتف ولي الأمر إجباري ويجب أن يتكون من 11 رقماً يبدأ بـ 010 أو 011 أو 012 أو 015' });
     }
 
-    if (cleanParentPhone && cleanParentPhone === cleanPhone) {
-      return res.status(400).json({ error: 'يرجى كتابة رقم هاتف ولي أمر مختلف عن رقمك الشخصي' });
+    if (cleanParentPhone === cleanPhone) {
+      return res.status(400).json({ error: 'يرجى كتابة رقم هاتف ولي أمر مختلف عن رقم الطالب الشخصي' });
     }
 
     const pwError = checkPasswordStrength(password, cleanPhone);
@@ -90,8 +90,8 @@ router.post('/register', registerLimiter, (req, res) => {
     try {
       db.prepare('INSERT INTO notifications (user_id, title, message, type) VALUES (?, ?, ?, ?)').run(
         user.id,
-        'أهلاً بيك في كيمياوي! 🧪',
-        `مرحباً ${safeName}، نورتنا في منصة د. زياد رمزي عياد. يلا نبدأ رحلة التفوق في الكيمياء!`,
+        'أهلاً بك في منصة كيمياوي التعليمية',
+        `مرحباً ${safeName}، نورتنا في منصة د. زياد رمزي عياد. ابدأ الآن رحلة التفوق في الكيمياء!`,
         'success'
       );
     } catch (notifErr) {

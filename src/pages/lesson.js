@@ -1,9 +1,9 @@
 import { renderNavbar, initNavbar } from '../components/navbar.js';
 import { api } from '../utils/api.js';
-import { getUser } from '../utils/auth.js';
+import { getUser, isTeacher } from '../utils/auth.js';
 import { showToast } from '../components/toast.js';
 import { confirmModal } from '../components/modal.js';
-import { esc, sanitize, safeUrl, formatTime } from '../utils/helpers.js';
+import { esc, sanitize, safeUrl, formatTime, getShortStudentName } from '../utils/helpers.js';
 
 export function renderLesson(id) {
   return `
@@ -11,7 +11,6 @@ export function renderLesson(id) {
     ${renderNavbar('courses')}
     <main class="main-content">
       <div id="lessonContent">
-        <!-- Lesson skeleton -->
         <div class="skeleton" style="height: 40px; width: 30%; margin-bottom: 20px;"></div>
         <div class="skeleton" style="height: 380px; border-radius: var(--radius-xl); margin-bottom: 20px;"></div>
         <div style="display:flex; gap:12px; margin-bottom:24px;">
@@ -30,10 +29,14 @@ export async function initLesson(id) {
 
   try {
     const lesson = await api.getLesson(id);
-    
+    const shortName = getShortStudentName(user.name);
+    const prereqExam = lesson.prerequisite_exam || null;
+    const prereqLocked = Boolean(lesson.prerequisite_locked && !isTeacher());
+    const allowForum = lesson.allow_student_replies !== 0 || isTeacher();
+
     document.getElementById('lessonContent').innerHTML = `
       <div style="margin-bottom: 20px;">
-        <a href="#/courses/${lesson.course_id}" class="btn btn-ghost btn-sm" style="padding-right:0;">
+        <a href="/courses/${lesson.course_id}" class="btn btn-ghost btn-sm" style="padding-right:0;">
           <span class="material-symbols-rounded">arrow_forward</span> العودة للكورس
         </a>
       </div>
@@ -43,38 +46,94 @@ export async function initLesson(id) {
         <p class="page-subtitle">${esc(lesson.chapter_title || 'شرح الدرس الحالي من الكورس المنهجي')}</p>
       </div>
 
-      <!-- Secure Video Box -->
-      <div class="video-container" id="videoBox" oncontextmenu="return false;">
-        <div id="videoContainer" style="width:100%; height:100%;">
-          <div style="display:flex; align-items:center; justify-content:center; height:100%; color:white; flex-direction:column; gap:12px;">
-            <div class="spinner"></div>
-            <p style="font-size:0.85rem; opacity:0.8;">جاري تحميل مشغل الفيديو الآمن...</p>
+      ${prereqExam ? `
+        <div class="card" style="margin-bottom: 20px; border: 2px solid ${prereqExam.passed ? 'var(--success)' : 'var(--warning)'}; background: ${prereqExam.passed ? 'rgba(16,185,129,0.06)' : 'rgba(245,158,11,0.08)'};">
+          <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:14px;">
+            <div style="display:flex; align-items:center; gap:12px;">
+              <div style="width:46px; height:46px; border-radius:12px; background:${prereqExam.passed ? 'rgba(16,185,129,0.15)' : 'rgba(245,158,11,0.2)'}; color:${prereqExam.passed ? 'var(--success)' : '#d97706'}; display:flex; align-items:center; justify-content:center;">
+                <span class="material-symbols-rounded" style="font-size:1.6rem;">${prereqExam.passed ? 'task_alt' : 'quiz'}</span>
+              </div>
+              <div>
+                <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                  <h3 style="margin:0; font-size:1.02rem; font-weight:900; color:var(--text-primary);">امتحان المحاضرة: ${esc(prereqExam.title)}</h3>
+                  <span class="badge ${prereqExam.passed ? 'badge-success' : 'badge-warning'}" style="font-weight:800;">
+                    ${prereqExam.passed ? `تم الاجتياز (${prereqExam.best_score}%)` : `مطلوب درجة النجاح: ${prereqExam.required_score}%`}
+                  </span>
+                </div>
+                <p style="margin:4px 0 0; font-size:0.84rem; color:var(--text-secondary);">
+                  ${prereqExam.passed
+                    ? 'لقد اجتزت امتحان المحاضرة بنجاح وتم فتح الفيديو لك.'
+                    : `يجب حل امتحان المحاضرة أولاً والحصول على درجة لا تقل عن ${prereqExam.required_score}% لفتح مشاهدة الفيديو.${prereqExam.best_score !== null ? ` (أعلى درجة سابقة لك: ${prereqExam.best_score}%)` : ''}`
+                  }
+                </p>
+              </div>
+            </div>
+            <a href="/exams/${prereqExam.id}/take" class="btn ${prereqExam.passed ? 'btn-outline' : 'btn-primary'} btn-sm" style="gap:6px; font-weight:800;">
+              <span class="material-symbols-rounded">edit_document</span>
+              ${prereqExam.passed ? 'مراجعة / إعادة الامتحان' : 'ابدأ حل امتحان المحاضرة الآن'}
+            </a>
           </div>
         </div>
-        
-        <!-- Anti-leak Moving Watermark (Anti-Piracy DRM) -->
-        <div id="watermark" class="video-watermark">
-          <span style="font-weight:800;">${esc(user.name)}</span>
-          <span style="opacity:0.6; margin: 0 6px;">•</span>
-          <span style="direction:ltr; display:inline-block;">${esc(user.phone)}</span>
-          <span style="opacity:0.6; margin: 0 6px;">•</span>
-          <span style="color:#FBBF24; font-weight:800;">ID:#${user.id}</span>
+      ` : ''}
+
+      <!-- Secure Video Box or Prerequisite Gate -->
+      ${prereqLocked ? `
+        <div class="card" style="text-align:center; padding:56px 24px; margin-bottom:24px; border:2px dashed var(--warning); background:var(--bg-card);">
+          <div style="width:76px; height:76px; border-radius:50%; background:rgba(245,158,11,0.14); color:#d97706; display:flex; align-items:center; justify-content:center; margin:0 auto 16px;">
+            <span class="material-symbols-rounded" style="font-size:2.6rem;">lock</span>
+          </div>
+          <h2 style="font-size:1.35rem; font-weight:900; color:var(--text-primary); margin-bottom:10px;">حل امتحان المحاضرة أولاً لفتح الفيديو</h2>
+          <p style="color:var(--text-secondary); font-size:0.95rem; max-width:520px; margin:0 auto 22px; line-height:1.7;">
+            اشترط المعلم اجتياز امتحان <strong>"${esc(prereqExam?.title || 'امتحان المحاضرة')}"</strong> بدرجة لا تقل عن <strong>${prereqExam?.required_score || 60}%</strong> قبل الدخول لمشاهدة فيديو المحاضرة.
+          </p>
+          <a href="/exams/${prereqExam?.id}/take" class="btn btn-primary" style="gap:8px; padding:12px 28px; font-weight:800;">
+            <span class="material-symbols-rounded">quiz</span> حل امتحان المحاضرة الآن
+          </a>
         </div>
-        
-        <!-- Protection Overlays -->
-        <div class="video-protection-overlay" style="height: 60px;"></div>
-        <div class="video-protection-overlay" style="bottom:0; top:auto; right:0; width:120px; height:60px;"></div>
-      </div>
+      ` : `
+        <div class="video-container" id="videoBox" oncontextmenu="return false;">
+          <div id="videoContainer" style="width:100%; height:100%;">
+            <div style="display:flex; align-items:center; justify-content:center; height:100%; color:white; flex-direction:column; gap:12px;">
+              <div class="spinner"></div>
+              <p style="font-size:0.85rem; opacity:0.8;">جاري تحميل مشغل الفيديو الآمن...</p>
+            </div>
+          </div>
+          
+          <!-- Anti-leak Moving Watermark (Instant jump, no animation, 2-part name + phone only, no ID) -->
+          <div id="watermark" class="video-watermark" style="transition: none !important;">
+            <span style="font-weight:800;">${esc(shortName)}</span>
+            <span style="opacity:0.6; margin: 0 6px;">•</span>
+            <span style="direction:ltr; display:inline-block;">${esc(user.phone || '')}</span>
+          </div>
+          
+          <!-- Anti-Leak Shields (Blocks YouTube Title Bar, Share, Copy Link, and Watch on YouTube Logo) -->
+          <div class="video-protection-overlay" style="top:0; left:0; right:0; height:66px; z-index:12;" title="مشغل محمي"></div>
+          <div class="video-protection-overlay" style="bottom:0; top:auto; right:0; width:175px; height:58px; z-index:12;" title="مشغل محمي"></div>
+          <div class="video-protection-overlay" style="bottom:42px; top:auto; left:0; width:180px; height:52px; z-index:12;"></div>
+
+          <!-- Custom Fullscreen Button (keeps watermark & shields active in fullscreen) -->
+          <button type="button" id="customFullscreenBtn" class="video-fullscreen-btn" title="ملء الشاشة">
+            <span class="material-symbols-rounded" id="fullscreenIcon">fullscreen</span>
+          </button>
+
+          <!-- Anti-Screenshot / Focus Loss Blur Shield -->
+          <div id="antiCaptureShield" class="video-anti-capture-shield" style="display:none;">
+            <span class="material-symbols-rounded" style="font-size:3rem; color:#f59e0b;">security</span>
+            <h4 style="margin:8px 0 4px; font-weight:800;">تم إيقاف العرض مؤقتاً لحماية المحتوى</h4>
+            <p style="font-size:0.85rem; opacity:0.85; margin:0;">اضغط داخل نافذة الفيديو للمتابعة</p>
+          </div>
+        </div>
+      `}
 
       <!-- Navigation & Completion Controls -->
       <div style="display:flex; justify-content:space-between; align-items:center; gap:16px; margin-bottom:24px; flex-wrap:wrap;">
         <div style="display:flex; gap:10px;">
           ${lesson.prev_lesson 
-            ? `<a href="#/${lesson.prev_lesson.item_type === 'exam' ? 'exams' : 'lessons'}/${lesson.prev_lesson.id}${lesson.prev_lesson.item_type === 'exam' ? '/take' : ''}" class="btn btn-secondary btn-sm"><span class="material-symbols-rounded">arrow_forward</span> الدرس السابق</a>` 
+            ? `<a href="/${lesson.prev_lesson.item_type === 'exam' ? 'exams' : 'lessons'}/${lesson.prev_lesson.id}${lesson.prev_lesson.item_type === 'exam' ? '/take' : ''}" class="btn btn-secondary btn-sm"><span class="material-symbols-rounded">arrow_forward</span> الدرس السابق</a>` 
             : ''
           }
           ${lesson.next_lesson 
-            ? `<a href="#/${lesson.next_lesson.item_type === 'exam' ? 'exams' : 'lessons'}/${lesson.next_lesson.id}${lesson.next_lesson.item_type === 'exam' ? '/take' : ''}" class="btn btn-secondary btn-sm">الدرس التالي <span class="material-symbols-rounded">arrow_back</span></a>` 
+            ? `<a href="/${lesson.next_lesson.item_type === 'exam' ? 'exams' : 'lessons'}/${lesson.next_lesson.id}${lesson.next_lesson.item_type === 'exam' ? '/take' : ''}" class="btn btn-secondary btn-sm">الدرس التالي <span class="material-symbols-rounded">arrow_back</span></a>` 
             : ''
           }
         </div>
@@ -84,9 +143,9 @@ export async function initLesson(id) {
             <span class="material-symbols-rounded" id="bookmarkIcon" style="color:${lesson.is_saved ? '#f59e0b' : 'inherit'};">
               ${lesson.is_saved ? 'bookmark_added' : 'bookmark_add'}
             </span>
-            <span id="bookmarkText">${lesson.is_saved ? 'محفوظ للمراجعة ⭐' : 'حفظ للمراجعة السريعة'}</span>
+            <span id="bookmarkText">${lesson.is_saved ? 'محفوظ للمراجعة' : 'حفظ للمراجعة السريعة'}</span>
           </button>
-          <button class="btn btn-primary btn-sm" id="markCompleteBtn" ${lesson.progress?.completed ? 'disabled' : ''}>
+          <button class="btn btn-primary btn-sm" id="markCompleteBtn" ${(lesson.progress?.completed || prereqLocked) ? 'disabled' : ''}>
             <span class="material-symbols-rounded">check</span> ${lesson.progress?.completed ? 'تم إكمال المشاهدة بنجاح' : 'تحديد كتمت المشاهدة'}
           </button>
         </div>
@@ -163,99 +222,153 @@ export async function initLesson(id) {
         </div>
       </div>
 
-      <!-- Lesson Discussions Form -->
-      <div class="card">
-        <h3 class="card-title" style="margin-bottom: 16px;"><span class="material-symbols-rounded" style="color:var(--primary)">forum</span> أسئلة الطلاب على هذا الدرس</h3>
-        
-        <form id="lessonDiscussionForm" style="display:flex; gap:10px; margin-bottom:20px;">
-          <input type="text" id="lessonDiscInput" class="form-input" placeholder="هل لديك سؤال في جزئية معينة من الفيديو؟ اكتبه للمدرس هنا..." required>
-          <button type="submit" class="btn btn-primary"><span class="material-symbols-rounded">send</span> اسأل المدرس</button>
-        </form>
-        
-        <div id="lessonDiscussionsList">
-          <div class="loading-spinner"><div class="spinner"></div></div>
+      <!-- Lesson Discussions Form (Only shown if enabled by teacher for this course) -->
+      ${allowForum ? `
+        <div class="card">
+          <h3 class="card-title" style="margin-bottom: 16px;"><span class="material-symbols-rounded" style="color:var(--primary)">forum</span> أسئلة الطلاب على هذا الدرس</h3>
+          
+          <form id="lessonDiscussionForm" style="display:flex; gap:10px; margin-bottom:20px;">
+            <input type="text" id="lessonDiscInput" class="form-input" placeholder="هل لديك سؤال في جزئية معينة من الفيديو؟ اكتبه للمدرس هنا..." required>
+            <button type="submit" class="btn btn-primary"><span class="material-symbols-rounded">send</span> اسأل المدرس</button>
+          </form>
+          
+          <div id="lessonDiscussionsList">
+            <div class="loading-spinner"><div class="spinner"></div></div>
+          </div>
         </div>
-      </div>
+      ` : ''}
     `;
 
-    // Load Video URL/Iframe Source securely
-    try {
-      const res = await api.getVideoToken(id);
-      const url = String(res.video_url || '');
-      let iframeSrc = '';
+    // Load Video URL/Iframe Source securely (if not locked by prerequisite exam)
+    if (!prereqLocked) {
+      try {
+        const res = await api.getVideoToken(id);
+        const url = String(res.video_url || '');
+        let iframeSrc = '';
 
-      if (url.includes('youtube.com') || url.includes('youtu.be')) {
-        let videoId = '';
-        if (url.includes('youtu.be/')) videoId = url.split('youtu.be/')[1].split('?')[0];
-        else if (url.includes('v=')) videoId = url.split('v=')[1].split('&')[0];
-        videoId = videoId.replace(/[^A-Za-z0-9_-]/g, '');
-        if (!videoId) throw new Error('رابط الفيديو غير صالح');
+        if (url.includes('youtube.com') || url.includes('youtu.be')) {
+          let videoId = '';
+          if (url.includes('youtu.be/')) videoId = url.split('youtu.be/')[1].split('?')[0].split('&')[0];
+          else if (url.includes('/embed/')) videoId = url.split('/embed/')[1].split('?')[0].split('&')[0];
+          else if (url.includes('v=')) videoId = url.split('v=')[1].split('&')[0];
+          videoId = videoId.replace(/[^A-Za-z0-9_-]/g, '');
+          if (!videoId) throw new Error('رابط الفيديو غير صالح');
 
-        iframeSrc = `https://www.youtube-nocookie.com/embed/${videoId}?rel=0&modestbranding=1&showinfo=0&fs=0&controls=1&disablekb=1`;
-      } else if (url.includes('drive.google.com')) {
-        let fileId = '';
-        if (url.includes('/d/')) fileId = url.split('/d/')[1].split('/')[0];
-        else if (url.includes('id=')) fileId = url.split('id=')[1].split('&')[0];
-        fileId = fileId.replace(/[^A-Za-z0-9_-]/g, '');
-        if (!fileId) throw new Error('رابط الفيديو غير صالح');
+          // Use standard youtube.com/embed with strict-origin-when-cross-origin to prevent YouTube Error 153
+          const originParam = encodeURIComponent(window.location.origin);
+          iframeSrc = `https://www.youtube.com/embed/${videoId}?rel=0&modestbranding=1&iv_load_policy=3&playsinline=1&enablejsapi=1&fs=0&origin=${originParam}`;
+        } else if (url.includes('drive.google.com')) {
+          let fileId = '';
+          if (url.includes('/d/')) fileId = url.split('/d/')[1].split('/')[0];
+          else if (url.includes('id=')) fileId = url.split('id=')[1].split('&')[0];
+          fileId = fileId.replace(/[^A-Za-z0-9_-]/g, '');
+          if (!fileId) throw new Error('رابط الفيديو غير صالح');
 
-        iframeSrc = `https://drive.google.com/file/d/${fileId}/preview`;
-      } else if (/^https:\/\//i.test(url)) {
-        iframeSrc = url;
-      } else {
-        throw new Error('رابط الفيديو غير صالح');
+          iframeSrc = `https://drive.google.com/file/d/${fileId}/preview`;
+        } else if (/^https:\/\//i.test(url)) {
+          iframeSrc = url;
+        } else {
+          throw new Error('رابط الفيديو غير صالح');
+        }
+
+        const vc = document.getElementById('videoContainer');
+        if (vc) {
+          vc.innerHTML = `
+            <iframe
+              src="${esc(iframeSrc)}"
+              title="فيديو الدرس"
+              style="width:100%; height:100%; border:none;"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+              referrerpolicy="strict-origin-when-cross-origin"
+            ></iframe>
+          `;
+        }
+      } catch (err) {
+        const vc = document.getElementById('videoContainer');
+        if (vc) {
+          vc.innerHTML = `
+            <div style="display:flex; align-items:center; justify-content:center; height:100%; color:var(--error); flex-direction:column; gap:12px; background:var(--bg-secondary);">
+              <span class="material-symbols-rounded" style="font-size:3rem;">error</span>
+              <p style="font-size:0.85rem; font-weight:700;">${esc(err.message)}</p>
+            </div>
+          `;
+        }
       }
-
-      // Fullscreen stays disabled simply by omitting the allowfullscreen attribute.
-      document.getElementById('videoContainer').innerHTML = `
-        <iframe src="${esc(iframeSrc)}" title="فيديو الدرس" style="width:100%; height:100%; border:none;" allow="autoplay; encrypted-media" referrerpolicy="no-referrer"></iframe>
-      `;
-    } catch (err) {
-      document.getElementById('videoContainer').innerHTML = `
-        <div style="display:flex; align-items:center; justify-content:center; height:100%; color:var(--error); flex-direction:column; gap:12px; background:var(--bg-secondary);">
-          <span class="material-symbols-rounded" style="font-size:3rem;">error</span>
-          <p style="font-size:0.85rem; font-weight:700;">${esc(err.message)}</p>
-        </div>
-      `;
     }
 
-    // Security constraints against key triggers
+    // Security constraints & custom fullscreen & instant watermark movement
     const videoBox = document.getElementById('videoBox');
+    const shield = document.getElementById('antiCaptureShield');
+    const fsBtn = document.getElementById('customFullscreenBtn');
+    const fsIcon = document.getElementById('fullscreenIcon');
+
     videoBox?.addEventListener('contextmenu', e => e.preventDefault());
+
+    if (fsBtn && videoBox) {
+      fsBtn.addEventListener('click', () => {
+        if (!document.fullscreenElement) {
+          videoBox.requestFullscreen?.().catch(() => {});
+        } else {
+          document.exitFullscreen?.().catch(() => {});
+        }
+      });
+      document.addEventListener('fullscreenchange', () => {
+        if (fsIcon) {
+          fsIcon.textContent = document.fullscreenElement ? 'fullscreen_exit' : 'fullscreen';
+        }
+      });
+    }
+
+    const activateCaptureShield = () => {
+      if (shield) shield.style.display = 'flex';
+    };
+    const clearCaptureShield = () => {
+      if (shield) shield.style.display = 'none';
+    };
+    shield?.addEventListener('click', clearCaptureShield);
 
     const preventKeys = e => {
       if (
+        e.key === 'PrintScreen' ||
         e.key === 'F12' ||
-        (e.ctrlKey && e.shiftKey && (e.key === 'I' || e.key === 'i' || e.key === 'C' || e.key === 'c' || e.key === 'J' || e.key === 'j')) ||
-        (e.ctrlKey && (e.key === 'U' || e.key === 'u' || e.key === 'S' || e.key === 's'))
+        (e.metaKey && e.shiftKey && (e.key === 'S' || e.key === 's' || e.key === '3' || e.key === '4')) ||
+        (e.ctrlKey && e.shiftKey && (e.key === 'I' || e.key === 'i' || e.key === 'C' || e.key === 'c' || e.key === 'J' || e.key === 'j' || e.key === 'S' || e.key === 's')) ||
+        (e.ctrlKey && (e.key === 'U' || e.key === 'u' || e.key === 'S' || e.key === 's' || e.key === 'P' || e.key === 'p'))
       ) {
         e.preventDefault();
-        showToast('غير مسموح بهذا الإجراء لحماية محتوى المنصة', 'warning');
+        activateCaptureShield();
+        showToast('غير مسموح بالتقاط الشاشة أو نسخ رابط الفيديو لحماية المحتوى', 'warning');
       }
     };
     document.addEventListener('keydown', preventKeys);
+    document.addEventListener('keyup', (e) => {
+      if (e.key === 'PrintScreen') {
+        activateCaptureShield();
+        navigator.clipboard?.writeText?.('').catch(() => {});
+      }
+    });
 
-    // Watermark dynamic movement (Anti-piracy moving watermark)
+    // Instant Watermark jump (zero transition animation)
     const watermark = document.getElementById('watermark');
     let wmInterval;
     if (watermark) {
       const moveWm = () => {
-        const top = Math.floor(Math.random() * 65) + 15;
-        const left = Math.floor(Math.random() * 65) + 15;
-        const rot = Math.floor(Math.random() * 24) - 12;
+        const top = Math.floor(Math.random() * 62) + 18;
+        const left = Math.floor(Math.random() * 60) + 20;
+        watermark.style.transition = 'none';
         watermark.style.top = `${top}%`;
         watermark.style.left = `${left}%`;
-        watermark.style.transform = `translate(-50%, -50%) rotate(${rot}deg)`;
+        watermark.style.transform = 'translate(-50%, -50%)';
       };
       moveWm();
-      wmInterval = setInterval(moveWm, 4000);
+      wmInterval = setInterval(moveWm, 3500);
     }
 
     const cleanupLessonListeners = () => {
       document.removeEventListener('keydown', preventKeys);
       if (wmInterval) clearInterval(wmInterval);
     };
-    window.addEventListener('hashchange', cleanupLessonListeners, { once: true });
+    window.addEventListener('popstate', cleanupLessonListeners, { once: true });
 
     // Load & bind personal timestamped study notes
     const parseTimeSec = (val) => {
@@ -280,7 +393,7 @@ export async function initLesson(id) {
         notesEl.innerHTML = notes.map(n => `
           <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; padding:10px 14px; background:var(--bg-secondary); border-radius:10px; margin-bottom:8px; border-right:3px solid var(--accent);">
             <div style="display:flex; align-items:center; gap:10px; flex:1; min-width:0;">
-              <span class="badge badge-warning" dir="ltr" style="font-family:monospace; font-size:0.78rem; flex-shrink:0;">⏱ ${formatTime(n.timestamp_sec || 0)}</span>
+              <span class="badge badge-warning" dir="ltr" style="font-family:monospace; font-size:0.78rem; flex-shrink:0; display:inline-flex; align-items:center; gap:4px;"><span class="material-symbols-rounded" style="font-size:0.9rem;">schedule</span> ${formatTime(n.timestamp_sec || 0)}</span>
               <span style="font-size:0.88rem; color:var(--text-primary); font-weight:600; word-break:break-word;">${esc(n.content)}</span>
             </div>
             <button type="button" class="btn btn-ghost btn-sm delete-note-btn" data-nid="${n.id}" style="color:var(--error); padding:4px;" title="حذف الملاحظة">
@@ -317,7 +430,7 @@ export async function initLesson(id) {
         if (timeInp) timeInp.value = '';
         contentInp.value = '';
         loadLessonNotes();
-        showToast('تم حفظ ملاحظتك بنجاح 📝', 'success');
+        showToast('تم حفظ ملاحظتك بنجاح', 'success');
       } catch (err) {
         showToast(err.message, 'error');
       }
@@ -325,7 +438,7 @@ export async function initLesson(id) {
 
     // Completion toggle
     const markBtn = document.getElementById('markCompleteBtn');
-    if (markBtn && !lesson.progress?.completed) {
+    if (markBtn && !lesson.progress?.completed && !prereqLocked) {
       markBtn.addEventListener('click', async () => {
         markBtn.disabled = true;
         markBtn.innerHTML = '<span class="material-symbols-rounded spin-icon">sync</span> جاري الحفظ...';
@@ -341,134 +454,134 @@ export async function initLesson(id) {
       });
     }
 
-    // Discussions forum loading
-    const loadLessonDiscussions = async () => {
-      try {
-        const discs = await api.getDiscussions(lesson.course_id, id);
-        const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
-        const isT = currentUser.role === 'teacher' || currentUser.role === 'admin';
-        const listEl = document.getElementById('lessonDiscussionsList');
-        if (!listEl) return;
+    // Discussions forum loading (if enabled)
+    if (allowForum) {
+      const loadLessonDiscussions = async () => {
+        try {
+          const discs = await api.getDiscussions(lesson.course_id, id);
+          const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
+          const isT = currentUser.role === 'teacher' || currentUser.role === 'admin';
+          const listEl = document.getElementById('lessonDiscussionsList');
+          if (!listEl) return;
 
-        if (discs.length === 0) {
-          listEl.innerHTML = `
-            <p style="color:var(--text-muted); text-align:center; padding:20px; font-size:0.82rem; font-weight:600;">
-              لا توجد أسئلة حالياً للدرس. كن أول من يسأل!
-            </p>
-          `;
-          return;
-        }
+          if (discs.length === 0) {
+            listEl.innerHTML = `
+              <p style="color:var(--text-muted); text-align:center; padding:20px; font-size:0.82rem; font-weight:600;">
+                لا توجد أسئلة حالياً للدرس. كن أول من يسأل!
+              </p>
+            `;
+            return;
+          }
 
-        listEl.innerHTML = discs.map(d => `
-          <div class="discussion-card">
-            <div class="discussion-header">
-              <div class="discussion-avatar" style="background:var(--green-50); color:var(--primary); font-weight:800; border:1px solid var(--green-200);">
-                ${esc(d.user_name.charAt(0))}
-              </div>
-              <div style="flex:1;">
-                <div style="display:flex; align-items:center; justify-content:space-between;">
-                  <div style="font-size:0.85rem; font-weight:800; color:var(--text-primary); display:flex; align-items:center; gap:5px;">
-                    <span>${sanitize(d.user_name)}</span>
-                    ${d.user_role === 'teacher' || d.user_role === 'admin' 
-                      ? '<span class="badge badge-success" style="font-size:0.6rem; padding:1px 6px;">مُدرّس المنصة</span>' 
-                      : ''
-                    }
-                  </div>
-                  ${(isT || currentUser.id === d.user_id) 
-                    ? `<button class="btn btn-ghost delete-disc-btn" data-id="${d.id}" style="color:var(--error); padding:4px;" title="حذف السؤال"><span class="material-symbols-rounded" style="font-size:1.15rem;">delete</span></button>` 
-                    : ''
-                  }
+          listEl.innerHTML = discs.map(d => `
+            <div class="discussion-card">
+              <div class="discussion-header">
+                <div class="discussion-avatar" style="background:var(--green-50); color:var(--primary); font-weight:800; border:1px solid var(--green-200);">
+                  ${esc(d.user_name.charAt(0))}
                 </div>
-                <div class="discussion-time">${new Date(d.created_at || Date.now()).toLocaleDateString('ar-EG', {hour:'2-digit', minute:'2-digit'})}</div>
-              </div>
-            </div>
-            
-            <div class="discussion-body">
-              ${sanitize(d.content)}
-            </div>
-            
-            <!-- Replies -->
-            <div class="discussion-replies">
-              ${d.replies.map(r => `
-                <div class="reply-item">
-                  <div class="reply-avatar" style="background:var(--gold-50); color:var(--accent); font-weight:800; border:1px solid var(--gold-200);">
-                    ${sanitize(r.user_name.charAt(0))}
-                  </div>
-                  <div class="reply-content">
-                    <div style="display:flex; align-items:center; justify-content:space-between;">
-                      <strong style="font-size:0.78rem; font-weight:700; color:var(--text-primary);">${sanitize(r.user_name)}</strong>
-                      ${(isT || currentUser.id === r.user_id) 
-                        ? `<button class="btn btn-ghost delete-reply-btn" data-id="${r.id}" style="color:var(--error); padding:2px;" title="حذف الرد"><span class="material-symbols-rounded" style="font-size:1rem;">close</span></button>` 
+                <div style="flex:1;">
+                  <div style="display:flex; align-items:center; justify-content:space-between;">
+                    <div style="font-size:0.85rem; font-weight:800; color:var(--text-primary); display:flex; align-items:center; gap:5px;">
+                      <span>${sanitize(d.user_name)}</span>
+                      ${d.user_role === 'teacher' || d.user_role === 'admin' 
+                        ? '<span class="badge badge-success" style="font-size:0.6rem; padding:1px 6px;">مُدرّس المنصة</span>' 
                         : ''
                       }
                     </div>
-                    <p class="reply-text">${sanitize(r.content)}</p>
+                    ${(isT || currentUser.id === d.user_id) 
+                      ? `<button class="btn btn-ghost delete-disc-btn" data-id="${d.id}" style="color:var(--error); padding:4px;" title="حذف السؤال"><span class="material-symbols-rounded" style="font-size:1.15rem;">delete</span></button>` 
+                      : ''
+                    }
                   </div>
+                  <div class="discussion-time">${new Date(d.created_at || Date.now()).toLocaleDateString('ar-EG', {hour:'2-digit', minute:'2-digit'})}</div>
                 </div>
-              `).join('')}
+              </div>
               
-              <form class="replyForm" data-id="${d.id}" style="display:flex; gap:8px; margin-top:8px;">
-                <input type="text" class="form-input" placeholder="أضف رداً..." required style="padding:6px 12px; font-size:0.8rem;">
-                <button type="submit" class="btn btn-secondary btn-sm" style="padding: 0 14px;">رد</button>
-              </form>
+              <div class="discussion-body">
+                ${sanitize(d.content)}
+              </div>
+              
+              <div class="discussion-replies">
+                ${d.replies.map(r => `
+                  <div class="reply-item">
+                    <div class="reply-avatar" style="background:var(--gold-50); color:var(--accent); font-weight:800; border:1px solid var(--gold-200);">
+                      ${sanitize(r.user_name.charAt(0))}
+                    </div>
+                    <div class="reply-content">
+                      <div style="display:flex; align-items:center; justify-content:space-between;">
+                        <strong style="font-size:0.78rem; font-weight:700; color:var(--text-primary);">${sanitize(r.user_name)}</strong>
+                        ${(isT || currentUser.id === r.user_id) 
+                          ? `<button class="btn btn-ghost delete-reply-btn" data-id="${r.id}" style="color:var(--error); padding:2px;" title="حذف الرد"><span class="material-symbols-rounded" style="font-size:1rem;">close</span></button>` 
+                          : ''
+                        }
+                      </div>
+                      <p class="reply-text">${sanitize(r.content)}</p>
+                    </div>
+                  </div>
+                `).join('')}
+                
+                <form class="replyForm" data-id="${d.id}" style="display:flex; gap:8px; margin-top:8px;">
+                  <input type="text" class="form-input" placeholder="أضف رداً..." required style="padding:6px 12px; font-size:0.8rem;">
+                  <button type="submit" class="btn btn-secondary btn-sm" style="padding: 0 14px;">رد</button>
+                </form>
+              </div>
             </div>
-          </div>
-        `).join('');
+          `).join('');
 
-        // Bind delete & reply actions
-        document.querySelectorAll('.delete-disc-btn').forEach(btn => {
-          btn.addEventListener('click', async (e) => {
-            const ok = await confirmModal('تأكيد الحذف', 'هل أنت متأكد من حذف هذا السؤال؟');
-            if (!ok) return;
-            try {
-              await api.deleteDiscussion(e.currentTarget.dataset.id);
-              showToast('تم حذف السؤال', 'success');
-              loadLessonDiscussions();
-            } catch (err) { showToast(err.message, 'error'); }
+          document.querySelectorAll('.delete-disc-btn').forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+              const ok = await confirmModal('تأكيد الحذف', 'هل أنت متأكد من حذف هذا السؤال؟');
+              if (!ok) return;
+              try {
+                await api.deleteDiscussion(e.currentTarget.dataset.id);
+                showToast('تم حذف السؤال', 'success');
+                loadLessonDiscussions();
+              } catch (err) { showToast(err.message, 'error'); }
+            });
           });
-        });
-        document.querySelectorAll('.delete-reply-btn').forEach(btn => {
-          btn.addEventListener('click', async (e) => {
-            const ok = await confirmModal('تأكيد الحذف', 'هل أنت متأكد من حذف هذا الرد؟');
-            if (!ok) return;
-            try {
-              await api.deleteReply(e.currentTarget.dataset.id);
-              showToast('تم حذف الرد', 'success');
-              loadLessonDiscussions();
-            } catch (err) { showToast(err.message, 'error'); }
+          document.querySelectorAll('.delete-reply-btn').forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+              const ok = await confirmModal('تأكيد الحذف', 'هل أنت متأكد من حذف هذا الرد؟');
+              if (!ok) return;
+              try {
+                await api.deleteReply(e.currentTarget.dataset.id);
+                showToast('تم حذف الرد', 'success');
+                loadLessonDiscussions();
+              } catch (err) { showToast(err.message, 'error'); }
+            });
           });
-        });
-        document.querySelectorAll('.replyForm').forEach(form => {
-          form.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const input = e.target.querySelector('input');
-            try {
-              await api.postReply(e.target.dataset.id, { content: input.value });
-              input.value = '';
-              loadLessonDiscussions();
-            } catch (err) { showToast(err.message, 'error'); }
+          document.querySelectorAll('.replyForm').forEach(form => {
+            form.addEventListener('submit', async (e) => {
+              e.preventDefault();
+              const input = e.target.querySelector('input');
+              try {
+                await api.postReply(e.target.dataset.id, { content: input.value });
+                input.value = '';
+                loadLessonDiscussions();
+              } catch (err) { showToast(err.message, 'error'); }
+            });
           });
-        });
 
-      } catch (e) {
-        document.getElementById('lessonDiscussionsList').innerHTML = '<p style="color:var(--error); text-align:center; padding:10px;">فشل تحميل أسئلة الدرس.</p>';
-      }
-    };
+        } catch (e) {
+          const el = document.getElementById('lessonDiscussionsList');
+          if (el) el.innerHTML = '<p style="color:var(--error); text-align:center; padding:10px;">فشل تحميل أسئلة الدرس.</p>';
+        }
+      };
 
-    loadLessonDiscussions();
+      loadLessonDiscussions();
 
-    // Discussion submission
-    const lessonDiscForm = document.getElementById('lessonDiscussionForm');
-    lessonDiscForm?.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const input = document.getElementById('lessonDiscInput');
-      try {
-        await api.postDiscussion({ course_id: lesson.course_id, lesson_id: id, content: input.value });
-        input.value = '';
-        loadLessonDiscussions();
-        showToast('تم نشر سؤالك بنجاح', 'success');
-      } catch (err) { showToast(err.message, 'error'); }
-    });
+      const lessonDiscForm = document.getElementById('lessonDiscussionForm');
+      lessonDiscForm?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const input = document.getElementById('lessonDiscInput');
+        try {
+          await api.postDiscussion({ course_id: lesson.course_id, lesson_id: id, content: input.value });
+          input.value = '';
+          loadLessonDiscussions();
+          showToast('تم نشر سؤالك بنجاح', 'success');
+        } catch (err) { showToast(err.message, 'error'); }
+      });
+    }
 
     // Bookmark / Save lesson toggle
     document.getElementById('bookmarkBtn')?.addEventListener('click', async () => {
@@ -479,7 +592,7 @@ export async function initLesson(id) {
         const text = document.getElementById('bookmarkText');
         if (icon) icon.style.color = res.is_saved ? '#f59e0b' : 'inherit';
         if (icon) icon.textContent = res.is_saved ? 'bookmark_added' : 'bookmark_add';
-        if (text) text.textContent = res.is_saved ? 'محفوظ للمراجعة ⭐' : 'حفظ للمراجعة السريعة';
+        if (text) text.textContent = res.is_saved ? 'محفوظ للمراجعة' : 'حفظ للمراجعة السريعة';
       } catch (e) {
         showToast(e.message, 'error');
       }
@@ -491,12 +604,12 @@ export async function initLesson(id) {
         <div style="width:74px; height:74px; border-radius:50%; background:var(--green-50); border:2px solid var(--green-200); display:flex; align-items:center; justify-content:center; margin:0 auto 18px; color:var(--primary);">
           <span class="material-symbols-rounded" style="font-size:2.8rem;">lock</span>
         </div>
-        <h2 style="font-size:1.4rem; font-weight:900; color:var(--text-primary); margin-bottom:10px;">عفواً، المحتوى مغلق (نظام التسلسل الإجباري)</h2>
+        <h2 style="font-size:1.4rem; font-weight:900; color:var(--text-primary); margin-bottom:10px;">المحتوى مغلق حالياً</h2>
         <p style="color:var(--text-secondary); font-size:0.92rem; line-height:1.7; max-width:520px; margin:0 auto 24px;">
-          ${esc(err.message || 'لا يمكنك فتح هذا الدرس إلا بعد اجتياز المحاضرة أو الكويز السابق بنجاح وفقاً لنظام المتابعة الصارم.')}
+          ${esc(err.message || 'لا يمكنك فتح هذا الدرس إلا بعد استكمال المتطلبات السابقة.')}
         </p>
         <div style="display:flex; justify-content:center; gap:12px; flex-wrap:wrap;">
-          <a href="#/courses" class="btn btn-secondary"><span class="material-symbols-rounded">book</span> جدول الكورسات</a>
+          <a href="/courses" class="btn btn-secondary"><span class="material-symbols-rounded">book</span> جدول الكورسات</a>
           <button onclick="window.history.back()" class="btn btn-primary"><span class="material-symbols-rounded">arrow_forward</span> الرجوع واستكمال المطلوب</button>
         </div>
       </div>

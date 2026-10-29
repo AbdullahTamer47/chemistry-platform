@@ -15,7 +15,8 @@ import { renderLive, initLive } from './pages/live.js';
 import { renderWallet, initWallet } from './pages/wallet.js';
 import { renderCertificates, initCertificates } from './pages/certificates.js';
 import { renderPackages, initPackages } from './pages/packages.js';
-import { renderStoreLocator, initStoreLocator } from './pages/storeLocator.js';
+import { renderLab, initLab } from './pages/lab.js';
+import { renderParentPortal, initParentPortal } from './pages/parentPortal.js';
 import {
   renderAdmin, initAdmin,
   renderAdminCourses, initAdminCourses,
@@ -31,24 +32,33 @@ import { renderNavbar, initNavbar } from './components/navbar.js';
 import { api } from './utils/api.js';
 import { isLoggedIn, isTeacher, requireAuth, requireTeacher, getUser } from './utils/auth.js';
 import { showToast } from './components/toast.js';
-import { timeAgo, esc } from './utils/helpers.js';
+import { timeAgo, esc, gradesList } from './utils/helpers.js';
 
 const app = document.getElementById('app');
 
-// Navigation guard — increments on every route change.
-// Async init functions should capture this at call-time and bail
-// if it has changed by the time they try to write to the DOM.
 let navigationId = 0;
 
-// Safe DOM helper — returns true only if element still exists in the current page
 function isDomMounted(elementId) {
   return !!document.getElementById(elementId);
 }
 
-// Expose helpers globally so page modules can use them without circular imports
 window.__nav = { getId: () => navigationId, isDomMounted };
 
-// Render a consistent error fallback inside a container element
+// Clean URL navigation helper (no '#' in URL)
+export function navigateTo(rawTarget, replace = false) {
+  let clean = String(rawTarget || '/').trim();
+  if (clean.startsWith('#/')) clean = clean.slice(1);
+  if (!clean.startsWith('/')) clean = '/' + clean;
+  if (replace) {
+    window.history.replaceState(null, '', clean);
+  } else if (window.location.pathname + window.location.search !== clean) {
+    window.history.pushState(null, '', clean);
+  }
+  navigate();
+}
+
+window.navigateTo = navigateTo;
+
 function renderErrorState(containerId, message) {
   const el = document.getElementById(containerId);
   if (!el) return;
@@ -62,7 +72,6 @@ function renderErrorState(containerId, message) {
       </button>
     </div>`;
 }
-
 
 // ===== Notifications Page =====
 function renderNotifications() {
@@ -95,7 +104,6 @@ async function initNotifications(navId) {
         el.querySelector('.badge')?.remove();
       });
       showToast('تم تحديد الكل كمقروء', 'success');
-      // Refresh badge
       const badge = document.getElementById('notifBadge');
       if (badge) badge.style.display = 'none';
     } catch(e) { showToast(e.message, 'error'); }
@@ -103,7 +111,6 @@ async function initNotifications(navId) {
 
   try {
     const notifs = await api.getNotifications();
-    // Guard: bail if user navigated away while waiting for API
     const container = document.getElementById('notifsContent');
     if (!container) return;
 
@@ -130,7 +137,6 @@ async function initNotifications(navId) {
         </div>
       `).join('')}</div>`;
 
-    // Mark as read on click
     document.querySelectorAll('[data-nid]').forEach(el => {
       el.addEventListener('click', async () => {
         const nid = el.dataset.nid;
@@ -151,9 +157,7 @@ async function initNotifications(navId) {
   }
 }
 
-
 // ===== Profile Page =====
-
 function renderProfile() {
   return `<div class="app-layout">
     ${renderNavbar('profile')}
@@ -168,29 +172,27 @@ async function initProfile(navId) {
   initNavbar();
   try {
     const user = await api.getMe();
-    // Guard: bail if user navigated away while waiting for profile data
     const container = document.getElementById('profileContent');
     if (!container) return;
 
     container.innerHTML = `
       <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(320px, 1fr));gap:24px;max-width:850px">
         <div class="card">
-          <h3 style="font-weight:700;margin-bottom:20px"><span class="material-symbols-rounded" style="color:var(--primary)">person</span> بياناتي</h3>
+          <h3 style="font-weight:700;margin-bottom:20px;display:flex;align-items:center;gap:8px;"><span class="material-symbols-rounded" style="color:var(--primary)">person</span> بياناتي</h3>
           <form id="profileForm">
             <div class="form-group"><label class="form-label">الاسم</label><input type="text" class="form-input" id="pName" value="${esc(user.name)}" required></div>
             <div class="form-group"><label class="form-label">رقم الهاتف</label><input type="tel" class="form-input" id="pPhone" value="${esc(user.phone)}" disabled dir="ltr" style="opacity:0.6"></div>
             <div class="form-group"><label class="form-label">المرحلة الدراسية</label>
               <select class="form-select" id="pGrade">
-                ${['سادسة ابتدائي','أولى إعدادي','ثانية إعدادي','ثالثة إعدادي','أولى ثانوي','ثانية ثانوي','ثالثة ثانوي'].map(g => `<option value="${g}" ${user.grade===g?'selected':''}>${g}</option>`).join('')}
+                ${gradesList.map(g => `<option value="${g}" ${user.grade===g?'selected':''}>${g}</option>`).join('')}
               </select>
             </div>
-            <div class="form-group"><label class="form-label">رقم هاتف الأب (ولي الأمر الأساسي)</label><input type="tel" class="form-input" id="pParent" value="${esc(user.parent_phone || '')}" dir="ltr" placeholder="01XXXXXXXXX"></div>
-            <div class="form-group"><label class="form-label">رقم هاتف الأم (ولي الأمر الثاني لمتابعة الدرجات)</label><input type="tel" class="form-input" id="pParentSecondary" value="${esc(user.parent_phone_secondary || '')}" dir="ltr" placeholder="01XXXXXXXXX"></div>
+            <div class="form-group"><label class="form-label">رقم هاتف ولي الأمر</label><input type="tel" class="form-input" id="pParent" value="${esc(user.parent_phone || '')}" dir="ltr" placeholder="01XXXXXXXXX" required></div>
             <button type="submit" class="btn btn-primary btn-block"><span class="material-symbols-rounded">save</span> حفظ التعديلات</button>
           </form>
         </div>
         <div class="card">
-          <h3 style="font-weight:700;margin-bottom:20px"><span class="material-symbols-rounded" style="color:var(--accent)">lock</span> تغيير كلمة المرور</h3>
+          <h3 style="font-weight:700;margin-bottom:20px;display:flex;align-items:center;gap:8px;"><span class="material-symbols-rounded" style="color:var(--accent)">lock</span> تغيير كلمة المرور</h3>
           <form id="passwordForm">
             <div class="form-group"><label class="form-label">كلمة المرور الحالية</label><input type="password" class="form-input" id="currentPass" required></div>
             <div class="form-group"><label class="form-label">كلمة المرور الجديدة</label><input type="password" class="form-input" id="newPass" required minlength="6"></div>
@@ -204,26 +206,21 @@ async function initProfile(navId) {
       </div>
     `;
 
-    // Update profile
     document.getElementById('profileForm').addEventListener('submit', async (e) => {
       e.preventDefault();
       try {
         const updated = await api.updateProfile({
           name: document.getElementById('pName').value,
           grade: document.getElementById('pGrade').value,
-          parent_phone: document.getElementById('pParent').value,
-          parent_phone_secondary: document.getElementById('pParentSecondary').value
+          parent_phone: document.getElementById('pParent').value
         });
-        // Update local storage
         const stored = JSON.parse(localStorage.getItem('user') || '{}');
         Object.assign(stored, {
           name: updated.name,
           grade: updated.grade,
-          parent_phone: updated.parent_phone,
-          parent_phone_secondary: updated.parent_phone_secondary
+          parent_phone: updated.parent_phone
         });
         localStorage.setItem('user', JSON.stringify(stored));
-        // Update sidebar user info in DOM immediately
         const sbName = document.querySelector('.sidebar-user-name');
         const sbRole = document.querySelector('.sidebar-user-role');
         if (sbName) sbName.textContent = updated.name;
@@ -232,7 +229,6 @@ async function initProfile(navId) {
       } catch (err) { showToast(err.message, 'error'); }
     });
 
-    // Change password
     document.getElementById('passwordForm').addEventListener('submit', async (e) => {
       e.preventDefault();
       const newPass = document.getElementById('newPass').value;
@@ -255,10 +251,12 @@ const routes = {
   '/': { render: renderLanding, init: initLanding },
   '/login': { render: renderLogin, init: initLogin },
   '/register': { render: renderRegister, init: initRegister },
+  '/parent-portal': { render: renderParentPortal, init: initParentPortal },
+  '/lab': { render: renderLab, init: initLab },
   '/dashboard': { 
     render: () => {
       if (isTeacher()) {
-        window.location.hash = '#/admin';
+        window.history.replaceState(null, '', '/admin');
         return renderAdmin();
       }
       return renderDashboard();
@@ -277,7 +275,7 @@ const routes = {
   '/wallet': { 
     render: () => {
       if (isTeacher()) {
-        window.location.hash = '#/admin';
+        window.history.replaceState(null, '', '/admin');
         return renderAdmin();
       }
       return renderWallet();
@@ -291,7 +289,7 @@ const routes = {
   '/certificates': { 
     render: () => {
       if (isTeacher()) {
-        window.location.hash = '#/admin';
+        window.history.replaceState(null, '', '/admin');
         return renderAdmin();
       }
       return renderCertificates();
@@ -303,7 +301,6 @@ const routes = {
     auth: true 
   },
   '/packages': { render: renderPackages, init: initPackages },
-  '/store-locator': { render: renderStoreLocator, init: initStoreLocator },
   '/notifications': { render: renderNotifications, init: initNotifications, auth: true },
   '/profile': { render: renderProfile, init: initProfile, auth: true },
   '/admin': { render: renderAdmin, init: initAdmin, auth: true, teacher: true },
@@ -313,7 +310,6 @@ const routes = {
   '/admin/exams': { render: renderAdminExams, init: initAdminExams, auth: true, teacher: true },
   '/admin/live': { render: renderAdminLive, init: initAdminLive, auth: true, teacher: true },
   '/admin/notifications': { render: renderAdminNotifications, init: initAdminNotifications, auth: true, teacher: true },
-  '/admin/stores': { render: renderStoreLocator, init: initStoreLocator, auth: true, teacher: true },
 };
 
 // Dynamic routes
@@ -339,81 +335,73 @@ function matchDynamic(path) {
   return null;
 }
 
-// Prevent concurrent navigations from racing each other
 let isNavigating = false;
 
 async function navigate() {
-  // Increment guard BEFORE anything async — every init() should capture
-  // this value at the start and compare before writing to DOM.
   const myNavId = ++navigationId;
 
-  // Debounce: ignore if already mid-navigation (can happen on rapid hash changes)
-  if (isNavigating) {
-    // Let the most recent call win — abort will happen naturally via navId check
+  // If URL still has #/something, convert it immediately to a clean path without '#'
+  if (window.location.hash && window.location.hash.startsWith('#/')) {
+    const cleanFromHash = window.location.hash.slice(1);
+    window.history.replaceState(null, '', cleanFromHash);
   }
 
-  const rawHash = window.location.hash.slice(1) || '/';
-  const [hashPath] = rawHash.split('?');
-
-  // Handle in-page anchor jumps (e.g. #reviews, #faq, #features, #grades)
-  let path = hashPath;
+  let path = window.location.pathname || '/';
   let targetSection = null;
 
   const sectionIds = ['reviews', 'faq', 'features', 'grades', 'why-us', 'about'];
-  const cleanId = path.replace(/^\/?#?/, '');
-
-  if (!path.startsWith('/') || sectionIds.includes(cleanId)) {
-    targetSection = cleanId;
-    path = '/';
+  const rawHash = window.location.hash ? window.location.hash.replace(/^#\/?/, '') : '';
+  if (rawHash && sectionIds.includes(rawHash)) {
+    targetSection = rawHash;
   }
 
-  // Find route — static first, then dynamic
+  // Normalize trailing slash (except '/')
+  if (path.length > 1 && path.endsWith('/')) {
+    path = path.slice(0, -1);
+  }
+
+  // Logged-in student/teacher visiting '/' goes directly to their dashboard as their home page
+  if (path === '/' && isLoggedIn() && !targetSection) {
+    const dest = isTeacher() ? '/admin' : '/dashboard';
+    window.history.replaceState(null, '', dest);
+    path = dest;
+  }
+
   const route = routes[path] || matchDynamic(path);
 
   if (!route) {
-    // 404 — bail early if another navigation started
     if (navigationId !== myNavId) return;
     app.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;min-height:100vh;text-align:center;flex-direction:column;gap:16px">
       <div style="font-size:5rem; color: var(--primary); display: flex; justify-content: center; align-items: center;"><span class="material-symbols-rounded" style="font-size: 5rem;">science</span></div>
       <h1 style="font-size:2rem;font-weight:800">404</h1>
       <p style="color:var(--text-muted)">الصفحة غير موجودة</p>
-      <a href="#/" class="btn btn-primary">الرئيسية</a>
+      <a href="/" class="btn btn-primary">الرئيسية</a>
     </div>`;
     return;
   }
 
-  // Auth check
   if (route.auth && !isLoggedIn()) {
-    window.location.hash = '#/login';
-    return;
+    window.history.replaceState(null, '', '/login');
+    return navigate();
   }
 
   if (route.teacher && !requireTeacher()) {
     return;
   }
 
-  // Scroll to top immediately if no anchor section target
   if (!targetSection) {
     window.scrollTo(0, 0);
   }
 
-  // Render synchronously — bail if stale
   if (navigationId !== myNavId) return;
 
   isNavigating = true;
   try {
     const root = document.getElementById('app') || app;
-    if (!root) {
-      console.error('#app element not found');
-      return;
-    }
+    if (!root) return;
     root.innerHTML = route.render();
-
-    // Pass navId to init so it can self-cancel if the user navigated away
-    // during the await chain inside init()
     if (route.init) await route.init(myNavId);
   } catch (err) {
-    // Only show error if we're still on the same route
     if (navigationId === myNavId) {
       console.error('Navigation error:', err);
       showToast('حدث خطأ في تحميل الصفحة — ' + (err.message || ''), 'error');
@@ -422,7 +410,6 @@ async function navigate() {
     isNavigating = false;
   }
 
-  // Scroll to section if anchor jump
   if (targetSection && navigationId === myNavId) {
     setTimeout(() => {
       const el = document.getElementById(targetSection);
@@ -431,15 +418,50 @@ async function navigate() {
   }
 }
 
-// Listen for hash changes and initial load
-window.addEventListener('hashchange', navigate);
+// Global click interceptor for internal SPA links (both '/path' and legacy '#/path')
+document.addEventListener('click', (e) => {
+  if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+  const anchor = e.target.closest('a[href]');
+  if (!anchor) return;
+  if (anchor.hasAttribute('download') || anchor.getAttribute('target') === '_blank') return;
+
+  const href = anchor.getAttribute('href') || '';
+  if (!href || href === '#') return;
+
+  // In-page section scroll (e.g. #faq)
+  if (href.startsWith('#') && !href.startsWith('#/')) {
+    return;
+  }
+
+  // Convert '#/path' or internal '/path' to clean History API navigation
+  if (href.startsWith('#/')) {
+    e.preventDefault();
+    navigateTo(href.slice(1));
+    return;
+  }
+
+  if (href.startsWith('/') && !href.startsWith('//') && !href.startsWith('/uploads/') && !href.startsWith('/api/')) {
+    e.preventDefault();
+    navigateTo(href);
+  }
+});
+
+// Listen for popstate and legacy hashchange
+window.addEventListener('popstate', navigate);
+window.addEventListener('hashchange', () => {
+  if (window.location.hash && window.location.hash.startsWith('#/')) {
+    const target = window.location.hash.slice(1);
+    window.history.replaceState(null, '', target);
+    navigate();
+  }
+});
+
 if (document.readyState === 'loading') {
   window.addEventListener('DOMContentLoaded', navigate);
 } else {
   navigate();
 }
 
-// Dark mode persistence
 if (localStorage.getItem('darkMode') === 'true') {
   document.documentElement.setAttribute('data-theme', 'dark');
 }

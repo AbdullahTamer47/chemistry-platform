@@ -8,17 +8,23 @@ const METHODS = ['vodafone_cash', 'instapay', 'fawry'];
 const PHONE_RE = /^01[0125][0-9]{8}$/;
 const MAX_RECEIPT_BYTES = 3 * 1024 * 1024; // ~3MB base64 payload
 
-// Public payment config (receiving accounts) — read from dynamic platform_settings
+// Public payment config (receiving accounts + Paymob status) — read from dynamic platform_settings
 router.get('/config', (req, res) => {
   try {
     const rows = db.prepare('SELECT key, value FROM platform_settings').all();
     const settings = {};
     rows.forEach(r => { settings[r.key] = r.value; });
+    const paymobConfigured = !!(settings.paymob_api_key || process.env.PAYMOB_API_KEY) && settings.paymob_enabled === '1';
     res.json({
       vodafone_cash: settings.vodafone_cash || process.env.PAY_VODAFONE_NUMBER || '',
       instapay: settings.instapay || process.env.PAY_INSTAPAY_HANDLE || '',
       fawry_merchant: settings.fawry_merchant || process.env.PAY_FAWRY_MERCHANT || '',
       whatsapp: settings.whatsapp || process.env.SUPPORT_WHATSAPP || '',
+      paymob_enabled: settings.paymob_enabled === '1',
+      paymob_configured: paymobConfigured,
+      paymob_iframe_id: settings.paymob_iframe_id || process.env.PAYMOB_IFRAME_ID || '',
+      paymob_integration_id_card: settings.paymob_integration_id_card || process.env.PAYMOB_INTEGRATION_ID_CARD || '',
+      paymob_integration_id_wallet: settings.paymob_integration_id_wallet || process.env.PAYMOB_INTEGRATION_ID_WALLET || '',
     });
   } catch (err) {
     res.json({
@@ -26,14 +32,20 @@ router.get('/config', (req, res) => {
       instapay: process.env.PAY_INSTAPAY_HANDLE || '',
       fawry_merchant: process.env.PAY_FAWRY_MERCHANT || '',
       whatsapp: process.env.SUPPORT_WHATSAPP || '',
+      paymob_enabled: false,
+      paymob_configured: false,
     });
   }
 });
 
-// Teacher: update payment config / numbers
+// Teacher: update payment config / numbers & Paymob keys
 router.put('/config', authMiddleware, teacherMiddleware, (req, res) => {
   try {
-    const { vodafone_cash, instapay, fawry_merchant, whatsapp } = req.body;
+    const {
+      vodafone_cash, instapay, fawry_merchant, whatsapp,
+      paymob_enabled, paymob_api_key, paymob_iframe_id,
+      paymob_integration_id_card, paymob_integration_id_wallet
+    } = req.body;
     const upsert = db.prepare(`
       INSERT INTO platform_settings (key, value) VALUES (?, ?)
       ON CONFLICT(key) DO UPDATE SET value = excluded.value
@@ -43,16 +55,23 @@ router.put('/config', authMiddleware, teacherMiddleware, (req, res) => {
       if (instapay !== undefined) upsert.run('instapay', String(instapay).trim());
       if (fawry_merchant !== undefined) upsert.run('fawry_merchant', String(fawry_merchant).trim());
       if (whatsapp !== undefined) upsert.run('whatsapp', String(whatsapp).trim());
+      if (paymob_enabled !== undefined) upsert.run('paymob_enabled', paymob_enabled ? '1' : '0');
+      if (paymob_api_key !== undefined && String(paymob_api_key).trim() !== '') {
+        upsert.run('paymob_api_key', String(paymob_api_key).trim());
+      }
+      if (paymob_iframe_id !== undefined) upsert.run('paymob_iframe_id', String(paymob_iframe_id).trim());
+      if (paymob_integration_id_card !== undefined) upsert.run('paymob_integration_id_card', String(paymob_integration_id_card).trim());
+      if (paymob_integration_id_wallet !== undefined) upsert.run('paymob_integration_id_wallet', String(paymob_integration_id_wallet).trim());
     });
     tx();
-    res.json({ message: 'تم حفظ وتحديث أرقام وبيانات الدفع بنجاح' });
+    res.json({ message: 'تم حفظ وتحديث بيانات وبوابات الدفع بنجاح' });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'حدث خطأ أثناء تحديث بيانات الدفع' });
   }
 });
 
-// Student: submit a payment request (Receipt is strictly MANDATORY)
+// Student: submit a payment request (Receipt is MANDATORY, transaction_ref is OPTIONAL)
 router.post('/', authMiddleware, (req, res) => {
   try {
     const { course_id, method, sender_phone, transaction_ref, receipt_image } = req.body;
@@ -81,8 +100,8 @@ router.post('/', authMiddleware, (req, res) => {
       return res.status(400).json({ error: 'رقم الهاتف المحوَّل منه غير صحيح (11 رقم يبدأ بـ 01)' });
     }
     const ref = String(transaction_ref || '').trim();
-    if (!ref || ref.length < 4 || ref.length > 40) {
-      return res.status(400).json({ error: 'يرجى إدخال رقم العملية / المرجع الظاهر في رسالة التحويل' });
+    if (ref.length > 40) {
+      return res.status(400).json({ error: 'رقم العملية طويل جداً' });
     }
 
     const enrolled = db.prepare('SELECT id FROM enrollments WHERE user_id = ? AND course_id = ?').get(req.user.id, course_id);
@@ -91,13 +110,15 @@ router.post('/', authMiddleware, (req, res) => {
     const pending = db.prepare("SELECT id FROM payment_requests WHERE user_id = ? AND course_id = ? AND status = 'pending'").get(req.user.id, course_id);
     if (pending) return res.status(400).json({ error: 'لديك طلب دفع قيد المراجعة لهذا الكورس بالفعل' });
 
-    const dupRef = db.prepare("SELECT id FROM payment_requests WHERE transaction_ref = ? AND method = ? AND status != 'rejected'").get(ref, method);
-    if (dupRef) return res.status(400).json({ error: 'رقم العملية هذا مستخدم من قبل' });
+    if (ref) {
+      const dupRef = db.prepare("SELECT id FROM payment_requests WHERE transaction_ref = ? AND method = ? AND status != 'rejected'").get(ref, method);
+      if (dupRef) return res.status(400).json({ error: 'رقم العملية هذا مستخدم من قبل' });
+    }
 
     const result = db.prepare(`
       INSERT INTO payment_requests (user_id, course_id, method, amount, sender_phone, transaction_ref, receipt_image)
       VALUES (?, ?, ?, ?, ?, ?, ?)
-    `).run(req.user.id, course_id, method, course.price, phone || null, ref, receipt_image);
+    `).run(req.user.id, course_id, method, course.price, phone || null, ref || null, receipt_image);
 
     res.status(201).json({ id: result.lastInsertRowid, message: 'تم إرسال طلب الدفع مع صورة الإيصال بنجاح، سيتم تفعيل الكورس فور مراجعة التحويل' });
   } catch (err) {
@@ -173,7 +194,7 @@ router.put('/:id', authMiddleware, teacherMiddleware, (req, res) => {
 
         db.prepare('INSERT INTO notifications (user_id, title, message, type) VALUES (?, ?, ?, ?)').run(
           p.user_id,
-          'تم تأكيد الدفع وتفعيل الكورس! 🎉',
+          'تم تأكيد الدفع وتفعيل الكورس',
           `تم قبول طلب الدفع بنجاح وتفعيل اشتراكك في "${courseTitle}". يمكنك الآن مشاهدة جميع الدروس وحل الامتحانات!`,
           'success'
         );
@@ -328,7 +349,7 @@ router.post('/wallet/charge-voucher', authMiddleware, (req, res) => {
         VALUES (?, ?, ?, 'success')
       `).run(
         req.user.id,
-        'تم شحن كارت السنتر بنجاح! 🎟️',
+        'تم شحن كارت السنتر بنجاح',
         `تم شحن رصيد قدره ${voucher.amount} ج.م في محفظتك باستخدام كارت السنتر المعتمد.`
       );
     });
@@ -385,6 +406,124 @@ router.post('/vouchers/generate', authMiddleware, teacherMiddleware, (req, res) 
     res.status(201).json({ message: `تم توليد ${count} كارت شحن برصيد ${amount} ج.م بنجاح`, vouchers: generated });
   } catch (err) {
     res.status(500).json({ error: 'حدث خطأ في توليد الكروت' });
+  }
+});
+
+// ==========================================
+// PAYMOB ELECTRONIC PAYMENT GATEWAY ARCHITECTURE
+// ==========================================
+router.post('/paymob/checkout', authMiddleware, async (req, res) => {
+  try {
+    const amount = Number(req.body.amount);
+    const paymentType = req.body.payment_type || 'card'; // 'card' | 'wallet'
+    const walletPhone = String(req.body.wallet_phone || req.user.phone || '').replace(/\D/g, '');
+
+    if (!amount || amount < 10 || amount > 10000) {
+      return res.status(400).json({ error: 'يرجى تحديد مبلغ شحن صحيح بين 10 و 10000 جنيه' });
+    }
+
+    const rows = db.prepare('SELECT key, value FROM platform_settings').all();
+    const settings = {};
+    rows.forEach(r => { settings[r.key] = r.value; });
+
+    const apiKey = settings.paymob_api_key || process.env.PAYMOB_API_KEY || '';
+    const isEnabled = settings.paymob_enabled === '1' && !!apiKey;
+
+    if (!isEnabled) {
+      return res.status(400).json({
+        configured: false,
+        error: 'بوابة الدفع الإلكتروني الآلي (Paymob) غير مفعلة حالياً من قِبل الإدارة. يمكنك الدفع الآن عبر فودافون كاش / إنستاباي أو شحن كارت السنتر.'
+      });
+    }
+
+    const integrationId = paymentType === 'wallet'
+      ? (settings.paymob_integration_id_wallet || process.env.PAYMOB_INTEGRATION_ID_WALLET)
+      : (settings.paymob_integration_id_card || process.env.PAYMOB_INTEGRATION_ID_CARD);
+
+    if (!integrationId) {
+      return res.status(400).json({ error: 'معرف التكامل (Integration ID) الخاص ببوابة Paymob غير مضبوط في إعدادات المعلم.' });
+    }
+
+    // 1. Authenticate with Paymob API
+    const authRes = await fetch('https://accept.paymob.com/api/auth/tokens', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ api_key: apiKey })
+    });
+    const authData = await authRes.json();
+    if (!authData.token) {
+      return res.status(502).json({ error: 'تعذر الاتصال ببوابة Paymob — تحقق من صحة مفتاح API Key' });
+    }
+
+    // 2. Register Order on Paymob
+    const merchantOrderId = `KIM-${req.user.id}-${Date.now()}`;
+    const orderRes = await fetch('https://accept.paymob.com/api/ecommerce/orders', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        auth_token: authData.token,
+        delivery_needed: 'false',
+        amount_cents: Math.round(amount * 100),
+        currency: 'EGP',
+        merchant_order_id: merchantOrderId,
+        items: [{
+          name: `شحن محفظة منصة كيمياوي - ${req.user.name}`,
+          amount_cents: Math.round(amount * 100),
+          description: `شحن رصيد لطالب ${req.user.phone}`,
+          quantity: 1
+        }]
+      })
+    });
+    const orderData = await orderRes.json();
+    if (!orderData.id) {
+      return res.status(502).json({ error: 'تعذر تسجيل الطلب في بوابة Paymob' });
+    }
+
+    // 3. Request Payment Key
+    const nameParts = String(req.user.name || 'Student Kimyawy').trim().split(/\s+/);
+    const pKeyRes = await fetch('https://accept.paymob.com/api/acceptance/payment_keys', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        auth_token: authData.token,
+        amount_cents: Math.round(amount * 100),
+        expiration: 3600,
+        order_id: orderData.id,
+        billing_data: {
+          apartment: 'NA',
+          email: `${req.user.phone}@kimyawy.edu.eg`,
+          floor: 'NA',
+          first_name: nameParts[0] || 'Student',
+          street: 'NA',
+          building: 'NA',
+          phone_number: walletPhone || req.user.phone || '01000000000',
+          shipping_method: 'NA',
+          postal_code: 'NA',
+          city: 'Cairo',
+          country: 'EG',
+          last_name: nameParts.slice(1).join(' ') || 'Kimyawy',
+          state: 'Cairo'
+        },
+        currency: 'EGP',
+        integration_id: Number(integrationId)
+      })
+    });
+    const pKeyData = await pKeyRes.json();
+    if (!pKeyData.token) {
+      return res.status(502).json({ error: 'تعذر استخراج مفتاح الدفع من Paymob' });
+    }
+
+    const iframeId = settings.paymob_iframe_id || process.env.PAYMOB_IFRAME_ID || '';
+    res.json({
+      configured: true,
+      order_id: orderData.id,
+      merchant_order_id: merchantOrderId,
+      payment_key: pKeyData.token,
+      iframe_url: iframeId ? `https://accept.paymob.com/api/acceptance/iframes/${iframeId}?payment_token=${pKeyData.token}` : null
+    });
+  } catch (err) {
+    console.error('Paymob checkout error:', err);
+    res.status(500).json({ error: 'حدث خطأ أثناء الاتصال ببوابة الدفع الإلكتروني Paymob' });
   }
 });
 

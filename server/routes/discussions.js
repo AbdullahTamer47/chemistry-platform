@@ -69,6 +69,10 @@ router.post('/', authMiddleware, (req, res) => {
       if (!canAccessCourse(req.user, course_id)) {
         return res.status(403).json({ error: 'غير مسموح. يجب الاشتراك في الكورس أولاً' });
       }
+      const course = db.prepare('SELECT allow_student_replies FROM courses WHERE id = ?').get(course_id);
+      if (course && Number(course.allow_student_replies) === 0) {
+        return res.status(403).json({ error: 'المنتدى وسؤال المعلم غير مفعلين لهذا الكورس' });
+      }
     }
 
     const result = db.prepare(

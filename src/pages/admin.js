@@ -13,7 +13,7 @@ export function renderAdmin() {
       <div class="stats-grid" id="adminStats"><div class="loading-spinner"><div class="spinner"></div></div></div>
       <div class="card" id="adminPayments" style="margin-top:24px"></div>
       <div class="card" id="adminPaymentSettings" style="margin-top:24px"></div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:24px" id="adminGrid">
+      <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(300px, 1fr));gap:20px;margin-top:24px" id="adminGrid">
         <div class="card" id="recentStudents"></div>
         <div class="card" id="gradeChart"></div>
       </div>
@@ -31,7 +31,7 @@ export async function initAdmin() {
       <div class="stat-card"><div class="stat-icon green"><span class="material-symbols-rounded">group</span></div><div class="stat-info"><div class="stat-value">${stats.total_students}</div><div class="stat-label">طالب مسجل</div></div></div>
       <div class="stat-card"><div class="stat-icon gold"><span class="material-symbols-rounded">book</span></div><div class="stat-info"><div class="stat-value">${stats.total_courses}</div><div class="stat-label">كورس</div></div></div>
       <div class="stat-card"><div class="stat-icon blue"><span class="material-symbols-rounded">play_circle</span></div><div class="stat-info"><div class="stat-value">${stats.total_lessons}</div><div class="stat-label">درس</div></div></div>
-      <div class="stat-card"><div class="stat-icon purple"><span class="material-symbols-rounded">assignment</span></div><div class="stat-info"><div class="stat-value">${stats.total_exams}</div><div class="stat-label">امتحان</div></div></div>
+      <div class="stat-card"><div class="stat-icon purple"><span class="material-symbols-rounded">assignment</span></div><div class="stat-info"><div class="stat-value">${stats.total_exams}</div><div class="stat-label">امتحان وواجب</div></div></div>
       <div class="stat-card"><div class="stat-icon green"><span class="material-symbols-rounded">person_add</span></div><div class="stat-info"><div class="stat-value">${stats.total_enrollments}</div><div class="stat-label">اشتراك فعال</div></div></div>
       <div class="stat-card"><div class="stat-icon gold"><span class="material-symbols-rounded">key</span></div><div class="stat-info"><div class="stat-value">${stats.active_codes}</div><div class="stat-label">كود متاح</div></div></div>
     `;
@@ -47,14 +47,13 @@ export async function initAdmin() {
       <div class="card-header"><h3 class="card-title"><span class="material-symbols-rounded" style="color:var(--accent)">pie_chart</span> توزيع الطلاب</h3></div>
       ${stats.grade_distribution.map(g => `<div style="display:flex;align-items:center;gap:10px;padding:6px 0">
         <span style="font-size:0.85rem;font-weight:600;min-width:100px">${escA(g.grade)}</span>
-        <div class="progress-bar" style="flex:1"><div class="progress-fill" style="width:${(g.count / stats.total_students) * 100}%"></div></div>
+        <div class="progress-bar" style="flex:1"><div class="progress-fill" style="width:${stats.total_students ? (g.count / stats.total_students) * 100 : 0}%"></div></div>
         <span style="font-size:0.8rem;font-weight:700;color:var(--primary)">${g.count}</span>
       </div>`).join('')}
     `;
   } catch (err) { showToast(err.message, 'error'); }
 }
 
-// Payment requests review (Vodafone Cash / InstaPay / Fawry)
 const PAY_METHOD = { vodafone_cash: 'فودافون كاش', instapay: 'إنستاباي', fawry: 'فوري' };
 const escA = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
@@ -69,7 +68,7 @@ async function loadAdminPayments() {
         <div class="pay-request-row" data-id="${p.id}">
           <div style="min-width:0;flex:1">
             <div class="wallet-course-title">${escA(p.student_name)} — ${escA(p.course_title)}</div>
-            <div class="wallet-course-meta">${PAY_METHOD[p.method]} • ${Number(p.amount)} ج.م • من: <span dir="ltr">${escA(p.sender_phone || '-')}</span> • رقم العملية: <span dir="ltr">${escA(p.transaction_ref)}</span> • ${formatDate(p.created_at)}</div>
+            <div class="wallet-course-meta">${PAY_METHOD[p.method] || p.method} • ${Number(p.amount)} ج.م • من: <span dir="ltr">${escA(p.sender_phone || '-')}</span> ${p.transaction_ref ? `• رقم العملية: <span dir="ltr">${escA(p.transaction_ref)}</span>` : '• بدون رقم عملية'} • ${formatDate(p.created_at)}</div>
           </div>
           <div style="display:flex;gap:6px;flex-shrink:0">
             ${p.receipt_image ? `<button class="btn btn-ghost btn-sm pay-view" data-id="${p.id}"><span class="material-symbols-rounded">image</span></button>` : ''}
@@ -114,7 +113,6 @@ async function loadAdminPayments() {
   }
 }
 
-// Payment Settings management (Vodafone Cash / InstaPay / Fawry / WhatsApp)
 async function loadPaymentSettings() {
   const box = document.getElementById('adminPaymentSettings');
   if (!box) return;
@@ -124,9 +122,9 @@ async function loadPaymentSettings() {
       <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">
         <h3 class="card-title">
           <span class="material-symbols-rounded" style="color:var(--primary)">tune</span>
-          إعدادات أرقام واستقبال أموال الدفع (كاش / إنستاباي / فوري / واتساب)
+          إعدادات وسائل الدفع وبوابة Paymob الإلكترونية
         </h3>
-        <span style="font-size:0.75rem;color:var(--text-muted);font-weight:600;">الأرقام دي بتظهر للطلاب في صفحة الدفع والاشتراك</span>
+        <span style="font-size:0.75rem;color:var(--text-muted);font-weight:600;">تظهر هذه البيانات للطلاب في صفحة المحفظة والاشتراك</span>
       </div>
       
       <form id="adminPaymentConfigForm" style="display:grid;grid-template-columns:repeat(auto-fit, minmax(240px, 1fr));gap:16px;margin-top:14px;">
@@ -148,23 +146,46 @@ async function loadPaymentSettings() {
 
         <div class="form-group" style="margin-bottom:0;">
           <label class="form-label" style="display:flex;align-items:center;gap:6px;">
-            <span class="material-symbols-rounded" style="font-size:1.1rem;color:#d97706;">storefront</span>
-            كود تاجر فوري (Fawry Merchant)
-          </label>
-          <input type="text" id="cfgFawry" class="form-input" dir="ltr" value="${escA(cfg.fawry_merchant || '')}" placeholder="مثال: 788">
-        </div>
-
-        <div class="form-group" style="margin-bottom:0;">
-          <label class="form-label" style="display:flex;align-items:center;gap:6px;">
             <span class="material-symbols-rounded" style="font-size:1.1rem;color:#16a34a;">chat</span>
             رقم واتساب الدعم الفني وتلقي الإيصالات
           </label>
           <input type="text" id="cfgWhatsapp" class="form-input" dir="ltr" value="${escA(cfg.whatsapp || '')}" placeholder="مثال: 201012345678">
         </div>
 
+        <div style="grid-column:1/-1;border-top:1px dashed var(--border);padding-top:14px;margin-top:4px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:12px;">
+            <strong style="font-size:0.92rem;display:flex;align-items:center;gap:6px;color:var(--text-primary);">
+              <span class="material-symbols-rounded" style="color:var(--primary);">credit_card</span>
+              إعدادات الربط المباشر مع بوابة Paymob (البطاقات البنكية / المحافظ / فوري)
+            </strong>
+            <label style="display:flex;align-items:center;gap:6px;font-size:0.85rem;font-weight:700;cursor:pointer;">
+              <input type="checkbox" id="cfgPaymobEnabled" ${cfg.paymob_enabled ? 'checked' : ''}>
+              <span>تفعيل الدفع المباشر عبر Paymob</span>
+            </label>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(220px, 1fr));gap:12px;">
+            <div>
+              <label class="form-label" style="font-size:0.78rem;">Paymob API Key</label>
+              <input type="password" id="cfgPaymobApiKey" class="form-input" dir="ltr" placeholder="${cfg.paymob_configured ? '•••••••• (محفوظ — اتركه فارغاً لعدم التغيير)' : 'أدخل Paymob API Key'}">
+            </div>
+            <div>
+              <label class="form-label" style="font-size:0.78rem;">Paymob Iframe ID</label>
+              <input type="text" id="cfgPaymobIframe" class="form-input" dir="ltr" value="${escA(cfg.paymob_iframe_id || '')}" placeholder="مثال: 812345">
+            </div>
+            <div>
+              <label class="form-label" style="font-size:0.78rem;">Integration ID (البطاقات البنكية)</label>
+              <input type="text" id="cfgPaymobCardId" class="form-input" dir="ltr" value="${escA(cfg.paymob_integration_id_card || '')}" placeholder="مثال: 4123456">
+            </div>
+            <div>
+              <label class="form-label" style="font-size:0.78rem;">Integration ID (المحافظ الإلكترونية)</label>
+              <input type="text" id="cfgPaymobWalletId" class="form-input" dir="ltr" value="${escA(cfg.paymob_integration_id_wallet || '')}" placeholder="مثال: 4123457">
+            </div>
+          </div>
+        </div>
+
         <div style="grid-column:1/-1;display:flex;justify-content:flex-end;margin-top:6px;">
           <button type="submit" class="btn btn-primary" id="savePaymentConfigBtn" style="padding:10px 24px;">
-            <span class="material-symbols-rounded">save</span> حفظ أرقام الدفع فوراً
+            <span class="material-symbols-rounded">save</span> حفظ إعدادات الدفع
           </button>
         </div>
       </form>
@@ -179,18 +200,23 @@ async function loadPaymentSettings() {
       const payload = {
         vodafone_cash: document.getElementById('cfgVodafone').value.trim(),
         instapay: document.getElementById('cfgInstapay').value.trim(),
-        fawry_merchant: document.getElementById('cfgFawry').value.trim(),
         whatsapp: document.getElementById('cfgWhatsapp').value.trim(),
+        paymob_enabled: document.getElementById('cfgPaymobEnabled').checked,
+        paymob_iframe_id: document.getElementById('cfgPaymobIframe').value.trim(),
+        paymob_integration_id_card: document.getElementById('cfgPaymobCardId').value.trim(),
+        paymob_integration_id_wallet: document.getElementById('cfgPaymobWalletId').value.trim(),
       };
+      const apiKeyVal = document.getElementById('cfgPaymobApiKey').value.trim();
+      if (apiKeyVal) payload.paymob_api_key = apiKeyVal;
 
       try {
         const res = await api.updatePaymentConfig(payload);
-        showToast(res.message || 'تم حفظ أرقام الدفع بنجاح!', 'success');
+        showToast(res.message || 'تم حفظ إعدادات الدفع بنجاح', 'success');
       } catch (err) {
         showToast(err.message, 'error');
       } finally {
         btn.disabled = false;
-        btn.innerHTML = '<span class="material-symbols-rounded">save</span> حفظ أرقام الدفع فوراً';
+        btn.innerHTML = '<span class="material-symbols-rounded">save</span> حفظ إعدادات الدفع';
       }
     });
   } catch (err) {
@@ -198,7 +224,6 @@ async function loadPaymentSettings() {
   }
 }
 
-// Admin Courses
 export function renderAdminCourses() {
   return `<div class="app-layout">
     ${renderNavbar('admin-courses')}
@@ -214,79 +239,103 @@ export async function initAdminCourses() {
   initNavbar();
   const courses = await api.getCourses();
 
+  const bindCourseThumbUpload = (fileInputId, urlInputId) => {
+    const fileInput = document.getElementById(fileInputId);
+    const urlInput = document.getElementById(urlInputId);
+    fileInput?.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      if (file.size > 3 * 1024 * 1024) return showToast('حجم الصورة يجب ألا يتجاوز 3 ميجا', 'warning');
+      const reader = new FileReader();
+      reader.onload = () => {
+        if (urlInput) urlInput.value = reader.result;
+        showToast('تم تجهيز صورة الكورس بنجاح', 'success');
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+
   const bindCourseEvents = () => {
     document.querySelectorAll('.edit-course-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         const id = btn.dataset.id;
         const c = courses.find(x => x.id == id);
-        showModal('تعديل كورس أو باقة', `
-          <div class="form-group"><label class="form-label">عنوان الكورس / الباقة</label><input type="text" class="form-input" id="ecTitle" value="${escA(c.title)}" required></div>
-          <div class="form-group"><label class="form-label">الوصف والتعليمات</label><textarea class="form-input" id="ecDesc" rows="3">${escA(c.description || '')}</textarea></div>
-          <div class="form-group"><label class="form-label">المرحلة الدراسية</label><select class="form-select" id="ecGrade">${gradesList.map(g => `<option value="${g}" ${c.grade===g?'selected':''}>${g}</option>`).join('')}<option value="جميع المراحل" ${c.grade==='جميع المراحل'?'selected':''}>جميع المراحل</option></select></div>
+        showModal('تعديل الكورس', `
+          <div class="form-group"><label class="form-label">عنوان الكورس</label><input type="text" class="form-input" id="ecTitle" value="${escA(c.title)}" required></div>
+          <div class="form-group"><label class="form-label">الوصف والتفاصيل</label><textarea class="form-input" id="ecDesc" rows="3">${escA(c.description || '')}</textarea></div>
+          <div class="form-group"><label class="form-label">المرحلة الدراسية</label><select class="form-select" id="ecGrade">${gradesList.map(g => `<option value="${g}" ${c.grade===g?'selected':''}>${g}</option>`).join('')}</select></div>
           
-          <div style="background:rgba(5, 150, 105, 0.08); border:1px solid rgba(5, 150, 105, 0.2); border-radius:8px; padding:10px 14px; margin-bottom:14px; font-size:0.83rem; color:var(--emerald-800); display:flex; align-items:center; gap:8px;">
-            <span class="material-symbols-rounded" style="color:var(--emerald-600); font-size:1.2rem;">all_inclusive</span>
-            <span><strong>ضمان المنصة:</strong> الكورسات ليس لها تاريخ انتهاء صلاحية. "3 شهور" أو "ترم" تعبر عن <u>حجم المحتوى المنهجي</u>، والمحتوى يظل متاحاً للطالب طوال العام الدراسي حتى امتحانات الثانوية العامة.</span>
+          <div class="form-group">
+            <label class="form-label">صورة غلاف الكورس (رابط أو رفع من جهازك)</label>
+            <div style="display:flex;gap:8px;align-items:center;">
+              <input type="text" class="form-input" id="ecThumb" value="${escA(c.thumbnail || '')}" placeholder="https://... أو ارفع صورة" dir="ltr" style="flex:1;">
+              <label class="btn btn-secondary btn-sm" style="cursor:pointer;white-space:nowrap;">
+                <span class="material-symbols-rounded">upload_file</span> رفع صورة
+                <input type="file" id="ecThumbFile" accept="image/*" style="display:none;">
+              </label>
+            </div>
           </div>
 
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
             <div class="form-group">
-              <label class="form-label">نطاق محتوى الكورس من المنهج</label>
+              <label class="form-label">نطاق محتوى الكورس</label>
               <select class="form-select" id="ecType">
-                <option value="monthly" ${c.course_type==='monthly'?'selected':''}>كورس شهري (محتوى شهر دراسي)</option>
-                <option value="quarterly" ${c.course_type==='quarterly'?'selected':''}>باقة 3 شهور (محتوى 3 شهور من المنهج)</option>
-                <option value="term" ${c.course_type==='term'?'selected':''}>باقة ترم كامل (محتوى ترم دراسي كامل)</option>
-                <option value="annual" ${c.course_type==='annual'?'selected':''}>كورس سنوي شامل (منهج العام كاملاً)</option>
-                <option value="custom" ${c.course_type==='custom'?'selected':''}>كورس مخصص / مراجعة نهائية</option>
+                <option value="monthly" ${c.course_type==='monthly'?'selected':''}>كورس شهري / فصل دراسي</option>
+                <option value="quarterly" ${c.course_type==='quarterly'?'selected':''}>باقة 3 شهور</option>
+                <option value="term" ${c.course_type==='term'?'selected':''}>باقة ترم كامل</option>
+                <option value="annual" ${c.course_type==='annual'?'selected':''}>كورس سنوي شامل</option>
+                <option value="custom" ${c.course_type==='custom'?'selected':''}>مراجعة نهائية / مخصص</option>
               </select>
             </div>
-            <div class="form-group">
-              <label class="form-label">صلاحية وصول الطالب</label>
-              <input type="text" class="form-input" value="مفتوح طوال العام الدراسي (دائم)" disabled style="background:var(--bg-secondary); color:var(--emerald-600); font-weight:700;">
-              <input type="hidden" id="ecDays" value="365">
-            </div>
-          </div>
-
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
             <div class="form-group">
               <label class="form-label">السعر الفعلي (0 = مجاني)</label>
               <input type="number" class="form-input" id="ecPrice" value="${c.price || 0}">
             </div>
+          </div>
+
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
             <div class="form-group">
-              <label class="form-label">السعر الأصلي قبل الخصم</label>
-              <input type="number" class="form-input" id="ecOrigPrice" value="${c.original_price || 0}" placeholder="اختياري للتوفير">
+              <label class="form-label">السعر الأصلي قبل الخصم (اختياري)</label>
+              <input type="number" class="form-input" id="ecOrigPrice" value="${c.original_price || 0}">
+            </div>
+            <div class="form-group">
+              <label class="form-label">بادج مميز (اختياري)</label>
+              <input type="text" class="form-input" id="ecBadge" value="${escA(c.badge_text || '')}" placeholder="مثال: الأكثر طلباً">
             </div>
           </div>
 
           <div class="form-group">
-            <label class="form-label">بادج ترويجي مميز (اختياري)</label>
-            <input type="text" class="form-input" id="ecBadge" value="${escA(c.badge_text || '')}" placeholder="مثال: الأكثر طلباً 🔥 / وفر 30%">
-          </div>
-
-          <div class="form-group">
-            <label class="form-label"><input type="checkbox" id="ecSequential" ${c.sequential_access ? 'checked' : ''} style="margin-left: 8px;"> تفعيل الترتيب الإجباري للدروس والامتحانات</label>
+            <label class="form-label" style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+              <input type="checkbox" id="ecSequential" ${c.sequential_access ? 'checked' : ''}>
+              <span>تفعيل الترتيب الإجباري للدروس والامتحانات</span>
+            </label>
           </div>
           <div class="form-group">
-            <label class="form-label"><input type="checkbox" id="ecReplies" ${c.allow_student_replies ? 'checked' : ''} style="margin-left: 8px;"> السماح للطلاب بالرد على بعضهم في المنتدى</label>
+            <label class="form-label" style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+              <input type="checkbox" id="ecReplies" ${c.allow_student_replies ? 'checked' : ''}>
+              <span>تفعيل منتدى النقاش وسؤال المعلم للطلاب في هذا الكورس</span>
+            </label>
           </div>
           <button class="btn btn-primary btn-block" id="updateCourseBtn"><span class="material-symbols-rounded">check</span> تحديث الكورس</button>
         `);
+        bindCourseThumbUpload('ecThumbFile', 'ecThumb');
         document.getElementById('updateCourseBtn').addEventListener('click', async () => {
           try {
             const price = parseInt(document.getElementById('ecPrice').value) || 0;
             const original_price = parseInt(document.getElementById('ecOrigPrice').value) || 0;
-            const duration_days = parseInt(document.getElementById('ecDays').value) || 30;
             const course_type = document.getElementById('ecType').value;
             const badge_text = document.getElementById('ecBadge').value;
+            const thumbnail = document.getElementById('ecThumb').value.trim();
             const sequential_access = document.getElementById('ecSequential').checked;
             const allow_student_replies = document.getElementById('ecReplies').checked;
             await api.updateCourse(id, { 
               title: document.getElementById('ecTitle').value, 
               description: document.getElementById('ecDesc').value, 
               grade: document.getElementById('ecGrade').value, 
+              thumbnail,
               price, 
               original_price,
-              duration_days,
+              duration_days: 365,
               course_type,
               badge_text,
               is_free: price === 0, 
@@ -318,11 +367,11 @@ export async function initAdminCourses() {
   createPaginatedList({
     data: courses,
     containerId: 'adminCoursesList',
-    searchPlaceholder: 'ابحث باسم الكورس أو المرحلة أو نوع الباقة...',
+    searchPlaceholder: 'ابحث باسم الكورس أو المرحلة...',
     itemsPerPage: 8,
-    filterFn: (c, search) => !search || c.title.toLowerCase().includes(search) || (c.grade && c.grade.includes(search)) || (c.badge_text && c.badge_text.includes(search)),
+    filterFn: (c, search) => !search || c.title.toLowerCase().includes(search) || (c.grade && c.grade.includes(search)),
     renderList: (items, totalFiltered) => {
-      if (totalFiltered === 0) return '<div class="empty-state"><span class="material-symbols-rounded">book</span><h3>لا توجد كورسات مطابقة</h3></div>';
+      if (totalFiltered === 0) return '<div class="empty-state"><span class="material-symbols-rounded">book</span><h3>لا توجد كورسات حالياً — اضغط على "كورس جديد" لإضافة أول كورس</h3></div>';
       return items.map(c => `
         <div class="exam-card">
           <div class="exam-icon green" style="background:var(--green-100);color:var(--green-700)">
@@ -332,19 +381,19 @@ export async function initAdminCourses() {
             <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px;">
               <h3 style="margin:0;">${escA(c.title)}</h3>
               ${c.badge_text ? `<span class="badge badge-warning" style="font-size:0.72rem;">${escA(c.badge_text)}</span>` : ''}
-              ${c.course_type === 'quarterly' ? '<span class="badge badge-info" style="font-size:0.72rem;">باقة 3 شهور</span>' : c.course_type === 'term' ? '<span class="badge badge-primary" style="font-size:0.72rem;">باقة ترم كامل</span>' : ''}
+              <span class="badge ${c.allow_student_replies ? 'badge-info' : 'badge-secondary'}" style="font-size:0.7rem;">
+                ${c.allow_student_replies ? 'المنتدى مفعل' : 'المنتدى مغلق'}
+              </span>
             </div>
             <div class="exam-meta">
               <span>${escA(c.grade)}</span>
-              <span><span class="material-symbols-rounded" style="font-size:0.9rem; color:var(--emerald-600);">menu_book</span> ${c.course_type === 'quarterly' ? 'محتوى 3 شهور' : c.course_type === 'term' ? 'محتوى ترم' : c.course_type === 'annual' ? 'منهج سنوي' : 'محتوى شهر'}</span>
-              <span class="badge" style="background:rgba(16,185,129,0.1); color:var(--success); font-size:0.68rem; font-weight:700; padding:2px 6px;"><span class="material-symbols-rounded" style="font-size:0.75rem; vertical-align:middle;">all_inclusive</span> طوال العام</span>
               <span>${c.lesson_count || 0} درس</span>
               <span>${c.student_count || 0} طالب</span>
-              <span>${c.is_free ? 'مجاني' : c.price + ' جنيه'}${c.original_price > c.price ? ` <s style="color:var(--text-muted);font-size:0.75rem;">${c.original_price} ج</s>` : ''}</span>
+              <span>${c.is_free ? 'مجاني' : c.price + ' جنيه'}</span>
             </div>
           </div>
           <div style="display:flex;gap:8px">
-            <a href="#/admin/courses/${c.id}" class="btn btn-ghost btn-sm" title="إدارة المحتوى والمحاضرات والامتحانات"><span class="material-symbols-rounded">settings</span></a>
+            <a href="/admin/courses/${c.id}" class="btn btn-primary btn-sm" title="إدارة الفصول والدروس وامتحانات المحاضرات"><span class="material-symbols-rounded">folder_managed</span> المحتوى</a>
             <button class="btn btn-ghost btn-sm edit-course-btn" data-id="${c.id}" title="تعديل"><span class="material-symbols-rounded">edit</span></button>
             <button class="btn btn-ghost btn-sm text-danger delete-course-btn" data-id="${c.id}" title="حذف" style="color:var(--error)"><span class="material-symbols-rounded">delete</span></button>
           </div>
@@ -355,92 +404,90 @@ export async function initAdminCourses() {
   });
 
   document.getElementById('addCourseBtn').addEventListener('click', () => {
-    showModal('إضافة كورس أو باقة جديدة', `
-      <div class="form-group"><label class="form-label">عنوان الكورس أو الباقة</label><input type="text" class="form-input" id="mcTitle" placeholder="مثال: الباب الأول أو باقة الـ 3 شهور الشاملة" required></div>
-      <div class="form-group"><label class="form-label">الوصف والتعليمات</label><textarea class="form-input" id="mcDesc" rows="3" placeholder="تفاصيل المحاضرات والمذكرات المتضمنة..."></textarea></div>
-      <div class="form-group"><label class="form-label">المرحلة الدراسية</label><select class="form-select" id="mcGrade">${gradesList.map(g => `<option value="${g}">${g}</option>`).join('')}<option value="جميع المراحل">جميع المراحل</option></select></div>
+    showModal('إضافة كورس جديد', `
+      <div class="form-group"><label class="form-label">عنوان الكورس</label><input type="text" class="form-input" id="mcTitle" placeholder="مثال: كورس العناصر الانتقالية (الصف الثالث الثانوي)" required></div>
+      <div class="form-group"><label class="form-label">الوصف والتفاصيل</label><textarea class="form-input" id="mcDesc" rows="3" placeholder="تفاصيل المحاضرات والمذكرات المتضمنة..."></textarea></div>
+      <div class="form-group"><label class="form-label">المرحلة الدراسية</label><select class="form-select" id="mcGrade">${gradesList.map(g => `<option value="${g}" ${g === 'ثالثة ثانوي' ? 'selected' : ''}>${g}</option>`).join('')}</select></div>
       
-      <div style="background:rgba(5, 150, 105, 0.08); border:1px solid rgba(5, 150, 105, 0.2); border-radius:8px; padding:10px 14px; margin-bottom:14px; font-size:0.83rem; color:var(--emerald-800); display:flex; align-items:center; gap:8px;">
-        <span class="material-symbols-rounded" style="color:var(--emerald-600); font-size:1.2rem;">all_inclusive</span>
-        <span><strong>ضمان المنصة:</strong> الكورسات ليس لها تاريخ انتهاء صلاحية. "3 شهور" أو "ترم" تعبر عن <u>حجم المحتوى المنهجي</u>، والمحتوى يظل متاحاً للطالب طوال العام الدراسي حتى امتحانات الثانوية العامة.</span>
+      <div class="form-group">
+        <label class="form-label">صورة غلاف الكورس (اختياري — رابط أو رفع من جهازك)</label>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <input type="text" class="form-input" id="mcThumb" placeholder="https://... أو ارفع صورة" dir="ltr" style="flex:1;">
+          <label class="btn btn-secondary btn-sm" style="cursor:pointer;white-space:nowrap;">
+            <span class="material-symbols-rounded">upload_file</span> رفع صورة
+            <input type="file" id="mcThumbFile" accept="image/*" style="display:none;">
+          </label>
+        </div>
       </div>
 
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
         <div class="form-group">
-          <label class="form-label">نطاق محتوى الكورس من المنهج</label>
+          <label class="form-label">نطاق محتوى الكورس</label>
           <select class="form-select" id="mcType">
-            <option value="monthly">كورس شهري (محتوى شهر دراسي)</option>
-            <option value="quarterly">باقة 3 شهور (محتوى 3 شهور من المنهج)</option>
-            <option value="term">باقة ترم كامل (محتوى ترم دراسي كامل)</option>
-            <option value="annual">كورس سنوي شامل (منهج العام كاملاً)</option>
-            <option value="custom">كورس مخصص / مراجعة نهائية</option>
+            <option value="monthly">كورس شهري / فصل دراسي</option>
+            <option value="quarterly">باقة 3 شهور</option>
+            <option value="term">باقة ترم كامل</option>
+            <option value="annual">كورس سنوي شامل</option>
+            <option value="custom">مراجعة نهائية / مخصص</option>
           </select>
         </div>
         <div class="form-group">
-          <label class="form-label">صلاحية وصول الطالب</label>
-          <input type="text" class="form-input" value="مفتوح طوال العام الدراسي (دائم)" disabled style="background:var(--bg-secondary); color:var(--emerald-600); font-weight:700;">
-          <input type="hidden" id="mcDays" value="365">
+          <label class="form-label">السعر الفعلي بالجنيه (0 = مجاني)</label>
+          <input type="number" class="form-input" id="mcPrice" value="220">
         </div>
       </div>
 
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
         <div class="form-group">
-          <label class="form-label">السعر الفعلي (0 = مجاني)</label>
-          <input type="number" class="form-input" id="mcPrice" value="0">
+          <label class="form-label">السعر الأصلي قبل الخصم (اختياري)</label>
+          <input type="number" class="form-input" id="mcOrigPrice" value="0">
         </div>
         <div class="form-group">
-          <label class="form-label">السعر الأصلي قبل الخصم</label>
-          <input type="number" class="form-input" id="mcOrigPrice" value="0" placeholder="لحساب نسبة التوفير">
+          <label class="form-label">بادج مميز (اختياري)</label>
+          <input type="text" class="form-input" id="mcBadge" placeholder="مثال: الأكثر طلباً">
         </div>
       </div>
 
       <div class="form-group">
-        <label class="form-label">بادج مميز (اختياري)</label>
-        <input type="text" class="form-input" id="mcBadge" placeholder="مثال: خصم 30% أو الأكثر طلباً">
-      </div>
-
-      <div class="form-group">
-        <label class="form-label"><input type="checkbox" id="mcSequential" style="margin-left: 8px;"> تفعيل الترتيب الإجباري للدروس والامتحانات</label>
+        <label class="form-label" style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+          <input type="checkbox" id="mcSequential">
+          <span>تفعيل الترتيب الإجباري للدروس والامتحانات</span>
+        </label>
       </div>
       <div class="form-group">
-        <label class="form-label"><input type="checkbox" id="mcReplies" style="margin-left: 8px;"> السماح للطلاب بالرد على بعضهم في المنتدى</label>
+        <label class="form-label" style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+          <input type="checkbox" id="mcReplies">
+          <span>تفعيل منتدى النقاش وسؤال المعلم للطلاب في هذا الكورس</span>
+        </label>
       </div>
       <button class="btn btn-primary btn-block" id="saveCourseBtn"><span class="material-symbols-rounded">check</span> حفظ الكورس</button>
     `);
-
-    // Auto update days when course type changes
-    document.getElementById('mcType').addEventListener('change', (e) => {
-      const type = e.target.value;
-      const daysInput = document.getElementById('mcDays');
-      if (type === 'monthly') daysInput.value = 30;
-      else if (type === 'quarterly') daysInput.value = 90;
-      else if (type === 'term') daysInput.value = 120;
-      else if (type === 'annual') daysInput.value = 365;
-    });
+    bindCourseThumbUpload('mcThumbFile', 'mcThumb');
 
     document.getElementById('saveCourseBtn').addEventListener('click', async () => {
       try {
         const price = parseInt(document.getElementById('mcPrice').value) || 0;
         const original_price = parseInt(document.getElementById('mcOrigPrice').value) || 0;
-        const duration_days = parseInt(document.getElementById('mcDays').value) || 30;
         const course_type = document.getElementById('mcType').value;
         const badge_text = document.getElementById('mcBadge').value;
+        const thumbnail = document.getElementById('mcThumb').value.trim();
         const sequential_access = document.getElementById('mcSequential').checked;
         const allow_student_replies = document.getElementById('mcReplies').checked;
         await api.createCourse({ 
           title: document.getElementById('mcTitle').value, 
           description: document.getElementById('mcDesc').value, 
           grade: document.getElementById('mcGrade').value, 
+          thumbnail,
           price, 
           original_price,
-          duration_days,
+          duration_days: 365,
           course_type,
           badge_text,
           is_free: price === 0, 
           sequential_access, 
           allow_student_replies 
         });
-        showToast('تم إضافة الكورس / الباقة بنجاح', 'success');
+        showToast('تم إضافة الكورس بنجاح', 'success');
         document.querySelector('.modal-overlay')?.remove();
         initAdminCourses();
       } catch (err) { showToast(err.message, 'error'); }
@@ -448,7 +495,6 @@ export async function initAdminCourses() {
   });
 }
 
-// Admin Codes
 export function renderAdminCodes() {
   return `<div class="app-layout">
     ${renderNavbar('admin-codes')}
@@ -579,13 +625,12 @@ export async function initAdminCodes() {
             } catch { showToast('انسخ الكود يدوياً', 'warning'); }
           });
         });
-        initAdminCodes(); // Refresh
+        initAdminCodes();
       } catch (err) { showToast(err.message, 'error'); }
     });
   });
 }
 
-// Admin Students
 export function renderAdminStudents() {
   return `<div class="app-layout">
     ${renderNavbar('admin-students')}
@@ -695,15 +740,14 @@ export async function initAdminStudents() {
 
             showModal('تعديل بيانات الطالب', `
               <div class="form-group"><label class="form-label">الاسم</label><input type="text" class="form-input" id="esName" value="${escA(s.name)}" required></div>
-              <div class="form-group"><label class="form-label">رقم الهاتف</label><input type="text" class="form-input" id="esPhone" value="${escA(s.phone)}" required dir="ltr"></div>
-              <div class="form-group"><label class="form-label">رقم ولي الأمر</label><input type="text" class="form-input" id="esParent" value="${escA(s.parent_phone || '')}" dir="ltr"></div>
+              <div class="form-group"><label class="form-label">رقم هاتف الطالب</label><input type="text" class="form-input" id="esPhone" value="${escA(s.phone)}" required dir="ltr"></div>
+              <div class="form-group"><label class="form-label">رقم هاتف ولي الأمر</label><input type="text" class="form-input" id="esParent" value="${escA(s.parent_phone || '')}" required dir="ltr"></div>
               <div class="form-group"><label class="form-label">المرحلة</label><select class="form-select" id="esGrade">${gradesList.map(g => `<option value="${g}" ${s.grade===g?'selected':''}>${g}</option>`).join('')}</select></div>
               <div class="form-group"><label class="form-label">كلمة مرور جديدة (اتركها فارغة لعدم التغيير)</label><input type="password" class="form-input" id="esPass"></div>
               ${enrollmentsHtml}
               <button class="btn btn-primary btn-block" style="margin-top:20px" id="updateStBtn">تحديث الطالب</button>
             `);
 
-            // Attach toggle handlers
             document.querySelectorAll('.suspend-toggle').forEach(toggle => {
               toggle.addEventListener('change', async (ev) => {
                 try {
@@ -713,7 +757,7 @@ export async function initAdminStudents() {
                   showToast(isSuspended ? 'تم إيقاف الطالب من الكورس' : 'تم تفعيل الطالب في الكورس', isSuspended ? 'warning' : 'success');
                 } catch (err) {
                   showToast(err.message, 'error');
-                  ev.target.checked = !ev.target.checked; // revert
+                  ev.target.checked = !ev.target.checked;
                 }
               });
             });
@@ -743,19 +787,14 @@ export async function initAdminStudents() {
             const rep = await api.getStudentWhatsAppReport(s.id);
             showModal(`تقرير ولي الأمر (واتساب) — ${escA(s.name)}`, `
               <div style="text-align:right;">
-                <p style="font-size:0.85rem; color:var(--text-secondary); margin-bottom:12px;">نص التقرير الجاهز للإرسال:</p>
+                <p style="font-size:0.85rem; color:var(--text-secondary); margin-bottom:12px;">نص التقرير الجاهز للإرسال لولي الأمر:</p>
                 <div style="background:var(--bg-secondary); border:1px solid var(--border-light); border-radius:8px; padding:12px; font-size:0.85rem; line-height:1.6; white-space:pre-wrap; margin-bottom:16px;">${escA(rep.report_text)}</div>
-                <div style="display:flex; flex-direction:column; gap:10px;">
+                <div>
                   ${rep.whatsapp_parent_url ? `
                     <a href="${rep.whatsapp_parent_url}" target="_blank" class="btn btn-primary btn-block" style="background:#25D366; border-color:#25D366; gap:8px;">
-                      <span class="material-symbols-rounded">chat</span> إرسال لولي الأمر الأول (الأب) عبر واتساب
+                      <span class="material-symbols-rounded">chat</span> إرسال التقرير لولي الأمر عبر واتساب
                     </a>
-                  ` : '<p style="font-size:0.8rem; color:var(--error);">لم يتم تسجيل رقم ولي الأمر الأول</p>'}
-                  ${rep.whatsapp_parent_secondary_url ? `
-                    <a href="${rep.whatsapp_parent_secondary_url}" target="_blank" class="btn btn-secondary btn-block" style="gap:8px;">
-                      <span class="material-symbols-rounded">chat</span> إرسال لولي الأمر الثاني (الأم) عبر واتساب
-                    </a>
-                  ` : ''}
+                  ` : '<p style="font-size:0.8rem; color:var(--error);">لم يتم تسجيل رقم هاتف ولي الأمر</p>'}
                 </div>
               </div>
             `);
@@ -780,13 +819,13 @@ export async function initAdminStudents() {
     createPaginatedList({
       data: students,
       containerId: 'studentsList',
-      searchPlaceholder: 'ابحث بالاسم أو رقم الهاتف...',
+      searchPlaceholder: 'ابحث بالاسم أو رقم الهاتف أو رقم ولي الأمر...',
       itemsPerPage: 15,
-      filterFn: (s, search) => !search || s.name.toLowerCase().includes(search) || s.phone.includes(search),
+      filterFn: (s, search) => !search || s.name.toLowerCase().includes(search) || s.phone.includes(search) || (s.parent_phone && s.parent_phone.includes(search)),
       renderList: (items, totalFiltered) => {
         if (totalFiltered === 0) return '<div class="empty-state"><span class="material-symbols-rounded">group</span><h3>لا يوجد طلاب مطابقين</h3></div>';
-        return `<div class="mobile-swipe-hint"><span class="material-symbols-rounded">swipe</span> اسحب أفقياً لعرض باقي سجلات الطلاب</div><div class="table-wrapper"><table><thead><tr><th>الاسم</th><th>الهاتف</th><th>المرحلة</th><th>الكورسات</th><th>المعدل</th><th>إجراءات</th></tr></thead><tbody>
-          ${items.map(s => `<tr><td style="font-weight:600">${escA(s.name)}</td><td dir="ltr">${escA(s.phone)}</td><td>${escA(s.grade || '-')}</td><td>${s.enrolled_courses}</td><td><span class="badge ${(s.avg_score || 0) >= 60 ? 'badge-success' : 'badge-danger'}">${s.avg_score || 0}%</span></td>
+        return `<div class="mobile-swipe-hint"><span class="material-symbols-rounded">swipe</span> اسحب أفقياً لعرض باقي سجلات الطلاب</div><div class="table-wrapper"><table><thead><tr><th>الاسم</th><th>هاتف الطالب</th><th>هاتف ولي الأمر</th><th>المرحلة</th><th>الكورسات</th><th>المعدل</th><th>إجراءات</th></tr></thead><tbody>
+          ${items.map(s => `<tr><td style="font-weight:600">${escA(s.name)}</td><td dir="ltr">${escA(s.phone)}</td><td dir="ltr">${escA(s.parent_phone || '-')}</td><td>${escA(s.grade || '-')}</td><td>${s.enrolled_courses}</td><td><span class="badge ${(s.avg_score || 0) >= 60 ? 'badge-success' : 'badge-danger'}">${s.avg_score || 0}%</span></td>
           <td><div style="display:flex;gap:4px">
             <button class="btn btn-ghost btn-sm wa-st-btn" data-id="${s.id}" title="تقرير الواتساب لولي الأمر"><span class="material-symbols-rounded" style="color:#25D366">chat</span></button>
             <button class="btn btn-ghost btn-sm report-st-btn" data-id="${s.id}" title="تقرير الطالب"><span class="material-symbols-rounded" style="color:var(--info)">analytics</span></button>
@@ -827,13 +866,12 @@ export async function initAdminStudents() {
   load('');
 }
 
-// Admin Exams
 export function renderAdminExams() {
   return `<div class="app-layout">
     ${renderNavbar('admin-exams')}
     <main class="main-content">
-      <div class="page-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px"><div><h1 class="page-title"><span class="material-symbols-rounded" style="color:var(--accent)">assignment</span> إدارة الامتحانات</h1></div>
-      <button class="btn btn-primary" id="addExamBtn"><span class="material-symbols-rounded">add</span> امتحان جديد</button></div>
+      <div class="page-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px"><div><h1 class="page-title"><span class="material-symbols-rounded" style="color:var(--accent)">assignment</span> إدارة الامتحانات والواجبات</h1></div>
+      <button class="btn btn-primary" id="addExamBtn"><span class="material-symbols-rounded">add</span> إضافة امتحان أو واجب</button></div>
       <div id="adminExamsList"><div class="loading-spinner"><div class="spinner"></div></div></div>
     </main>
   </div>`;
@@ -848,17 +886,36 @@ export async function initAdminExams() {
       btn.addEventListener('click', () => {
         const id = btn.dataset.id;
         const e = exams.find(x => x.id == id);
-        showModal('تعديل امتحان', `
-          <div class="form-group"><label class="form-label">عنوان الامتحان</label><input type="text" class="form-input" id="eeT" value="${escA(e.title)}"></div>
+        showModal('تعديل الامتحان / الواجب', `
+          <div class="form-group"><label class="form-label">العنوان</label><input type="text" class="form-input" id="eeT" value="${escA(e.title)}"></div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+            <div class="form-group">
+              <label class="form-label">نوع التقييم</label>
+              <select class="form-select" id="eeType">
+                <option value="exam" ${e.exam_type !== 'homework' ? 'selected' : ''}>امتحان تقييمي (يُقفل عند الخروج ويتطلب إذن المعلم للإعادة)</option>
+                <option value="homework" ${e.exam_type === 'homework' ? 'selected' : ''}>واجب منزلي (مفتوح المحاولات للتدريب)</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">درجة النجاح المطلوبة (%)</label>
+              <input type="number" class="form-input" id="eePassScore" value="${e.passing_score || 60}" min="1" max="100">
+            </div>
+          </div>
           <div style="display:flex;gap:12px">
             <div class="form-group" style="flex:1"><label class="form-label">المدة (دقائق)</label><input type="number" class="form-input" id="eeD" value="${e.duration_minutes}"></div>
-            <div class="form-group" style="flex:1"><label class="form-label">عدد المحاولات</label><input type="number" class="form-input" id="eeA" value="${e.max_attempts}"></div>
+            <div class="form-group" style="flex:1"><label class="form-label">عدد المحاولات المسموحة</label><input type="number" class="form-input" id="eeA" value="${e.max_attempts || 1}"></div>
             <div class="form-group" style="flex:1"><label class="form-label">الترتيب</label><input type="number" class="form-input" id="eeO" value="${e.order_num || 0}"></div>
           </div>
           <div class="form-group">
-            <label class="form-label">
-              <input type="checkbox" id="eeBankToggle" ${e.random_questions_count > 0 ? 'checked' : ''} style="margin-left: 8px;">
-              تفعيل نظام بنك الأسئلة (أسئلة عشوائية لكل طالب)
+            <label class="form-label" style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+              <input type="checkbox" id="eeCertToggle" ${Number(e.has_certificate) === 1 ? 'checked' : ''}>
+              <span>إصدار شهادة تقدير مصورة للطالب عند اجتياز هذا التقييم</span>
+            </label>
+          </div>
+          <div class="form-group">
+            <label class="form-label" style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+              <input type="checkbox" id="eeBankToggle" ${e.random_questions_count > 0 ? 'checked' : ''}>
+              <span>تفعيل نظام بنك الأسئلة (أسئلة عشوائية لكل طالب)</span>
             </label>
           </div>
           <div class="form-group" id="eeBankGroup" style="display: ${e.random_questions_count > 0 ? 'block' : 'none'};">
@@ -875,8 +932,11 @@ export async function initAdminExams() {
             const randomCount = document.getElementById('eeBankToggle').checked ? parseInt(document.getElementById('eeBankCount').value) : 0;
             await api.updateExam(id, { 
               title: document.getElementById('eeT').value, 
+              exam_type: document.getElementById('eeType').value,
+              passing_score: parseInt(document.getElementById('eePassScore').value) || 60,
               duration_minutes: parseInt(document.getElementById('eeD').value), 
-              max_attempts: parseInt(document.getElementById('eeA').value), 
+              max_attempts: parseInt(document.getElementById('eeA').value) || 1, 
+              has_certificate: document.getElementById('eeCertToggle').checked ? 1 : 0,
               random_questions_count: randomCount,
               order_num: parseInt(document.getElementById('eeO').value)
             });
@@ -906,37 +966,82 @@ export async function initAdminExams() {
     data: exams,
     containerId: 'adminExamsList',
     searchPlaceholder: 'ابحث بعنوان الامتحان أو الكورس...',
-    itemsPerPage: 5,
+    itemsPerPage: 8,
     filterFn: (e, search) => !search || e.title.toLowerCase().includes(search) || (e.course_title && e.course_title.toLowerCase().includes(search)),
     renderList: (items, totalFiltered) => {
       if (totalFiltered === 0) return '<div class="empty-state"><span class="material-symbols-rounded">assignment</span><h3>لا توجد امتحانات مطابقة</h3></div>';
       return items.map(e => `
-        <div class="exam-card"><div class="exam-icon gold" style="background:var(--gold-100);color:var(--gold-700)"><span class="material-symbols-rounded">assignment</span></div>
-        <div class="exam-info"><h3>${escA(e.title)}</h3><div class="exam-meta"><span>${escA(e.course_title || '-')}</span><span>${e.question_count} سؤال إجمالي</span><span>${e.random_questions_count > 0 ? `<span class="material-symbols-rounded" style="color:var(--warning)">shuffle</span> بنك (${e.random_questions_count} للطالب)` : 'ثابت'}</span><span>${e.duration_minutes} دقيقة</span><span>${e.attempt_count || 0} محاولة</span></div></div>
-        <div style="display:flex;gap:8px">
-          <a href="#/admin/exams/${e.id}" class="btn btn-ghost btn-sm" title="إدارة الأسئلة"><span class="material-symbols-rounded">settings</span></a>
-          <button class="btn btn-ghost btn-sm edit-exam-btn" data-id="${e.id}" title="تعديل"><span class="material-symbols-rounded">edit</span></button>
-          <button class="btn btn-ghost btn-sm text-danger delete-exam-btn" data-id="${e.id}" title="حذف" style="color:var(--error)"><span class="material-symbols-rounded">delete</span></button>
-        </div></div>
+        <div class="exam-card">
+          <div class="exam-icon gold" style="background:var(--gold-100);color:var(--gold-700)">
+            <span class="material-symbols-rounded">${e.exam_type === 'homework' ? 'menu_book' : 'assignment'}</span>
+          </div>
+          <div class="exam-info">
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px;">
+              <h3 style="margin:0;">${escA(e.title)}</h3>
+              <span class="badge ${e.exam_type === 'homework' ? 'badge-info' : 'badge-warning'}" style="font-size:0.7rem;">
+                ${e.exam_type === 'homework' ? 'واجب منزلي' : 'امتحان'}
+              </span>
+              <span class="badge ${Number(e.has_certificate) === 1 ? 'badge-success' : 'badge-secondary'}" style="font-size:0.7rem;">
+                ${Number(e.has_certificate) === 1 ? 'شهادة مفعلة' : 'بدون شهادة'}
+              </span>
+              ${Number(e.retake_requests_count) > 0 ? `
+                <span class="badge badge-danger" style="font-size:0.72rem;">
+                  طلبات إعادة فتح: ${e.retake_requests_count}
+                </span>
+              ` : ''}
+            </div>
+            <div class="exam-meta">
+              <span>${escA(e.course_title || '-')}</span>
+              <span>${e.question_count} سؤال</span>
+              <span>نجاح: ${e.passing_score || 60}%</span>
+              <span>${e.duration_minutes} دقيقة</span>
+              <span>${e.attempt_count || 0} تسليم</span>
+            </div>
+          </div>
+          <div style="display:flex;gap:8px">
+            <a href="/admin/exams/${e.id}" class="btn btn-primary btn-sm" title="إدارة الأسئلة والتسليمات وطلبات الإعادة"><span class="material-symbols-rounded">quiz</span> الأسئلة والنتائج</a>
+            <button class="btn btn-ghost btn-sm edit-exam-btn" data-id="${e.id}" title="تعديل الإعدادات والشهادة"><span class="material-symbols-rounded">edit</span></button>
+            <button class="btn btn-ghost btn-sm text-danger delete-exam-btn" data-id="${e.id}" title="حذف" style="color:var(--error)"><span class="material-symbols-rounded">delete</span></button>
+          </div>
+        </div>
       `).join('');
     },
     onRender: bindExamEvents
   });
 
   document.getElementById('addExamBtn').addEventListener('click', () => {
-    showModal('إضافة امتحان جديد', `
+    showModal('إضافة امتحان أو واجب جديد', `
       <div class="form-group"><label class="form-label">الكورس</label><select class="form-select" id="meC"><option value="">-- اختر الكورس --</option>${courses.map(c => `<option value="${c.id}">${escA(c.title)}</option>`).join('')}</select></div>
       <div class="form-group"><label class="form-label">الفصل (اختر الكورس أولاً)</label><select class="form-select" id="meCh" disabled><option value="">-- اختر الفصل --</option></select></div>
-      <div class="form-group"><label class="form-label">عنوان الامتحان</label><input type="text" class="form-input" id="meT"></div>
+      <div class="form-group"><label class="form-label">عنوان الامتحان أو الواجب</label><input type="text" class="form-input" id="meT" placeholder="مثال: امتحان المحاضرة الأولى على العناصر الانتقالية"></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <div class="form-group">
+          <label class="form-label">نوع التقييم</label>
+          <select class="form-select" id="meType">
+            <option value="exam">امتحان تقييمي (محاولة واحدة ويُقفل عند الخروج)</option>
+            <option value="homework">واجب منزلي (مفتوح المحاولات)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">درجة النجاح المطلوبة (%)</label>
+          <input type="number" class="form-input" id="mePassScore" value="60" min="1" max="100">
+        </div>
+      </div>
       <div style="display:flex;gap:12px">
         <div class="form-group" style="flex:1"><label class="form-label">المدة (دقائق)</label><input type="number" class="form-input" id="meD" value="30"></div>
-        <div class="form-group" style="flex:1"><label class="form-label">عدد المحاولات</label><input type="number" class="form-input" id="meA" value="2"></div>
+        <div class="form-group" style="flex:1"><label class="form-label">عدد المحاولات</label><input type="number" class="form-input" id="meA" value="1"></div>
         <div class="form-group" style="flex:1"><label class="form-label">الترتيب</label><input type="number" class="form-input" id="meO" value="1"></div>
       </div>
       <div class="form-group">
-        <label class="form-label">
-          <input type="checkbox" id="meBankToggle" style="margin-left: 8px;">
-          تفعيل نظام بنك الأسئلة (أسئلة عشوائية لكل طالب)
+        <label class="form-label" style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+          <input type="checkbox" id="meCertToggle">
+          <span>إصدار شهادة تقدير مصورة للطالب عند اجتياز هذا التقييم</span>
+        </label>
+      </div>
+      <div class="form-group">
+        <label class="form-label" style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+          <input type="checkbox" id="meBankToggle">
+          <span>تفعيل نظام بنك الأسئلة (أسئلة عشوائية لكل طالب)</span>
         </label>
       </div>
       <div class="form-group" id="meBankGroup" style="display: none;">
@@ -946,7 +1051,6 @@ export async function initAdminExams() {
       <button class="btn btn-primary btn-block" id="saveExamBtn">حفظ</button>
     `);
 
-    // Fetch chapters dynamically
     document.getElementById('meC').addEventListener('change', async (e) => {
       const courseId = e.target.value;
       const chSelect = document.getElementById('meCh');
@@ -973,12 +1077,15 @@ export async function initAdminExams() {
           course_id: parseInt(courseId), 
           chapter_id: parseInt(chapterId),
           title: document.getElementById('meT').value, 
+          exam_type: document.getElementById('meType').value,
+          passing_score: parseInt(document.getElementById('mePassScore').value) || 60,
           duration_minutes: parseInt(document.getElementById('meD').value), 
-          max_attempts: parseInt(document.getElementById('meA').value), 
+          max_attempts: parseInt(document.getElementById('meA').value) || 1, 
+          has_certificate: document.getElementById('meCertToggle').checked ? 1 : 0,
           random_questions_count: randomCount,
           order_num: parseInt(document.getElementById('meO').value)
         });
-        showToast('تم إضافة الامتحان', 'success');
+        showToast('تم إضافة التقييم بنجاح', 'success');
         document.querySelector('.modal-overlay')?.remove();
         initAdminExams();
       } catch (err) { showToast(err.message, 'error'); }
@@ -986,7 +1093,6 @@ export async function initAdminExams() {
   });
 }
 
-// Admin Live & Notifications (simplified)
 export function renderAdminLive() {
   return `<div class="app-layout">${renderNavbar('admin-live')}<main class="main-content">
     <div class="page-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px"><div><h1 class="page-title"><span class="material-symbols-rounded" style="color:var(--error)">live_tv</span> إدارة الحصص اللايف</h1></div>
@@ -1054,7 +1160,7 @@ export async function initAdminLive() {
     renderList: (items, totalFiltered) => {
       if (totalFiltered === 0) return '<div class="empty-state"><span class="material-symbols-rounded">live_tv</span><h3>لا توجد حصص مطابقة</h3></div>';
       return items.map(s => `<div class="live-card"><div class="stat-icon purple" style="width:45px;height:45px;font-size:1.1rem;flex-shrink:0;background:#EDE9FE;color:#7C3AED"><span class="material-symbols-rounded">live_tv</span></div>
-        <div style="flex:1"><h3 style="font-weight:700;font-size:0.9rem">${escA(s.title)}</h3><div style="font-size:0.78rem;color:var(--text-muted)">${formatDate(s.scheduled_at)} · ${escA(s.course_title || '')}</div></div>
+        <div style="flex:1"><h3 style="font-weight:700;font-size:0.9rem">${escA(s.title)}</h3><div style="font-size:0.78rem;color:var(--text-muted)">${formatDate(s.scheduled_at)} · ${escA(s.course_title || 'حصة عامة مجانية')}</div></div>
         <span class="badge ${s.status === 'upcoming' ? 'badge-info' : s.status === 'live' ? 'badge-danger' : 'badge-success'}">${s.status === 'upcoming' ? 'قادمة' : s.status === 'live' ? 'مباشر' : 'انتهت'}</span>
         <div style="display:flex;gap:8px;margin-right:12px">
           <button class="btn btn-ghost btn-sm edit-live-btn" data-id="${s.id}" title="تعديل"><span class="material-symbols-rounded">edit</span></button>
@@ -1067,7 +1173,7 @@ export async function initAdminLive() {
   document.getElementById('addLiveBtn').addEventListener('click', () => {
     showModal('إضافة حصة لايف', `
       <div class="form-group"><label class="form-label">العنوان</label><input type="text" class="form-input" id="lsT"></div>
-      <div class="form-group"><label class="form-label">الكورس</label><select class="form-select" id="lsC"><option value="">عام</option>${courses.map(c => `<option value="${c.id}">${escA(c.title)}</option>`).join('')}</select></div>
+      <div class="form-group"><label class="form-label">الكورس (اختر "عام مجاني" ليظهر لكل الطلاب، أو اختر كورس محدد ليظهر لمشتركي الكورس فقط)</label><select class="form-select" id="lsC"><option value="">عام مجاني (متاح لجميع الطلاب)</option>${courses.map(c => `<option value="${c.id}">${escA(c.title)}</option>`).join('')}</select></div>
       <div class="form-group"><label class="form-label">الموعد</label><input type="datetime-local" class="form-input" id="lsD"></div>
       <div class="form-group"><label class="form-label">رابط الحصة</label><input type="url" class="form-input" id="lsL" placeholder="https://meet.google.com/..." dir="ltr"></div>
       <button class="btn btn-primary btn-block" id="saveLiveBtn">حفظ</button>

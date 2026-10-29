@@ -509,10 +509,8 @@ const migrations = [
   "ALTER TABLE activation_codes ADD COLUMN expires_at DATETIME;",
 ];
 
-if (!loadedFromPg) {
-  for (const query of migrations) {
-    try { db.exec(query); } catch (e) { /* ignore if column already exists */ }
-  }
+for (const query of migrations) {
+  try { db.exec(query); } catch (e) { /* ignore if column already exists */ }
 }
 
 db.exec(`
@@ -700,26 +698,35 @@ function addColumnIfMissing(table, column, def) {
   } catch (e) {}
 }
 
-if (!loadedFromPg) {
-  addColumnIfMissing('enrollments', 'code_id', 'INTEGER');
-  addColumnIfMissing('enrollments', 'payment_id', 'INTEGER');
-  addColumnIfMissing('exam_attempts', 'question_ids', 'TEXT');
-  addColumnIfMissing('exam_attempts', 'pedagogical_feedback', 'TEXT');
-  addColumnIfMissing('questions', 'concept_key', 'TEXT');
-  addColumnIfMissing('exam_attempts', 'essay_grades', 'TEXT');
-  addColumnIfMissing('exam_attempts', 'teacher_feedback', 'TEXT');
-  addColumnIfMissing('exam_attempts', 'is_graded', 'INTEGER DEFAULT 1');
-  addColumnIfMissing('exam_attempts', 'late', 'INTEGER DEFAULT 0');
-  addColumnIfMissing('lessons', 'pdf_url', 'TEXT');
-  addColumnIfMissing('exams', 'start_time', 'DATETIME');
-  addColumnIfMissing('exams', 'end_time', 'DATETIME');
-  addColumnIfMissing('enrollments', 'expires_at', 'DATETIME');
-  addColumnIfMissing('users', 'parent_phone_secondary', 'TEXT');
-  addColumnIfMissing('courses', 'course_type', "TEXT DEFAULT 'monthly'");
-  addColumnIfMissing('courses', 'duration_days', 'INTEGER DEFAULT 30');
-  addColumnIfMissing('courses', 'original_price', 'REAL DEFAULT 0');
-  addColumnIfMissing('courses', 'badge_text', 'TEXT');
-}
+addColumnIfMissing('enrollments', 'code_id', 'INTEGER');
+addColumnIfMissing('enrollments', 'payment_id', 'INTEGER');
+addColumnIfMissing('exam_attempts', 'question_ids', 'TEXT');
+addColumnIfMissing('exam_attempts', 'pedagogical_feedback', 'TEXT');
+addColumnIfMissing('questions', 'concept_key', 'TEXT');
+addColumnIfMissing('questions', 'explanation_image', 'TEXT');
+addColumnIfMissing('exam_attempts', 'essay_grades', 'TEXT');
+addColumnIfMissing('exam_attempts', 'teacher_feedback', 'TEXT');
+addColumnIfMissing('exam_attempts', 'is_graded', 'INTEGER DEFAULT 1');
+addColumnIfMissing('exam_attempts', 'late', 'INTEGER DEFAULT 0');
+addColumnIfMissing('lessons', 'pdf_url', 'TEXT');
+addColumnIfMissing('lessons', 'prerequisite_exam_id', 'INTEGER');
+addColumnIfMissing('lessons', 'prerequisite_passing_score', 'INTEGER DEFAULT 60');
+addColumnIfMissing('exams', 'start_time', 'DATETIME');
+addColumnIfMissing('exams', 'end_time', 'DATETIME');
+addColumnIfMissing('exams', 'exam_type', "TEXT DEFAULT 'exam'");
+addColumnIfMissing('exams', 'has_certificate', 'INTEGER DEFAULT 0');
+addColumnIfMissing('exam_sessions', 'is_locked', 'INTEGER DEFAULT 0');
+addColumnIfMissing('exam_sessions', 'lock_reason', 'TEXT');
+addColumnIfMissing('exam_sessions', 'retake_requested', 'INTEGER DEFAULT 0');
+addColumnIfMissing('exam_sessions', 'retake_reason', 'TEXT');
+addColumnIfMissing('exam_sessions', 'updated_at', 'DATETIME');
+addColumnIfMissing('enrollments', 'expires_at', 'DATETIME');
+addColumnIfMissing('users', 'parent_phone_secondary', 'TEXT');
+addColumnIfMissing('courses', 'course_type', "TEXT DEFAULT 'monthly'");
+addColumnIfMissing('courses', 'duration_days', 'INTEGER DEFAULT 30');
+addColumnIfMissing('courses', 'original_price', 'REAL DEFAULT 0');
+addColumnIfMissing('courses', 'badge_text', 'TEXT');
+addColumnIfMissing('courses', 'updated_at', 'DATETIME');
 
 // Seed default settings if empty
 const seedSetting = (key, defaultVal) => {
@@ -734,157 +741,183 @@ seedSetting('vodafone_cash', process.env.PAY_VODAFONE_NUMBER || '01012345678');
 seedSetting('instapay', process.env.PAY_INSTAPAY_HANDLE || 'ziad.ramzy@instapay');
 seedSetting('fawry_merchant', process.env.PAY_FAWRY_MERCHANT || '788');
 seedSetting('whatsapp', process.env.SUPPORT_WHATSAPP || '201012345678');
+seedSetting('paymob_enabled', process.env.PAYMOB_ENABLED || '0');
+seedSetting('paymob_api_key', process.env.PAYMOB_API_KEY || '');
+seedSetting('paymob_integration_id_card', process.env.PAYMOB_INTEGRATION_ID_CARD || '');
+seedSetting('paymob_integration_id_wallet', process.env.PAYMOB_INTEGRATION_ID_WALLET || '');
+seedSetting('paymob_iframe_id', process.env.PAYMOB_IFRAME_ID || '');
 
-// Seed sample bookstores if empty
+// Always ensure teacher account exists
 try {
-  const storeCount = db.prepare('SELECT COUNT(*) as c FROM bookstores').get().c;
-  if (storeCount === 0) {
-    const insertStore = db.prepare(`INSERT INTO bookstores (name, governorate, address, phone, rating, reviews_count, whatsapp) VALUES (?, ?, ?, ?, ?, ?, ?)`);
-    const initialStores = [
-      ['مكتبة الأوائل الفجالة', 'القاهرة', 'شارع كامل صدقي، الفجالة، الأزبكية', '01019882233', 5.0, 0, '201019882233'],
-      ['سنتر ومكتبة الأهرام التعليمية', 'الجيزة', 'شارع مراد، ميدان الجيزة بجوار محطة المترو', '01123445566', 5.0, 0, '201123445566'],
-      ['مكتبة الإسكندر الأكبر', 'الإسكندرية', 'شارع سوتر، أمام المجمع النظري، الشاطبي', '01234556677', 5.0, 0, '201234556677'],
-      ['مكتبة النور للطباعة والنشر', 'الدقهلية', 'شارع جيهان، أمام بوابة جامعة المنصورة', '01098877665', 5.0, 0, '201098877665'],
-      ['مكتبة الجمهورية والسنتر الحديث', 'الشرقية', 'ميدان القومية، الزقازيق', '01155667788', 5.0, 0, '201155667788'],
-      ['مكتبة ابن سينا والمطبوعات', 'الغربية', 'شارع البحر، أمام محطة قطار طنطا', '01022334455', 5.0, 0, '201022334455'],
-      ['مكتبة المستقبل والجامعة', 'أسيوط', 'شارع الجمهورية، أمام جامعة أسيوط القديمة', '01299887711', 5.0, 0, '201299887711']
-    ];
-    initialStores.forEach(s => insertStore.run(...s));
+  const teacher = db.prepare("SELECT id FROM users WHERE phone = '01000000000'").get();
+  if (!teacher) {
+    const initialTeacherPass = process.env.TEACHER_INITIAL_PASSWORD || crypto.randomBytes(12).toString('base64url');
+    const hashed = bcrypt.hashSync(initialTeacherPass, 8);
+    db.prepare('INSERT INTO users (name, phone, password, role, grade) VALUES (?, ?, ?, ?, ?)')
+      .run('د. زياد رمزي عياد', '01000000000', hashed, 'teacher', 'الصف الثالث الثانوي');
   }
-} catch (e) { console.error('Seed stores error', e); }
+} catch (e) { console.error('Ensure teacher error', e); }
 
-// Auto-seed initial curriculum if courses table is empty
-try {
-  const courseCount = db.prepare('SELECT COUNT(*) as c FROM courses').get().c;
-  if (courseCount === 0 && process.env.SKIP_AUTO_SEED !== '1') {
-    let teacher = db.prepare("SELECT id FROM users WHERE phone = '01000000000'").get();
-    let teacherId;
-    if (teacher) {
-      teacherId = teacher.id;
-    } else {
-      const initialTeacherPass = process.env.TEACHER_INITIAL_PASSWORD || crypto.randomBytes(12).toString('base64url');
-      const hashed = bcrypt.hashSync(initialTeacherPass, 8);
-      const tRes = db.prepare('INSERT INTO users (name, phone, password, role, grade) VALUES (?, ?, ?, ?, ?)')
-        .run('د. زياد رمزي عياد', '01000000000', hashed, 'teacher', 'ثالثة ثانوي');
-      teacherId = tRes.lastInsertRowid;
+// Purge any previously auto-seeded fake courses, packages, live sessions, and bookstores in production
+let purgedFakeData = false;
+if (process.env.SEED_TEST_DATA !== '1') {
+  try {
+    const alreadyPurged = db.prepare("SELECT value FROM platform_settings WHERE key = 'purged_fake_seed_v2'").get();
+    if (!alreadyPurged) {
+      const fakeCourseTitles = [
+        'الباب الأول: كيمياء العناصر الانتقالية واستخلاص الحديد',
+        'أساسيات الكيمياء والتأسيس المنهجي الشامل (مجاني)',
+        'الباب الخامس: الكيمياء العضوية من الصفر للاحتراف',
+        'بنية الذرة والجدول الدوري الحديث والروابط الكيميائية'
+      ];
+      for (const title of fakeCourseTitles) {
+        const fc = db.prepare('SELECT id FROM courses WHERE title = ?').get(title);
+        if (fc) {
+          db.prepare('DELETE FROM lessons WHERE course_id = ?').run(fc.id);
+          db.prepare('DELETE FROM chapters WHERE course_id = ?').run(fc.id);
+          db.prepare('DELETE FROM exams WHERE course_id = ?').run(fc.id);
+          db.prepare('DELETE FROM enrollments WHERE course_id = ?').run(fc.id);
+          db.prepare('DELETE FROM live_sessions WHERE course_id = ?').run(fc.id);
+          db.prepare('DELETE FROM courses WHERE id = ?').run(fc.id);
+        }
+      }
+      db.prepare("DELETE FROM packages WHERE title LIKE 'باقة الـ 3 شهور الشاملة في الكيمياء%'").run();
+      db.prepare("DELETE FROM live_sessions WHERE meeting_link = 'https://meet.google.com/demo-chem-zra'").run();
+      db.prepare('DELETE FROM bookstores').run();
+      db.prepare("INSERT OR REPLACE INTO platform_settings (key, value) VALUES ('purged_fake_seed_v2', '1')").run();
+      purgedFakeData = true;
+      if (pgSql) {
+        try {
+          await pgSql.query('DELETE FROM pg_courses WHERE title = ANY($1)', [fakeCourseTitles]);
+        } catch (e) {}
+      }
     }
-
-    const insertCourse = db.prepare(`
-      INSERT INTO courses (title, description, grade, price, original_price, duration_days, course_type, badge_text, is_free, teacher_id, sequential_access, allow_student_replies)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `);
-
-    const c1Id = insertCourse.run(
-      'الباب الأول: كيمياء العناصر الانتقالية واستخلاص الحديد',
-      'شرح تفصيلي متكامل للسلسلة الانتقالية الأولى، التوزيع الإلكتروني، الخواص المغناطيسية والألوان، خامات الحديد واستخلاصه وتفاعلات أكاسيده.',
-      'ثالثة ثانوي', 150, 220, 365, 'monthly', 'الأكثر طلباً 🔥', 0, teacherId, 0, 1
-    ).lastInsertRowid;
-
-    const c2Id = insertCourse.run(
-      'أساسيات الكيمياء والتأسيس المنهجي الشامل (مجاني)',
-      'كورس تمهيدي شامل لجميع المفاهيم الأساسية: كتابة الصيغ الكيميائية، وزن المعادلات، وحساب أعداد التأكسد والمول.',
-      'ثالثة ثانوي', 0, 0, 365, 'monthly', 'مجاني للجميع 🎁', 1, teacherId, 0, 1
-    ).lastInsertRowid;
-
-    const c3Id = insertCourse.run(
-      'الباب الخامس: الكيمياء العضوية من الصفر للاحتراف',
-      'تغطية شاملة للهيدروكربونات الأليفاتية والأروماتية ومشتقات الهيدروكربونات مع مخططات التفاعلات الذهبية.',
-      'ثالثة ثانوي', 250, 350, 365, 'quarterly', 'شامل المخططات 🧪', 0, teacherId, 0, 1
-    ).lastInsertRowid;
-
-    const c4Id = insertCourse.run(
-      'بنية الذرة والجدول الدوري الحديث والروابط الكيميائية',
-      'شرح وافٍ لنظريات بنية الذرة وأعداد الكم الأربعة وتدرج الخواص في الجدول الدوري لطلاب الصف الثاني الثانوي.',
-      'ثانية ثانوي', 120, 160, 365, 'term', 'منهج الترم الأول', 0, teacherId, 0, 1
-    ).lastInsertRowid;
-
-    const ch1Id = db.prepare('INSERT INTO chapters (course_id, title, order_num) VALUES (?, ?, ?)').run(c1Id, 'الفصل الأول: الخواص العامة للسلسلة الانتقالية الأولى', 1).lastInsertRowid;
-    const ch2Id = db.prepare('INSERT INTO chapters (course_id, title, order_num) VALUES (?, ?, ?)').run(c1Id, 'الفصل الثاني: كيمياء الحديد وتفاعلات الأكاسيد', 2).lastInsertRowid;
-    const chFreeId = db.prepare('INSERT INTO chapters (course_id, title, order_num) VALUES (?, ?, ?)').run(c2Id, 'الوحدة التأسيسية: الصيغ الكيميائية والمعادلات', 1).lastInsertRowid;
-    const chOrgId = db.prepare('INSERT INTO chapters (course_id, title, order_num) VALUES (?, ?, ?)').run(c3Id, 'الجزء الأول: الهيدروكربونات (الألكانات والألكينات والألكاينات)', 1).lastInsertRowid;
-    const chSec2Id = db.prepare('INSERT INTO chapters (course_id, title, order_num) VALUES (?, ?, ?)').run(c4Id, 'الفصل الأول: بنية الذرة وأعداد الكم', 1).lastInsertRowid;
-
-    const insLesson = db.prepare(`
-      INSERT INTO lessons (chapter_id, course_id, title, description, video_url, duration, order_num, is_free, max_views)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `);
-    insLesson.run(ch1Id, c1Id, 'المحاضرة 1: التوزيع الإلكتروني وحالات التأكسد الشائعة', 'نتناول في هذه المحاضرة قاعدة هوند ومبدأ البناء التصاعدي، وحالات استقرار عناصر الكروم والنحاس.', 'https://www.youtube.com/watch?v=dQw4w9WgXcQ', 45, 1, 1, 8);
-    insLesson.run(ch1Id, c1Id, 'المحاضرة 2: الخواص البارامغناطيسية والدايامغناطيسية والأيونات الملونة', 'شرح العلاقة بين عدد الإلكترونات المفردة في الأوربيتالات وعزم الدوران المغناطيسي.', 'https://www.youtube.com/watch?v=dQw4w9WgXcQ', 50, 2, 0, 8);
-    insLesson.run(ch2Id, c1Id, 'المحاضرة 3: خامات الحديد وأفران الاختزال (الفرن العالي ومدركس)', 'مقارنة شاملة بين الفرن العالي وفرن مدركس وإنتاج الصلب.', 'https://www.youtube.com/watch?v=dQw4w9WgXcQ', 55, 1, 0, 8);
-    insLesson.run(chFreeId, c2Id, 'تأسيس 1: التكافؤات وكتابة الصيغ الكيميائية للمركبات', 'أساسيات لا غنى عنها لكل طالب ثانوية عامة في كتابة الصيغ الكيميائية بدقة.', 'https://www.youtube.com/watch?v=dQw4w9WgXcQ', 35, 1, 1, 15);
-    insLesson.run(chFreeId, c2Id, 'تأسيس 2: وزن المعادلات الكيميائية وحساب المول والكتلة المولية', 'تدريبات عملية على وزن أصعب المعادلات وحسابات المول.', 'https://www.youtube.com/watch?v=dQw4w9WgXcQ', 40, 2, 1, 15);
-    insLesson.run(chOrgId, c3Id, 'عضوية 1: مقدمة الكيمياء العضوية وتسمية الألكانات بنظام الأيوباك', 'بداية قوية للكيمياء العضوية وقواعد تسمية المركبات العضوية خطوة بخطوة.', 'https://www.youtube.com/watch?v=dQw4w9WgXcQ', 60, 1, 1, 8);
-    insLesson.run(chSec2Id, c4Id, 'المحاضرة 1: تطور مفهوم بنية الذرة ونموذج بور الذري', 'شرح تجارب رذرفورد وطومسون ونموذج بور الذري.', 'https://www.youtube.com/watch?v=dQw4w9WgXcQ', 42, 1, 1, 8);
-
-    const exam1Id = db.prepare(`
-      INSERT INTO exams (course_id, chapter_id, title, description, duration_minutes, max_attempts, passing_score, is_active, order_num)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(c1Id, ch1Id, 'اختبار إلكتروني شامل على الخواص العامة والتوزيع الإلكتروني', 'اختبار تقييمي لقياس فهم التوزيع الإلكتروني وأعداد التأكسد والخواص المغناطيسية والألوان.', 20, 3, 60, 1, 3).lastInsertRowid;
-
-    const insQ = db.prepare(`
-      INSERT INTO questions (exam_id, type, text, options, correct_answer, explanation, points, order_num)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `);
-    insQ.run(
-      exam1Id, 'mcq',
-      'عنصر انتقالي رئيسي من السلسلة الأولى يحتوي مركبه على أيون X³⁺ بتوزيع إلكتروني [Ar] 3d⁵، فما هو العدد الذري لهذا العنصر؟',
-      JSON.stringify([
-        { id: 'opt1', text: '26 (الحديد Fe)' },
-        { id: 'opt2', text: '25 (المنجنيز Mn)' },
-        { id: 'opt3', text: '27 (الكوبالت Co)' },
-        { id: 'opt4', text: '24 (الكروم Cr)' }
-      ]),
-      'opt1',
-      'الحديد Fe عدده الذري 26 وتوزيعه الذري [Ar] 4s² 3d⁶. عند فقد 3 إلكترونات يصبح توزيعه [Ar] 3d⁵.',
-      2, 1
-    );
-    insQ.run(
-      exam1Id, 'true_false',
-      'تتميز جميع عناصر السلسلة الانتقالية الأولى بامتلاكها حالة التأكسد (+2) ما عدا عنصر السكانديوم Sc الذي يمتلك حالة وحيدة هي (+3).',
-      null, 'true',
-      'صحيح، لأن السكانديوم يفقد إلكتروني 4s وإلكترون 3d دفعة واحدة للوصول إلى التركيب الثابت للغاز الخامل [Ar].',
-      1, 2
-    );
-    insQ.run(
-      exam1Id, 'fill_blank',
-      'العنصر الانتقالي الوحيد في السلسلة الأولى الذي جميع مركباته ومحاليله غير ملونة ودايامغناطيسية هو عنصر الـ...',
-      null, 'سكانديوم',
-      'عنصر السكانديوم Sc في حالة التأكسد +3 يخلو مداره 3d تماماً من الإلكترونات (3d⁰).',
-      2, 3
-    );
-
-    const examFreeId = db.prepare(`
-      INSERT INTO exams (course_id, chapter_id, title, description, duration_minutes, max_attempts, passing_score, is_active, order_num)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(c2Id, chFreeId, 'اختبار تحديد المستوى في أساسيات الكيمياء (مجاني)', 'اختبر مستواك في الصيغ الكيميائية وأعداد التأكسد وحسابات المول.', 15, 5, 60, 1, 3).lastInsertRowid;
-
-    insQ.run(
-      examFreeId, 'mcq',
-      'ما هي الكتلة المولية لمركب هيدروكسيد الكالسيوم Ca(OH)₂ علماً بأن (Ca=40, O=16, H=1)؟',
-      JSON.stringify([
-        { id: 'opt1', text: '74 جم/مول' },
-        { id: 'opt2', text: '57 جم/مول' },
-        { id: 'opt3', text: '58 جم/مول' },
-        { id: 'opt4', text: '90 جم/مول' }
-      ]),
-      'opt1',
-      'الكتلة المولية = 40 + 2 × (16 + 1) = 40 + 34 = 74 جم/مول.',
-      2, 1
-    );
-
-    db.prepare(`
-      INSERT INTO live_sessions (title, course_id, description, scheduled_at, duration_minutes, meeting_link, status)
-      VALUES (?, ?, ?, datetime('now', '+2 days'), ?, ?, ?)
-    `).run(
-      'بث مباشر: مراجعة شاملة وحل مسائل الباب الأول العليا',
-      c1Id,
-      'حصة تفاعلية مباشرة مع د. زياد رمزي عياد لمراجعة تكات الباب الأول والإجابة على استفسارات الطلاب.',
-      75,
-      'https://meet.google.com/demo-chem-zra',
-      'upcoming'
-    );
+  } catch (e) {
+    console.warn('Purge fake seed warning:', e.message);
   }
-} catch (e) { console.error('Auto-seed curriculum error', e); }
+}
+
+// Seed test data ONLY when explicitly running automated test suite (SEED_TEST_DATA === '1')
+if (process.env.SEED_TEST_DATA === '1') {
+  try {
+    const storeCount = db.prepare('SELECT COUNT(*) as c FROM bookstores').get().c;
+    if (storeCount === 0) {
+      const insertStore = db.prepare(`INSERT INTO bookstores (name, governorate, address, phone, rating, reviews_count, whatsapp) VALUES (?, ?, ?, ?, ?, ?, ?)`);
+      insertStore.run('مكتبة الأوائل', 'القاهرة', 'شارع كامل صدقي', '01019882233', 5.0, 0, '201019882233');
+    }
+  } catch (e) {}
+
+  try {
+    const courseCount = db.prepare('SELECT COUNT(*) as c FROM courses').get().c;
+    if (courseCount === 0) {
+      const teacher = db.prepare("SELECT id FROM users WHERE phone = '01000000000'").get();
+      const teacherId = teacher.id;
+
+      const insertCourse = db.prepare(`
+        INSERT INTO courses (title, description, grade, price, original_price, duration_days, course_type, badge_text, is_free, teacher_id, sequential_access, allow_student_replies)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+
+      const c1Id = insertCourse.run(
+        'الباب الأول: كيمياء العناصر الانتقالية واستخلاص الحديد',
+        'شرح تفصيلي متكامل للسلسلة الانتقالية الأولى، التوزيع الإلكتروني، الخواص المغناطيسية والألوان، خامات الحديد واستخلاصه وتفاعلات أكاسيده.',
+        'ثالثة ثانوي', 150, 220, 365, 'monthly', 'الأكثر طلباً', 0, teacherId, 0, 1
+      ).lastInsertRowid;
+
+      const c2Id = insertCourse.run(
+        'أساسيات الكيمياء والتأسيس المنهجي الشامل (مجاني)',
+        'كورس تمهيدي شامل لجميع المفاهيم الأساسية: كتابة الصيغ الكيميائية، وزن المعادلات، وحساب أعداد التأكسد والمول.',
+        'ثالثة ثانوي', 0, 0, 365, 'monthly', 'مجاني للجميع', 1, teacherId, 0, 0
+      ).lastInsertRowid;
+
+      const c3Id = insertCourse.run(
+        'الباب الخامس: الكيمياء العضوية من الصفر للاحتراف',
+        'تغطية شاملة للهيدروكربونات الأليفاتية والأروماتية ومشتقات الهيدروكربونات مع مخططات التفاعلات الذهبية.',
+        'ثالثة ثانوي', 250, 350, 365, 'quarterly', 'شامل المخططات', 0, teacherId, 0, 1
+      ).lastInsertRowid;
+
+      const c4Id = insertCourse.run(
+        'بنية الذرة والجدول الدوري الحديث والروابط الكيميائية',
+        'شرح وافٍ لنظريات بنية الذرة وأعداد الكم الأربعة وتدرج الخواص في الجدول الدوري لطلاب الصف الثاني الثانوي.',
+        'ثانية ثانوي', 120, 160, 365, 'term', 'منهج الترم الأول', 0, teacherId, 0, 1
+      ).lastInsertRowid;
+
+      const ch1Id = db.prepare('INSERT INTO chapters (course_id, title, order_num) VALUES (?, ?, ?)').run(c1Id, 'الفصل الأول: الخواص العامة للسلسلة الانتقالية الأولى', 1).lastInsertRowid;
+      const ch2Id = db.prepare('INSERT INTO chapters (course_id, title, order_num) VALUES (?, ?, ?)').run(c1Id, 'الفصل الثاني: كيمياء الحديد وتفاعلات الأكاسيد', 2).lastInsertRowid;
+      const chFreeId = db.prepare('INSERT INTO chapters (course_id, title, order_num) VALUES (?, ?, ?)').run(c2Id, 'الوحدة التأسيسية: الصيغ الكيميائية والمعادلات', 1).lastInsertRowid;
+      const chOrgId = db.prepare('INSERT INTO chapters (course_id, title, order_num) VALUES (?, ?, ?)').run(c3Id, 'الجزء الأول: الهيدروكربونات (الألكانات والألكينات والألكاينات)', 1).lastInsertRowid;
+      const chSec2Id = db.prepare('INSERT INTO chapters (course_id, title, order_num) VALUES (?, ?, ?)').run(c4Id, 'الفصل الأول: بنية الذرة وأعداد الكم', 1).lastInsertRowid;
+
+      const insLesson = db.prepare(`
+        INSERT INTO lessons (chapter_id, course_id, title, description, video_url, duration, order_num, is_free, max_views)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+      insLesson.run(ch1Id, c1Id, 'المحاضرة 1: التوزيع الإلكتروني وحالات التأكسد الشائعة', 'نتناول في هذه المحاضرة قاعدة هوند ومبدأ البناء التصاعدي، وحالات استقرار عناصر الكروم والنحاس.', 'https://www.youtube.com/watch?v=dQw4w9WgXcQ', 45, 1, 1, 8);
+      insLesson.run(ch1Id, c1Id, 'المحاضرة 2: الخواص البارامغناطيسية والدايامغناطيسية والأيونات الملونة', 'شرح العلاقة بين عدد الإلكترونات المفردة في الأوربيتالات وعزم الدوران المغناطيسي.', 'https://www.youtube.com/watch?v=dQw4w9WgXcQ', 50, 2, 0, 8);
+      insLesson.run(ch2Id, c1Id, 'المحاضرة 3: خامات الحديد وأفران الاختزال (الفرن العالي ومدركس)', 'مقارنة شاملة بين الفرن العالي وفرن مدركس وإنتاج الصلب.', 'https://www.youtube.com/watch?v=dQw4w9WgXcQ', 55, 1, 0, 8);
+      insLesson.run(chFreeId, c2Id, 'تأسيس 1: التكافؤات وكتابة الصيغ الكيميائية للمركبات', 'أساسيات لا غنى عنها لكل طالب ثانوية عامة في كتابة الصيغ الكيميائية بدقة.', 'https://www.youtube.com/watch?v=dQw4w9WgXcQ', 35, 1, 1, 15);
+      insLesson.run(chFreeId, c2Id, 'تأسيس 2: وزن المعادلات الكيميائية وحساب المول والكتلة المولية', 'تدريبات عملية على وزن أصعب المعادلات وحسابات المول.', 'https://www.youtube.com/watch?v=dQw4w9WgXcQ', 40, 2, 1, 15);
+      insLesson.run(chOrgId, c3Id, 'عضوية 1: مقدمة الكيمياء العضوية وتسمية الألكانات بنظام الأيوباك', 'بداية قوية للكيمياء العضوية وقواعد تسمية المركبات العضوية خطوة بخطوة.', 'https://www.youtube.com/watch?v=dQw4w9WgXcQ', 60, 1, 1, 8);
+      insLesson.run(chSec2Id, c4Id, 'المحاضرة 1: تطور مفهوم بنية الذرة ونموذج بور الذري', 'شرح تجارب رذرفورد وطومسون ونموذج بور الذري.', 'https://www.youtube.com/watch?v=dQw4w9WgXcQ', 42, 1, 1, 8);
+
+      const exam1Id = db.prepare(`
+        INSERT INTO exams (course_id, chapter_id, title, description, duration_minutes, max_attempts, passing_score, is_active, order_num, has_certificate)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+      `).run(c1Id, ch1Id, 'اختبار إلكتروني شامل على الخواص العامة والتوزيع الإلكتروني', 'اختبار تقييمي لقياس فهم التوزيع الإلكتروني وأعداد التأكسد والخواص المغناطيسية والألوان.', 20, 3, 60, 1, 3).lastInsertRowid;
+
+      const insQ = db.prepare(`
+        INSERT INTO questions (exam_id, type, text, options, correct_answer, explanation, points, order_num)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+      insQ.run(
+        exam1Id, 'mcq',
+        'عنصر انتقالي رئيسي من السلسلة الأولى يحتوي مركبه على أيون X³⁺ بتوزيع إلكتروني [Ar] 3d⁵، فما هو العدد الذري لهذا العنصر؟',
+        JSON.stringify([
+          { id: 'opt1', text: '26 (الحديد Fe)' },
+          { id: 'opt2', text: '25 (المنجنيز Mn)' },
+          { id: 'opt3', text: '27 (الكوبالت Co)' },
+          { id: 'opt4', text: '24 (الكروم Cr)' }
+        ]),
+        'opt1',
+        'الحديد Fe عدده الذري 26 وتوزيعه الذري [Ar] 4s² 3d⁶. عند فقد 3 إلكترونات يصبح توزيعه [Ar] 3d⁵.',
+        2, 1
+      );
+
+      const examFreeId = db.prepare(`
+        INSERT INTO exams (course_id, chapter_id, title, description, duration_minutes, max_attempts, passing_score, is_active, order_num, has_certificate)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+      `).run(c2Id, chFreeId, 'اختبار تحديد المستوى في أساسيات الكيمياء (مجاني)', 'اختبر مستواك في الصيغ الكيميائية وأعداد التأكسد وحسابات المول.', 15, 5, 60, 1, 3).lastInsertRowid;
+
+      insQ.run(
+        examFreeId, 'mcq',
+        'ما هي الكتلة المولية لمركب هيدروكسيد الكالسيوم Ca(OH)₂ علماً بأن (Ca=40, O=16, H=1)؟',
+        JSON.stringify([
+          { id: 'opt1', text: '74 جم/مول' },
+          { id: 'opt2', text: '57 جم/مول' },
+          { id: 'opt3', text: '58 جم/مول' },
+          { id: 'opt4', text: '90 جم/مول' }
+        ]),
+        'opt1',
+        'الكتلة المولية = 40 + 2 × (16 + 1) = 40 + 34 = 74 جم/مول.',
+        2, 1
+      );
+
+      db.prepare(`
+        INSERT INTO packages (title, description, grade, price, original_price, duration_days, course_ids, thumbnail)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        'باقة الـ 3 شهور الشاملة في الكيمياء (الفصل الأول والثاني والعضوية)',
+        'الباقة الذهبية المخفضة للدكتور زياد رمزي عياد.',
+        'ثالثة ثانوي',
+        350,
+        500,
+        90,
+        JSON.stringify([c1Id, c2Id, c3Id]),
+        '/assets/dr-ziad-success.jpg'
+      );
+    }
+  } catch (e) { console.error('Seed test curriculum error', e); }
+}
 
 // Create indexes for better query performance
 const indexes = [
@@ -904,32 +937,10 @@ for (const idx of indexes) {
   try { db.exec(idx); } catch (e) {}
 }
 
-// Seed default 3-month package if empty
-try {
-  const pkgCount = db.prepare('SELECT COUNT(*) as c FROM packages').get().c;
-  if (pkgCount === 0) {
-    const courses = db.prepare('SELECT id FROM courses ORDER BY id ASC LIMIT 3').all();
-    const courseIds = courses.map(c => c.id);
-    db.prepare(`
-      INSERT INTO packages (title, description, grade, price, original_price, duration_days, course_ids, thumbnail)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
-      'باقة الـ 3 شهور الشاملة في الكيمياء (الفصل الأول والثاني والعضوية)',
-      'الباقة الذهبية المخفضة للدكتور زياد رمزي عياد: تشمل محتوى 3 شهور كاملة من منهج الكيمياء (جميع محاضرات الشرح، التدريبات التفاعلية، حلول امتحانات الثانوية العامة السابقة، والواجبات والمذكرات PDF) ومتاحة طوال العام الدراسي حتى الامتحانات.',
-      'ثالثة ثانوي',
-      350,
-      500,
-      90,
-      JSON.stringify(courseIds.length ? courseIds : [1, 2]),
-      '/assets/dr-ziad-success.jpg'
-    );
-  }
-} catch (e) { console.error('Seed package error', e); }
-
 isBootstrapping = false;
 
-// If connected to PostgreSQL and this was the initial bootstrap, persist snapshot immediately
-if (pgSql && !loadedFromPg) {
+// If connected to PostgreSQL and this was the initial bootstrap or fake data was purged, persist snapshot immediately
+if (pgSql && (!loadedFromPg || purgedFakeData)) {
   await db.flushToPostgres(true);
 }
 

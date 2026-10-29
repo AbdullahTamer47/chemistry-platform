@@ -190,8 +190,8 @@ router.post('/:id(\\d+)/subscribe', authMiddleware, (req, res) => {
         VALUES (?, ?, ?, 'success')
       `).run(
         req.user.id,
-        'تم تفعيل باقة الكيمياء الشاملة! 🎉',
-        `مبروك! تم تفعيل اشتراكك في "${pkg.title}". محتوى الـ 3 شهور من المنهج متاح لك الآن بالكامل طوال العام الدراسي حتى امتحانات الثانوية العامة دون أي انتهاء صلاحية!`
+        'تم تفعيل باقة الكيمياء الشاملة',
+        `مبروك! تم تفعيل اشتراكك في "${pkg.title}". محتوى الباقة متاح لك الآن بالكامل طوال العام الدراسي.`
       );
     });
 
@@ -302,7 +302,7 @@ router.post('/stores/:id/rate', authMiddleware, (req, res) => {
     db.prepare('UPDATE bookstores SET rating = ?, reviews_count = ? WHERE id = ?').run(exactRating, totalCount, store.id);
 
     res.json({
-      message: 'شكراً لك! تم تسجيل تقييمك بنجاح لمساعدة زملائك الطلاب ⭐',
+      message: 'شكراً لك! تم تسجيل تقييمك بنجاح لمساعدة زملائك الطلاب',
       rating: exactRating,
       new_rating: exactRating,
       reviews_count: totalCount,
@@ -330,7 +330,7 @@ router.post('/stores', authMiddleware, teacherMiddleware, (req, res) => {
     `).run(name.trim(), governorate.trim(), address.trim(), cleanPhone, cleanWa);
 
     res.status(201).json({
-      message: 'تم إضافة المنفذ المعتمد بنجاح ✅',
+      message: 'تم إضافة المنفذ المعتمد بنجاح',
       id: result.lastInsertRowid,
       store_id: result.lastInsertRowid
     });
@@ -358,7 +358,7 @@ router.put('/stores/:id', authMiddleware, teacherMiddleware, (req, res) => {
       WHERE id = ?
     `).run(name, governorate, address, phone, whatsapp, is_active, req.params.id);
 
-    res.json({ message: 'تم تحديث بيانات المكتبة بنجاح ✅' });
+    res.json({ message: 'تم تحديث بيانات المكتبة بنجاح' });
   } catch (err) {
     console.error('Update store error:', err);
     res.status(500).json({ error: 'حدث خطأ في تحديث بيانات المكتبة' });
@@ -372,7 +372,7 @@ router.delete('/stores/:id', authMiddleware, teacherMiddleware, (req, res) => {
     if (!store) return res.status(404).json({ error: 'المكتبة غير موجودة' });
 
     db.prepare('DELETE FROM bookstores WHERE id = ?').run(req.params.id);
-    res.json({ message: 'تم حذف المكتبة من الدليل بنجاح ✅' });
+    res.json({ message: 'تم حذف المكتبة من الدليل بنجاح' });
   } catch (err) {
     console.error('Delete store error:', err);
     res.status(500).json({ error: 'حدث خطأ في حذف المكتبة' });

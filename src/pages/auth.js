@@ -39,9 +39,12 @@ export function renderLogin() {
       
       <!-- Right Side: Form (RTL Start) -->
       <div class="auth-form-col">
-        <div class="auth-top-nav">
-          <a href="#/" class="auth-back-link">
+        <div class="auth-top-nav" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+          <a href="/" class="auth-back-link">
             <span class="material-symbols-rounded">arrow_forward</span> العودة للرئيسية
+          </a>
+          <a href="/parent-portal" class="btn btn-outline btn-sm" style="gap:6px; font-weight:800; border-radius:10px;">
+            <span class="material-symbols-rounded" style="font-size:1.1rem;">family_restroom</span> بوابة ولي الأمر
           </a>
         </div>
         
@@ -50,8 +53,8 @@ export function renderLogin() {
             <img src="${zraLogoFace}" alt="Z.R.A" class="logo-face-img" style="height: 44px;" />
             <img src="${zraLogoText}" alt="Z.R.A" class="logo-text-img" style="height: 32px;" />
           </div>
-          <h1 class="auth-form-title">أهلاً بك مجدداً! جاهز للمذاكرة؟ 👋</h1>
-          <p class="auth-form-subtitle">سجّل دخولك للوصول إلى محاضراتك، امتحاناتك والمختبر التفاعلي</p>
+          <h1 class="auth-form-title">أهلاً بك مجدداً! جاهز للمذاكرة؟</h1>
+          <p class="auth-form-subtitle">سجّل دخولك للوصول إلى لوحة التحكم والمحاضرات والامتحانات</p>
         </div>
 
         <div id="loginAlertBox" style="display:none;"></div>
@@ -84,7 +87,7 @@ export function renderLogin() {
         </form>
 
         <div class="auth-switch-box">
-          طالب جديد بالمنصة؟ <a href="#/register" class="auth-switch-link">أنشئ حساباً جديداً في ثوانٍ!</a>
+          طالب جديد بالمنصة؟ <a href="/register" class="auth-switch-link">أنشئ حساباً جديداً الآن</a>
         </div>
       </div>
 
@@ -95,7 +98,7 @@ export function renderLogin() {
             <span class="material-symbols-rounded" style="font-size:1.15rem; color:#86efac;">science</span> منصة الكيمياء التفاعلية
           </span>
           <span class="auth-poster-pill">
-            <span class="material-symbols-rounded" style="font-size:1.15rem; color:#fde047;">star</span> نظام الـ 60/60
+            <span class="material-symbols-rounded" style="font-size:1.15rem; color:#fde047;">verified</span> نظام المتابعة الكاملة
           </span>
         </div>
 
@@ -104,7 +107,7 @@ export function renderLogin() {
             <img src="${drZiadImg}" alt="د. زياد رمزي عياد" class="auth-teacher-img" onerror="this.src='data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><circle cx=%2250%22 cy=%2250%22 r=%2250%22 fill=%22%2316a34a%22/></svg>'" />
           </div>
           <h2 class="auth-poster-title">انضم لمجتمع المتفوقين مع د. زياد رمزي عياد</h2>
-          <p class="auth-poster-desc">تعلّم الكيمياء بأسلوب ممتع وشيق يجمع بين الفهم العميق، التجارب التوضيحية، وحل آلاف الأسئلة الوزارية.</p>
+          <p class="auth-poster-desc">تعلّم الكيمياء بأسلوب ممتع يجمع بين الفهم العميق، المختبر الكيميائي، وحل الأسئلة الوزارية.</p>
         </div>
 
         <div class="auth-poster-footer">
@@ -168,10 +171,15 @@ export function initLogin() {
 
       const data = await api.login({ phone, password, device_id: deviceId, device_name: deviceName });
       setAuth(data.user, data.token);
-      showInlineAuthAlert('loginAlertBox', `مرحباً بك ${data.user.name}! جاري تحويلك للمنصة...`, 'success');
+      showInlineAuthAlert('loginAlertBox', `مرحباً بك ${data.user.name}! جاري تحويلك للوحة التحكم...`, 'success');
       showToast(`مرحباً بك ${data.user.name.split(' ')[0]}!`, 'success');
       const isT = data.user.role === 'teacher' || data.user.role === 'admin';
-      window.location.hash = isT ? '#/admin' : '#/dashboard';
+      const target = isT ? '/admin' : '/dashboard';
+      if (typeof window.navigateTo === 'function') {
+        window.navigateTo(target, true);
+      } else {
+        window.location.href = target;
+      }
     } catch (err) {
       const errMsg = err.message || 'تعذر تسجيل الدخول، تأكد من رقم الهاتف وكلمة المرور';
       showInlineAuthAlert('loginAlertBox', errMsg, 'error');
@@ -186,6 +194,15 @@ export function initLogin() {
 }
 
 export function renderRegister() {
+  const gradeDescriptions = {
+    'أولى إعدادي': 'الصف الأول الإعدادي',
+    'ثانية إعدادي': 'الصف الثاني الإعدادي',
+    'ثالثة إعدادي': 'الصف الثالث الإعدادي',
+    'أولى ثانوي': 'الصف الأول الثانوي',
+    'ثانية ثانوي': 'الصف الثاني الثانوي',
+    'ثالثة ثانوي': 'الصف الثالث الثانوي',
+  };
+
   return `
   <div class="auth-page-sakr">
     <div class="auth-card-sakr">
@@ -193,7 +210,7 @@ export function renderRegister() {
       <!-- Right Side: Form (RTL Start) -->
       <div class="auth-form-col">
         <div class="auth-top-nav">
-          <a href="#/" class="auth-back-link">
+          <a href="/" class="auth-back-link">
             <span class="material-symbols-rounded">arrow_forward</span> العودة للرئيسية
           </a>
         </div>
@@ -203,15 +220,15 @@ export function renderRegister() {
             <img src="${zraLogoFace}" alt="Z.R.A" class="logo-face-img" style="height: 44px;" />
             <img src="${zraLogoText}" alt="Z.R.A" class="logo-text-img" style="height: 32px;" />
           </div>
-          <h1 class="auth-form-title">إنشاء حساب طالب جديد 🚀</h1>
-          <p class="auth-form-subtitle">سجّل بياناتك الآن لتفعيل حسابك والوصول للكورسات المجانية والمدفوعة فوراً</p>
+          <h1 class="auth-form-title">إنشاء حساب طالب جديد</h1>
+          <p class="auth-form-subtitle">سجّل بياناتك الآن لتفعيل حسابك والوصول للكورسات والمحاضرات فوراً</p>
         </div>
 
         <div id="regAlertBox" style="display:none;"></div>
 
         <form id="registerForm" novalidate>
           <div class="sakr-input-group">
-            <label class="sakr-input-label" for="regName">الاسم بالكامل</label>
+            <label class="sakr-input-label" for="regName">الاسم بالكامل <span style="color:var(--danger);">*</span></label>
             <div class="sakr-input-wrap">
               <span class="material-symbols-rounded input-icon">person</span>
               <input type="text" autocomplete="name" class="sakr-input-field" id="regName" placeholder="اكتب اسمك الثلاثي باللغة العربية" required>
@@ -228,21 +245,20 @@ export function renderRegister() {
             </div>
             
             <div class="sakr-input-group">
-              <label class="sakr-input-label" for="regParentPhone">رقم ولي الأمر <span style="font-size:0.74rem;color:var(--text-muted);font-weight:500;">(اختياري)</span></label>
+              <label class="sakr-input-label" for="regParentPhone">رقم هاتف ولي الأمر <span style="color:var(--danger);">*</span></label>
               <div class="sakr-input-wrap">
                 <span class="material-symbols-rounded input-icon">family_restroom</span>
-                <input type="tel" inputmode="numeric" class="sakr-input-field" id="regParentPhone" placeholder="01xxxxxxxxx" dir="ltr">
+                <input type="tel" inputmode="numeric" class="sakr-input-field" id="regParentPhone" placeholder="01xxxxxxxxx" required dir="ltr">
               </div>
             </div>
           </div>
 
           <div class="sakr-input-group">
-            <label class="sakr-input-label" for="regGrade">المرحلة الدراسية</label>
+            <label class="sakr-input-label" for="regGrade">المرحلة الدراسية <span style="color:var(--danger);">*</span></label>
             <div class="sakr-input-wrap">
               <span class="material-symbols-rounded input-icon">school</span>
               <select class="sakr-input-field" id="regGrade" required style="cursor: pointer;">
-                <option value="ثالثة ثانوي" selected>ثالثة ثانوي (الصف الثالث الثانوي)</option>
-                ${gradesList.filter(g => g !== 'ثالثة ثانوي').map(g => `<option value="${g}">${g}</option>`).join('')}
+                ${gradesList.map(g => `<option value="${esc(g)}" ${g === 'ثالثة ثانوي' ? 'selected' : ''}>${esc(gradeDescriptions[g] || g)} (${esc(g)})</option>`).join('')}
               </select>
             </div>
           </div>
@@ -264,7 +280,7 @@ export function renderRegister() {
         </form>
 
         <div class="auth-switch-box">
-          لديك حساب بالفعل؟ <a href="#/login" class="auth-switch-link">تسجيل الدخول من هنا !</a>
+          لديك حساب بالفعل؟ <a href="/login" class="auth-switch-link">تسجيل الدخول من هنا</a>
         </div>
       </div>
 
@@ -338,15 +354,15 @@ export function initRegister() {
       return;
     }
 
-    if (parentPhone && !/^01[0125][0-9]{8}$/.test(parentPhone)) {
-      const msg = 'رقم هاتف ولي الأمر غير صحيح (يجب أن يتكون من 11 رقماً يبدأ بـ 01 أو اتركه فارغاً)';
+    if (!parentPhone || !/^01[0125][0-9]{8}$/.test(parentPhone)) {
+      const msg = 'يرجى إدخال رقم هاتف ولي الأمر (إجباري، 11 رقماً يبدأ بـ 01)';
       showInlineAuthAlert('regAlertBox', msg, 'warning');
       showToast(msg, 'warning');
       return;
     }
 
-    if (parentPhone && parentPhone === studentPhone) {
-      const msg = 'يرجى إدخال رقم ولي أمر مختلف عن رقمك الشخصي، أو اترك خانة ولي الأمر فارغة';
+    if (parentPhone === studentPhone) {
+      const msg = 'يرجى إدخال رقم هاتف لولي الأمر مختلف عن رقم هاتف الطالب الشخصي';
       showInlineAuthAlert('regAlertBox', msg, 'warning');
       showToast(msg, 'warning');
       return;
@@ -366,8 +382,12 @@ export function initRegister() {
       const data = await api.register({ name, phone: studentPhone, password, grade, parent_phone: parentPhone });
       setAuth(data.user, data.token);
       showInlineAuthAlert('regAlertBox', 'تم إنشاء حسابك بنجاح! جاري تحويلك للوحة التحكم...', 'success');
-      showToast('تم إنشاء حسابك بنجاح! مرحباً بك في كيمياوي 🧪', 'success');
-      window.location.hash = '#/dashboard';
+      showToast('تم إنشاء حسابك بنجاح! مرحباً بك في كيمياوي', 'success');
+      if (typeof window.navigateTo === 'function') {
+        window.navigateTo('/dashboard', true);
+      } else {
+        window.location.href = '/dashboard';
+      }
     } catch (err) {
       const errMsg = err.message || 'حدث خطأ أثناء إنشاء الحساب، حاول مرة أخرى';
       showInlineAuthAlert('regAlertBox', errMsg, 'error');

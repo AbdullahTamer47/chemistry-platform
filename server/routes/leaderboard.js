@@ -37,9 +37,10 @@ router.get('/', (req, res) => {
         WHERE ea.exam_id = ?
           AND ea.completed_at IS NOT NULL
           AND (ea.is_graded = 1 OR ea.is_graded IS NULL)
+          AND ea.score >= 50
           ${timeFilter}
         ORDER BY ea.score DESC, ea.time_spent ASC
-        LIMIT 100
+        LIMIT 10
       `).all(exam_id);
     } else if (course_id) {
       students = db.prepare(`
@@ -47,7 +48,7 @@ router.get('/', (req, res) => {
           ROUND(AVG(ea.score), 1) AS avg_score,
           SUM(ea.score) AS total_score,
           COUNT(DISTINCT ea.exam_id) AS exams_taken,
-          ROW_NUMBER() OVER (ORDER BY AVG(ea.score) DESC) AS rank
+          ROW_NUMBER() OVER (ORDER BY AVG(ea.score) DESC, SUM(ea.score) DESC) AS rank
         FROM exam_attempts ea
         JOIN users u ON ea.user_id = u.id
         JOIN exams e ON ea.exam_id = e.id
@@ -56,8 +57,9 @@ router.get('/', (req, res) => {
           AND (ea.is_graded = 1 OR ea.is_graded IS NULL)
           ${timeFilter}
         GROUP BY u.id
-        ORDER BY avg_score DESC
-        LIMIT 100
+        HAVING AVG(ea.score) >= 50
+        ORDER BY avg_score DESC, total_score DESC
+        LIMIT 10
       `).all(course_id);
     } else {
       let q = `
@@ -66,7 +68,7 @@ router.get('/', (req, res) => {
           SUM(ea.score) AS total_score,
           COUNT(DISTINCT ea.exam_id) AS exams_taken,
           SUM(CASE WHEN ea.score >= 60 THEN 1 ELSE 0 END) AS passed_exams,
-          ROW_NUMBER() OVER (ORDER BY AVG(ea.score) DESC) AS rank
+          ROW_NUMBER() OVER (ORDER BY AVG(ea.score) DESC, SUM(ea.score) DESC) AS rank
         FROM exam_attempts ea
         JOIN users u ON ea.user_id = u.id
         WHERE ea.completed_at IS NOT NULL
@@ -80,7 +82,7 @@ router.get('/', (req, res) => {
         params.push(grade);
       }
 
-      q += ' GROUP BY u.id ORDER BY avg_score DESC LIMIT 100';
+      q += ' GROUP BY u.id HAVING AVG(ea.score) >= 50 ORDER BY avg_score DESC, total_score DESC LIMIT 10';
       students = db.prepare(q).all(...params);
     }
 

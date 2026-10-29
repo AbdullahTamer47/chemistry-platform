@@ -47,6 +47,51 @@ function checkLessonAccess(user, lesson, allItems) {
   return null;
 }
 
+function checkPrerequisiteExam(user, lesson) {
+  if (!lesson.prerequisite_exam_id) return { locked: false, exam: null };
+  const prereqExam = db.prepare('SELECT id, title, passing_score, duration_minutes FROM exams WHERE id = ?').get(lesson.prerequisite_exam_id);
+  if (!prereqExam) return { locked: false, exam: null };
+
+  const requiredScore = Number(lesson.prerequisite_passing_score) > 0
+    ? Number(lesson.prerequisite_passing_score)
+    : (prereqExam.passing_score || 60);
+
+  if (isTeacher(user)) {
+    return {
+      locked: false,
+      exam: {
+        id: prereqExam.id,
+        title: prereqExam.title,
+        duration_minutes: prereqExam.duration_minutes,
+        required_score: requiredScore,
+        best_score: 100,
+        passed: true
+      }
+    };
+  }
+
+  const row = db.prepare(`
+    SELECT MAX(score) as best_score
+    FROM exam_attempts
+    WHERE user_id = ? AND exam_id = ? AND completed_at IS NOT NULL AND (is_graded = 1 OR is_graded IS NULL)
+  `).get(user.id, prereqExam.id);
+
+  const bestScore = row && row.best_score !== null && row.best_score !== undefined ? Number(row.best_score) : null;
+  const passed = bestScore !== null && bestScore >= requiredScore;
+
+  return {
+    locked: !passed,
+    exam: {
+      id: prereqExam.id,
+      title: prereqExam.title,
+      duration_minutes: prereqExam.duration_minutes,
+      required_score: requiredScore,
+      best_score: bestScore,
+      passed
+    }
+  };
+}
+
 // Student: get all saved lessons (bookmarks for fast revision)
 router.get('/saved', authMiddleware, (req, res) => {
   try {
@@ -84,7 +129,7 @@ router.post('/:id/bookmark', authMiddleware, (req, res) => {
       res.json({ is_saved: false, message: 'تمت إزالة الفيديو من المحفوظات' });
     } else {
       db.prepare('INSERT INTO saved_lessons (user_id, lesson_id) VALUES (?, ?)').run(req.user.id, lessonId);
-      res.json({ is_saved: true, message: 'تم حفظ الفيديو للمراجعة السريعة ⭐' });
+      res.json({ is_saved: true, message: 'تم حفظ الفيديو للمراجعة السريعة' });
     }
   } catch (err) {
     console.error(err);
@@ -162,12 +207,16 @@ router.get('/video/:token', authMiddleware, (req, res) => {
 
 router.get('/:id', authMiddleware, (req, res) => {
   try {
-    const lesson = db.prepare('SELECT l.*, ch.title as chapter_title, c.title as course_title, c.is_free as course_is_free FROM lessons l LEFT JOIN chapters ch ON l.chapter_id = ch.id LEFT JOIN courses c ON l.course_id = c.id WHERE l.id = ?').get(req.params.id);
+    const lesson = db.prepare('SELECT l.*, ch.title as chapter_title, c.title as course_title, c.is_free as course_is_free, c.allow_student_replies FROM lessons l LEFT JOIN chapters ch ON l.chapter_id = ch.id LEFT JOIN courses c ON l.course_id = c.id WHERE l.id = ?').get(req.params.id);
     if (!lesson) return res.status(404).json({ error: 'الدرس غير موجود' });
 
     const allItems = getCourseItems(lesson.course_id);
     const denied = checkLessonAccess(req.user, lesson, allItems);
     if (denied) return res.status(denied.status).json(denied.body);
+
+    const prereq = checkPrerequisiteExam(req.user, lesson);
+    lesson.prerequisite_locked = prereq.locked;
+    lesson.prerequisite_exam = prereq.exam;
 
     lesson.progress = db.prepare('SELECT * FROM lesson_progress WHERE user_id = ? AND lesson_id = ?').get(req.user.id, lesson.id);
     lesson.is_saved = db.prepare('SELECT 1 FROM saved_lessons WHERE user_id = ? AND lesson_id = ?').get(req.user.id, lesson.id) ? 1 : 0;
@@ -175,7 +224,7 @@ router.get('/:id', authMiddleware, (req, res) => {
     if (currentIndex > 0) lesson.prev_lesson = allItems[currentIndex - 1];
     if (currentIndex < allItems.length - 1) lesson.next_lesson = allItems[currentIndex + 1];
 
-    // The video URL is only released through /video-token, which enforces the view limit.
+    // The video URL is only released through /video-token, which enforces the view limit and prerequisite exam gate.
     if (!isTeacher(req.user)) delete lesson.video_url;
     res.json(lesson);
   } catch (err) { console.error('Lesson error:', err); res.status(500).json({ error: 'حدث خطأ' }); }
@@ -188,6 +237,15 @@ router.post('/:id/video-token', authMiddleware, (req, res) => {
 
     const denied = checkLessonAccess(req.user, lesson, getCourseItems(lesson.course_id));
     if (denied) return res.status(denied.status).json(denied.body);
+
+    const prereq = checkPrerequisiteExam(req.user, lesson);
+    if (prereq.locked) {
+      return res.status(403).json({
+        error: `يجب حل امتحان المحاضرة "${prereq.exam.title}" أولاً والحصول على درجة النجاح (${prereq.exam.required_score}%) لفتح الفيديو`,
+        prerequisite_locked: true,
+        prerequisite_exam: prereq.exam
+      });
+    }
 
     if (!isTeacher(req.user)) {
       const progress = db.prepare('SELECT views_count, extra_views FROM lesson_progress WHERE user_id = ? AND lesson_id = ?').get(req.user.id, lesson.id);
@@ -208,7 +266,8 @@ router.post('/:id/video-token', authMiddleware, (req, res) => {
     const expiresAt = new Date(Date.now() + 4 * 3600000).toISOString();
     db.prepare('DELETE FROM video_tokens WHERE user_id = ? AND lesson_id = ?').run(req.user.id, lesson.id);
     db.prepare('INSERT INTO video_tokens (token, user_id, lesson_id, expires_at) VALUES (?, ?, ?, ?)').run(token, req.user.id, lesson.id, expiresAt);
-    res.json({ token, video_url: lesson.video_url, expires_at: expiresAt, watermark: `${req.user.name} • ${req.user.id}` });
+    const shortName = String(req.user.name || '').trim().split(/\s+/).slice(0, 2).join(' ');
+    res.json({ token, video_url: lesson.video_url, expires_at: expiresAt, watermark: `${shortName} • ${req.user.phone || ''}` });
   } catch (err) { console.error(err); res.status(500).json({ error: 'حدث خطأ' }); }
 });
 
@@ -235,16 +294,51 @@ router.post('/:id/progress', authMiddleware, (req, res) => {
 
 router.post('/', authMiddleware, teacherMiddleware, (req, res) => {
   try {
-    const { chapter_id, course_id, title, description, video_url, duration, order_num, max_views, is_free, pdf_url } = req.body;
-    const result = db.prepare('INSERT INTO lessons (chapter_id, course_id, title, description, video_url, duration, order_num, max_views, is_free, pdf_url) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').run(chapter_id, course_id, title, description, video_url, duration || 0, order_num || 0, max_views || 8, is_free ? 1 : 0, pdf_url || null);
+    const { chapter_id, course_id, title, description, video_url, duration, order_num, max_views, is_free, pdf_url, prerequisite_exam_id, prerequisite_passing_score } = req.body;
+    const prereqId = prerequisite_exam_id ? parseInt(prerequisite_exam_id, 10) : null;
+    const prereqScore = prerequisite_passing_score ? parseInt(prerequisite_passing_score, 10) : 60;
+    const result = db.prepare('INSERT INTO lessons (chapter_id, course_id, title, description, video_url, duration, order_num, max_views, is_free, pdf_url, prerequisite_exam_id, prerequisite_passing_score) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+      .run(chapter_id, course_id, title, description, video_url, duration || 0, order_num || 0, max_views || 8, is_free ? 1 : 0, pdf_url || null, prereqId, prereqScore);
+    try { db.prepare('UPDATE courses SET updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(course_id); } catch (e) {}
     res.status(201).json(db.prepare('SELECT * FROM lessons WHERE id = ?').get(result.lastInsertRowid));
   } catch (err) { res.status(500).json({ error: 'حدث خطأ في إضافة الدرس' }); }
 });
 
 router.put('/:id', authMiddleware, teacherMiddleware, (req, res) => {
   try {
-    const { title, description, video_url, duration, order_num, max_views, is_free, chapter_id, pdf_url } = req.body;
-    db.prepare('UPDATE lessons SET title=COALESCE(?,title), description=COALESCE(?,description), video_url=COALESCE(?,video_url), duration=COALESCE(?,duration), order_num=COALESCE(?,order_num), max_views=COALESCE(?,max_views), is_free=COALESCE(?,is_free), chapter_id=COALESCE(?,chapter_id), pdf_url=COALESCE(?,pdf_url) WHERE id=?').run(title, description, video_url, duration, order_num, max_views, is_free !== undefined ? (is_free ? 1 : 0) : null, chapter_id, pdf_url !== undefined ? (pdf_url || null) : null, req.params.id);
+    const { title, description, video_url, duration, order_num, max_views, is_free, chapter_id, pdf_url, prerequisite_exam_id, prerequisite_passing_score } = req.body;
+    const existing = db.prepare('SELECT * FROM lessons WHERE id = ?').get(req.params.id);
+    if (!existing) return res.status(404).json({ error: 'الدرس غير موجود' });
+
+    const prereqId = prerequisite_exam_id !== undefined
+      ? (prerequisite_exam_id ? parseInt(prerequisite_exam_id, 10) : null)
+      : existing.prerequisite_exam_id;
+    const prereqScore = prerequisite_passing_score !== undefined
+      ? (parseInt(prerequisite_passing_score, 10) || 60)
+      : (existing.prerequisite_passing_score || 60);
+
+    db.prepare(`
+      UPDATE lessons
+      SET title=COALESCE(?,title), description=COALESCE(?,description), video_url=COALESCE(?,video_url),
+          duration=COALESCE(?,duration), order_num=COALESCE(?,order_num), max_views=COALESCE(?,max_views),
+          is_free=COALESCE(?,is_free), chapter_id=COALESCE(?,chapter_id),
+          pdf_url=?, prerequisite_exam_id=?, prerequisite_passing_score=?
+      WHERE id=?
+    `).run(
+      title,
+      description,
+      video_url,
+      duration,
+      order_num,
+      max_views,
+      is_free !== undefined ? (is_free ? 1 : 0) : null,
+      chapter_id,
+      pdf_url !== undefined ? (pdf_url || null) : existing.pdf_url,
+      prereqId,
+      prereqScore,
+      req.params.id
+    );
+    try { db.prepare('UPDATE courses SET updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(existing.course_id); } catch (e) {}
     res.json(db.prepare('SELECT * FROM lessons WHERE id = ?').get(req.params.id));
   } catch (err) { res.status(500).json({ error: 'حدث خطأ' }); }
 });

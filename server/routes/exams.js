@@ -24,8 +24,13 @@ router.get('/course/:courseId', authMiddleware, (req, res) => {
     }
     const exams = db.prepare(`SELECT e.*, (SELECT COUNT(*) FROM questions WHERE exam_id = e.id) as question_count,
       (SELECT COUNT(*) FROM exam_attempts WHERE exam_id = e.id AND user_id = ?) as my_attempts,
-      (SELECT MAX(score) FROM exam_attempts WHERE exam_id = e.id AND user_id = ?) as my_best_score
-      FROM exams e WHERE e.course_id = ? AND e.is_active = 1 ORDER BY e.created_at DESC`).all(req.user.id, req.user.id, req.params.courseId);
+      (SELECT MAX(score) FROM exam_attempts WHERE exam_id = e.id AND user_id = ?) as my_best_score,
+      COALESCE((SELECT is_locked FROM exam_sessions WHERE exam_id = e.id AND user_id = ?), 0) as my_locked,
+      COALESCE((SELECT retake_requested FROM exam_sessions WHERE exam_id = e.id AND user_id = ?), 0) as my_retake_requested,
+      COALESCE((SELECT extra_attempts FROM exam_overrides WHERE exam_id = e.id AND user_id = ?), 0) as extra_attempts
+      FROM exams e WHERE e.course_id = ? AND e.is_active = 1 ORDER BY e.created_at DESC`).all(
+        req.user.id, req.user.id, req.user.id, req.user.id, req.user.id, req.params.courseId
+      );
     res.json(exams);
   } catch (err) { res.status(500).json({ error: 'حدث خطأ' }); }
 });
@@ -37,16 +42,22 @@ router.get('/', authMiddleware, (req, res) => {
     if (req.user.role === 'teacher' || req.user.role === 'admin') {
       exams = db.prepare(`SELECT e.*, c.title as course_title, c.grade,
         (SELECT COUNT(*) FROM questions WHERE exam_id = e.id) as question_count,
-        (SELECT COUNT(DISTINCT user_id) FROM exam_attempts WHERE exam_id = e.id) as attempt_count
+        (SELECT COUNT(DISTINCT user_id) FROM exam_attempts WHERE exam_id = e.id) as attempt_count,
+        (SELECT COUNT(*) FROM exam_sessions WHERE exam_id = e.id AND retake_requested = 1) as retake_requests_count
         FROM exams e LEFT JOIN courses c ON e.course_id = c.id ORDER BY e.created_at DESC`).all();
     } else {
       exams = db.prepare(`SELECT e.*, c.title as course_title, c.grade,
         (SELECT COUNT(*) FROM questions WHERE exam_id = e.id) as question_count,
         (SELECT COUNT(*) FROM exam_attempts WHERE exam_id = e.id AND user_id = ?) as my_attempts,
-        (SELECT MAX(score) FROM exam_attempts WHERE exam_id = e.id AND user_id = ?) as my_best_score
+        (SELECT MAX(score) FROM exam_attempts WHERE exam_id = e.id AND user_id = ?) as my_best_score,
+        COALESCE((SELECT is_locked FROM exam_sessions WHERE exam_id = e.id AND user_id = ?), 0) as my_locked,
+        COALESCE((SELECT retake_requested FROM exam_sessions WHERE exam_id = e.id AND user_id = ?), 0) as my_retake_requested,
+        COALESCE((SELECT extra_attempts FROM exam_overrides WHERE exam_id = e.id AND user_id = ?), 0) as extra_attempts
         FROM exams e LEFT JOIN courses c ON e.course_id = c.id
         INNER JOIN enrollments en ON en.course_id = e.course_id AND en.user_id = ? AND en.is_suspended = 0
-        WHERE e.is_active = 1 ORDER BY e.created_at DESC`).all(req.user.id, req.user.id, req.user.id);
+        WHERE e.is_active = 1 ORDER BY e.created_at DESC`).all(
+          req.user.id, req.user.id, req.user.id, req.user.id, req.user.id, req.user.id
+        );
     }
     res.json(exams);
   } catch (err) { res.status(500).json({ error: 'حدث خطأ' }); }
@@ -193,7 +204,7 @@ router.post('/adaptive-mistakes-quiz', authMiddleware, (req, res) => {
     res.json({
       has_mistakes: true,
       count: questions.length,
-      title: 'امتحانك الخاص: تدريب علاجي مكثف على أخطائك السابقة 🎯',
+      title: 'امتحانك الخاص: تدريب علاجي مكثف على أخطائك السابقة',
       description: 'تم جمع هذه الأسئلة خصيصاً لك من الاختبارات السابقة التي أخطأت فيها لتدريبك عليها حتى تتقنها 100%.',
       duration_minutes: 20,
       questions
@@ -263,6 +274,7 @@ router.post('/adaptive-mistakes-quiz/submit', authMiddleware, (req, res) => {
         points: pts,
         earned_points: qEarned,
         explanation: q.explanation,
+        explanation_image: q.explanation_image || null,
         pedagogical_feedback: !isCorrect && q.explanation ? {
           reinforcement: q.explanation,
           learning_action: 'راجع هذه النقطة جيداً وتأكد من إتقان الفكرة العلمية قبل الاختبار القادم.'
@@ -307,18 +319,45 @@ router.get('/:id/take', authMiddleware, (req, res) => {
       return res.status(400).json({ error: `انتهت الفترة الزمنية المخصصة لهذا الامتحان في ${new Date(exam.end_time).toLocaleString('ar-EG')}` });
     }
 
+    const session = db.prepare('SELECT * FROM exam_sessions WHERE user_id = ? AND exam_id = ?').get(req.user.id, exam.id);
+    const isHomework = exam.exam_type === 'homework';
+
+    // Check if locked due to exiting an active exam
+    if (!isTeacher(req.user) && !isHomework && session && Number(session.is_locked) === 1) {
+      return res.status(403).json({
+        error: 'تم إغلاق هذا الامتحان بسبب الخروج منه قبل التسليم. يمكنك إرسال طلب للمعلم لإعادة فتحه.',
+        is_locked: true,
+        can_request_retake: true,
+        retake_requested: !!session.retake_requested,
+        exam_id: exam.id,
+        exam_title: exam.title
+      });
+    }
+
+    const overrideRow = db.prepare('SELECT COALESCE(extra_attempts, 0) as extra FROM exam_overrides WHERE exam_id = ? AND user_id = ?').get(exam.id, req.user.id);
+    const extraAttempts = overrideRow ? Number(overrideRow.extra) : 0;
+    const baseMax = isHomework ? (exam.max_attempts > 1 ? exam.max_attempts : 99) : (exam.max_attempts > 0 ? exam.max_attempts : 1);
+    const allowedAttempts = baseMax + extraAttempts;
+
     const attemptCount = db.prepare('SELECT COUNT(*) as c FROM exam_attempts WHERE exam_id = ? AND user_id = ?').get(exam.id, req.user.id);
-    if (!isTeacher(req.user) && exam.max_attempts > 0 && attemptCount.c >= exam.max_attempts) {
-      return res.status(400).json({ error: 'لقد استنفذت عدد المحاولات المسموحة لهذا الامتحان' });
+    if (!isTeacher(req.user) && !isHomework && allowedAttempts > 0 && attemptCount.c >= allowedAttempts) {
+      return res.status(400).json({
+        error: 'لقد استنفذت عدد المحاولات المسموحة لهذا الامتحان. يمكنك التواصل مع المعلم أو إرسال طلب للسماح بمحاولة إضافية.',
+        attempts_exhausted: true,
+        can_request_retake: true,
+        retake_requested: !!(session && session.retake_requested),
+        exam_id: exam.id,
+        exam_title: exam.title
+      });
     }
 
     // Exam Session Management (Single active session & fixed random questions)
-    let session = db.prepare('SELECT * FROM exam_sessions WHERE user_id = ? AND exam_id = ?').get(req.user.id, exam.id);
+    let activeSession = session;
     let questions;
 
-    if (session) {
+    if (activeSession && activeSession.question_ids) {
       try {
-        const qIds = JSON.parse(session.question_ids);
+        const qIds = JSON.parse(activeSession.question_ids);
         const placeholders = qIds.map(() => '?').join(',');
         questions = db.prepare(`SELECT id, type, text, image_url, options, points, order_num FROM questions WHERE id IN (${placeholders}) ORDER BY order_num`).all(...qIds);
       } catch (e) {
@@ -332,12 +371,12 @@ router.get('/:id/take', authMiddleware, (req, res) => {
         questions = allQuestions;
       }
       const qIds = questions.map(q => q.id);
-      db.prepare('INSERT OR REPLACE INTO exam_sessions (user_id, exam_id, question_ids, started_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP)')
+      db.prepare('INSERT OR REPLACE INTO exam_sessions (user_id, exam_id, question_ids, is_locked, retake_requested, started_at, updated_at) VALUES (?, ?, ?, 0, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)')
         .run(req.user.id, exam.id, JSON.stringify(qIds));
-      session = { started_at: new Date().toISOString() };
+      activeSession = { started_at: new Date().toISOString() };
     }
 
-    const startedAt = parseSqliteDate(session.started_at);
+    const startedAt = parseSqliteDate(activeSession.started_at);
     const elapsedSeconds = Math.max(0, Math.floor((Date.now() - startedAt) / 1000));
     const totalAllowedSeconds = (exam.duration_minutes || 30) * 60;
     exam.remaining_seconds = Math.max(0, totalAllowedSeconds - elapsedSeconds);
@@ -346,6 +385,109 @@ router.get('/:id/take', authMiddleware, (req, res) => {
     exam.questions = questions;
     res.json(exam);
   } catch (err) { console.error(err); res.status(500).json({ error: 'حدث خطأ' }); }
+});
+
+// Student: Lock exam session when exiting an active exam before submission (notifies teacher)
+router.post('/:id/lock-exit', authMiddleware, (req, res) => {
+  try {
+    const exam = db.prepare('SELECT * FROM exams WHERE id = ?').get(req.params.id);
+    if (!exam) return res.status(404).json({ error: 'الامتحان غير موجود' });
+    if (isTeacher(req.user) || exam.exam_type === 'homework') {
+      return res.json({ locked: false });
+    }
+
+    const reason = (req.body.reason || 'خرج الطالب من صفحة الامتحان قبل التسليم').slice(0, 300);
+    const existing = db.prepare('SELECT * FROM exam_sessions WHERE user_id = ? AND exam_id = ?').get(req.user.id, exam.id);
+    if (existing) {
+      db.prepare('UPDATE exam_sessions SET is_locked = 1, lock_reason = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ? AND exam_id = ?')
+        .run(reason, req.user.id, exam.id);
+    } else {
+      db.prepare('INSERT INTO exam_sessions (user_id, exam_id, question_ids, is_locked, lock_reason, started_at, updated_at) VALUES (?, ?, ?, 1, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)')
+        .run(req.user.id, exam.id, '[]', reason);
+    }
+
+    // Notify teachers
+    const teachers = db.prepare("SELECT id FROM users WHERE role IN ('teacher', 'admin')").all();
+    const notifyStmt = db.prepare('INSERT INTO notifications (user_id, title, message, type) VALUES (?, ?, ?, ?)');
+    for (const t of teachers) {
+      notifyStmt.run(
+        t.id,
+        'خروج طالب من الامتحان',
+        `قام الطالب ${req.user.name} (${req.user.phone || ''}) بالخروج من امتحان "${exam.title}" قبل التسليم وتم قفل محاولته تلقائياً.`,
+        'warning'
+      );
+    }
+
+    res.json({ locked: true, message: 'تم تسجيل الخروج من الامتحان وإشعار المعلم' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'حدث خطأ' });
+  }
+});
+
+// Student: Request teacher permission to reopen/retake a locked or exhausted exam
+router.post('/:id/request-retake', authMiddleware, (req, res) => {
+  try {
+    const exam = db.prepare('SELECT * FROM exams WHERE id = ?').get(req.params.id);
+    if (!exam) return res.status(404).json({ error: 'الامتحان غير موجود' });
+
+    const reason = (req.body.reason || 'طلب السماح بإعادة فتح الامتحان').slice(0, 400);
+    const existing = db.prepare('SELECT * FROM exam_sessions WHERE user_id = ? AND exam_id = ?').get(req.user.id, exam.id);
+    if (existing) {
+      db.prepare('UPDATE exam_sessions SET is_locked = 1, retake_requested = 1, retake_reason = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ? AND exam_id = ?')
+        .run(reason, req.user.id, exam.id);
+    } else {
+      db.prepare('INSERT INTO exam_sessions (user_id, exam_id, question_ids, is_locked, retake_requested, retake_reason, started_at, updated_at) VALUES (?, ?, ?, 1, 1, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)')
+        .run(req.user.id, exam.id, '[]', reason);
+    }
+
+    const teachers = db.prepare("SELECT id FROM users WHERE role IN ('teacher', 'admin')").all();
+    const notifyStmt = db.prepare('INSERT INTO notifications (user_id, title, message, type) VALUES (?, ?, ?, ?)');
+    for (const t of teachers) {
+      notifyStmt.run(
+        t.id,
+        'طلب إعادة فتح امتحان',
+        `يرغب الطالب ${req.user.name} (${req.user.phone || ''}) في إعادة فتح امتحان "${exam.title}". السبب: ${reason}`,
+        'info'
+      );
+    }
+
+    res.json({ message: 'تم إرسال طلب إعادة فتح الامتحان إلى المعلم بنجاح' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'حدث خطأ أثناء إرسال الطلب' });
+  }
+});
+
+// Teacher: Unlock exam & grant extra attempt for a student
+router.post('/:id/allow-retake', authMiddleware, teacherMiddleware, (req, res) => {
+  try {
+    const exam = db.prepare('SELECT * FROM exams WHERE id = ?').get(req.params.id);
+    if (!exam) return res.status(404).json({ error: 'الامتحان غير موجود' });
+
+    const userId = Number(req.body.user_id);
+    if (!userId) return res.status(400).json({ error: 'معرف الطالب مطلوب' });
+
+    db.prepare(`
+      INSERT INTO exam_overrides (exam_id, user_id, extra_attempts)
+      VALUES (?, ?, 1)
+      ON CONFLICT(exam_id, user_id) DO UPDATE SET extra_attempts = extra_attempts + 1
+    `).run(exam.id, userId);
+
+    db.prepare('DELETE FROM exam_sessions WHERE exam_id = ? AND user_id = ?').run(exam.id, userId);
+
+    db.prepare('INSERT INTO notifications (user_id, title, message, type) VALUES (?, ?, ?, ?)').run(
+      userId,
+      'تم فتح الامتحان لك من المعلم',
+      `سمح لك المعلم بدخول/إعادة امتحان "${exam.title}". يمكنك الدخول للامتحان الآن.`,
+      'success'
+    );
+
+    res.json({ message: 'تم فتح الامتحان للطالب ومنحه محاولة جديدة بنجاح' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'حدث خطأ أثناء فتح الامتحان للطالب' });
+  }
 });
 
 // Submit exam
@@ -360,16 +502,22 @@ router.post('/:id/submit', authMiddleware, (req, res) => {
       return res.status(403).json({ error: 'يجب الاشتراك في الكورس أولاً' });
     }
 
+    const isHomework = exam.exam_type === 'homework';
+    const overrideRow = db.prepare('SELECT COALESCE(extra_attempts, 0) as extra FROM exam_overrides WHERE exam_id = ? AND user_id = ?').get(exam.id, req.user.id);
+    const extraAttempts = overrideRow ? Number(overrideRow.extra) : 0;
+    const baseMax = isHomework ? (exam.max_attempts > 1 ? exam.max_attempts : 99) : (exam.max_attempts > 0 ? exam.max_attempts : 1);
+    const allowedAttempts = baseMax + extraAttempts;
+
     // Strict attempt limit check on submit
     const attemptCount = db.prepare('SELECT COUNT(*) as c FROM exam_attempts WHERE exam_id = ? AND user_id = ?').get(exam.id, req.user.id);
-    if (!isTeacher(req.user) && exam.max_attempts > 0 && attemptCount.c >= exam.max_attempts) {
+    if (!isTeacher(req.user) && !isHomework && allowedAttempts > 0 && attemptCount.c >= allowedAttempts) {
       return res.status(400).json({ error: 'لقد استنفذت عدد المحاولات المسموحة لهذا الامتحان' });
     }
 
     // Verify against assigned session questions
     const session = db.prepare('SELECT * FROM exam_sessions WHERE user_id = ? AND exam_id = ?').get(req.user.id, exam.id);
     let questions;
-    if (session) {
+    if (session && session.question_ids) {
       try {
         const qIds = JSON.parse(session.question_ids);
         const placeholders = qIds.map(() => '?').join(',');
@@ -457,7 +605,7 @@ router.post('/:id/submit', authMiddleware, (req, res) => {
           isCorrect = Array.isArray(userAnswer) && JSON.stringify([...userAnswer].sort()) === JSON.stringify([...correctArr].sort());
         } catch (e) {}
       } else if (q.type === 'essay') {
-        // Essay questions do NOT award automatic 90% unverified score.
+        // Essay questions do NOT award automatic unverified score.
         // Score remains 0 until the teacher reviews, scores, and approves it!
         return { 
           question_id: q.id, 
@@ -467,7 +615,8 @@ router.post('/:id/submit', authMiddleware, (req, res) => {
           is_essay: true,
           ai_suggested_score: 0,
           ai_feedback: 'تم رصد خطوات الحل وحفظها بنجاح، وبانتظار اعتماد وتقدير الدرجة من المعلم.',
-          explanation: q.explanation, 
+          explanation: q.explanation,
+          explanation_image: q.explanation_image || null,
           points: q.points, 
           options: null, 
           text: q.text, 
@@ -494,7 +643,8 @@ router.post('/:id/submit', authMiddleware, (req, res) => {
         user_answer: userAnswer, 
         correct_answer: q.correct_answer, 
         is_correct: isCorrect, 
-        explanation: q.explanation, 
+        explanation: q.explanation,
+        explanation_image: q.explanation_image || null,
         pedagogical_feedback,
         points: q.points, 
         options: q.options ? JSON.parse(q.options) : null, 
@@ -527,9 +677,9 @@ router.post('/:id/submit', authMiddleware, (req, res) => {
     db.prepare('DELETE FROM exam_sessions WHERE user_id = ? AND exam_id = ?').run(req.user.id, exam.id);
     const rank = db.prepare('SELECT COUNT(DISTINCT user_id) + 1 as rank FROM exam_attempts WHERE exam_id = ? AND score > ? AND user_id != ?').get(exam.id, score, req.user.id);
 
-    // Auto-issue Certificate if passed and fully graded
+    // Auto-issue Certificate ONLY if teacher enabled has_certificate === 1 and student passed
     let certificate = null;
-    if (isGraded === 1 && score >= (exam.passing_score || 60)) {
+    if (Number(exam.has_certificate) === 1 && isGraded === 1 && score >= (exam.passing_score || 60)) {
       const tier = score === 100 ? 'gold' : score >= 90 ? 'silver' : 'bronze';
       const certCode = `CERT-ZRA-${crypto.randomBytes(6).toString('hex').toUpperCase()}`;
       try {
@@ -565,40 +715,32 @@ router.post('/:id/submit', authMiddleware, (req, res) => {
       }
     }
 
-    // Automated Dual Parent Loop (Father + Mother WhatsApp Reports)
-    const student = db.prepare('SELECT name, parent_phone, parent_phone_secondary FROM users WHERE id = ?').get(req.user.id);
+    // Unified Parent WhatsApp Report
+    const student = db.prepare('SELECT name, parent_phone FROM users WHERE id = ?').get(req.user.id);
     let whatsapp_parent_url = null;
-    let whatsapp_parent_secondary_url = null;
 
     if (student) {
       let baseMsg = '';
       if (hasEssay) {
         baseMsg = `نحيطكم علماً بأن الطالب قد أتم للتو تسليم اختبار: "${exam.title}" على منصة د. زياد رمزي عياد للكيمياء.\nتم رصد إجابات وخطوات الحل المقالية، وهي الآن قيد المراجعة والتصحيح من قبل المعلم لإصدار الدرجة المعتمدة.\nمع تحيات إدارة منصة كيمياوي.`;
       } else {
-        const statusText = score >= exam.passing_score ? 'ناجح بتفوق 🌟' : 'يحتاج لمزيد من المذاكرة والمتابعة ⚠️';
+        const statusText = score >= exam.passing_score ? 'ناجح بتفوق' : 'يحتاج لمزيد من المذاكرة والمتابعة';
         baseMsg = `نحيطكم علماً بأن الطالب قد أتم للتو اختبار: "${exam.title}" على منصة د. زياد رمزي عياد للكيمياء.\nالدرجة المحققة: ${score}% (${earnedPoints} من ${totalPoints})\nالحالة: ${statusText}\nمع تحيات إدارة منصة كيمياوي.`;
       }
 
-      // 1. Father / Primary Parent
       if (student.parent_phone) {
-        const fatherText = encodeURIComponent(`السلام عليكم ورحمة الله، والد الطالب/ة ${student.name}.\n${baseMsg}`);
-        whatsapp_parent_url = `https://wa.me/20${student.parent_phone.replace(/^0+/, '')}?text=${fatherText}`;
+        const parentText = encodeURIComponent(`السلام عليكم ورحمة الله، ولي أمر الطالب/ة ${student.name}.\n${baseMsg}`);
+        whatsapp_parent_url = `https://wa.me/20${student.parent_phone.replace(/^0+/, '')}?text=${parentText}`;
       }
 
-      // 2. Mother / Secondary Parent
-      if (student.parent_phone_secondary) {
-        const motherText = encodeURIComponent(`السلام عليكم ورحمة الله، والدة الطالب/ة ${student.name}.\n${baseMsg}`);
-        whatsapp_parent_secondary_url = `https://wa.me/20${student.parent_phone_secondary.replace(/^0+/, '')}?text=${motherText}`;
-      }
-
-      // Notification
+      // Notification to student
       db.prepare('INSERT INTO notifications (user_id, title, message, type) VALUES (?, ?, ?, ?)').run(
         req.user.id,
-        certificate ? 'تهانينا! حصلت على شهادة تفوق 🎉' : 'تقرير نتيجة الامتحان',
+        certificate ? 'تهانينا! حصلت على شهادة تفوق' : 'تقرير نتيجة الامتحان',
         hasEssay 
           ? `تم استلام إجابات امتحان "${exam.title}". خطوات الحل المقالية قيد مراجعة المعلم.`
           : (certificate 
-              ? `تهانينا! حققت ${score}% في "${exam.title}" واستحققت شهادة تقدير (${certificate.tier === 'gold' ? 'الدرجة الكاملة 🥇' : certificate.tier === 'silver' ? 'المتفوقين 🥈' : 'الاجتياز 🥉'}). توجه لصفحة الشهادات لتحميلها!`
+              ? `تهانينا! حققت ${score}% في "${exam.title}" واستحققت شهادة تقدير (${certificate.tier === 'gold' ? 'الدرجة الكاملة' : certificate.tier === 'silver' ? 'المتفوقين' : 'الاجتياز'}). توجه لصفحة الشهادات لتحميلها كصورة!`
               : `تم تسجيل نتيجة امتحان "${exam.title}" بنسبة ${score}%.`),
         score >= exam.passing_score ? 'success' : 'warning'
       );
@@ -617,13 +759,12 @@ router.post('/:id/submit', authMiddleware, (req, res) => {
       certificate,
       course_id: exam.course_id,
       next_item,
-      whatsapp_parent_url,
-      whatsapp_parent_secondary_url
+      whatsapp_parent_url
     });
   } catch (err) { console.error(err); res.status(500).json({ error: 'حدث خطأ في تسليم الامتحان' }); }
 });
 
-// Teacher: get all student submissions for an exam
+// Teacher: get all student submissions & locked/retake requests for an exam
 router.get('/:id/submissions', authMiddleware, teacherMiddleware, (req, res) => {
   try {
     const exam = db.prepare('SELECT * FROM exams WHERE id = ?').get(req.params.id);
@@ -631,14 +772,24 @@ router.get('/:id/submissions', authMiddleware, teacherMiddleware, (req, res) => 
 
     const attempts = db.prepare(`
       SELECT ea.id, ea.exam_id, ea.user_id, ea.answers, ea.score, ea.total_points, ea.time_spent, ea.completed_at, ea.is_graded, ea.essay_grades, ea.teacher_feedback,
-             u.name as student_name, u.phone as student_phone, u.avatar
+             u.name as student_name, u.phone as student_phone, u.parent_phone, u.avatar
       FROM exam_attempts ea
       JOIN users u ON u.id = ea.user_id
       WHERE ea.exam_id = ?
       ORDER BY ea.completed_at DESC
     `).all(exam.id);
 
-    const questions = db.prepare('SELECT id, type, text, image_url, options, correct_answer, explanation, points, order_num FROM questions WHERE exam_id = ? ORDER BY order_num').all(exam.id);
+    const lockedSessions = db.prepare(`
+      SELECT es.user_id, es.exam_id, es.is_locked, es.lock_reason, es.retake_requested, es.retake_reason, es.started_at, es.updated_at,
+             u.name as student_name, u.phone as student_phone, u.parent_phone,
+             (SELECT COUNT(*) FROM exam_attempts WHERE exam_id = es.exam_id AND user_id = es.user_id) as attempts_count
+      FROM exam_sessions es
+      JOIN users u ON u.id = es.user_id
+      WHERE es.exam_id = ? AND (es.is_locked = 1 OR es.retake_requested = 1)
+      ORDER BY es.updated_at DESC
+    `).all(exam.id);
+
+    const questions = db.prepare('SELECT id, type, text, image_url, options, correct_answer, explanation, explanation_image, points, order_num FROM questions WHERE exam_id = ? ORDER BY order_num').all(exam.id);
     questions.forEach(q => { if (q.options) { try { q.options = JSON.parse(q.options); } catch (e) {} } });
 
     const parsedAttempts = attempts.map(a => {
@@ -653,7 +804,7 @@ router.get('/:id/submissions', authMiddleware, teacherMiddleware, (req, res) => 
       };
     });
 
-    res.json({ exam, questions, attempts: parsedAttempts });
+    res.json({ exam, questions, attempts: parsedAttempts, locked_sessions: lockedSessions });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'حدث خطأ في جلب تسليمات الامتحان' });
@@ -735,8 +886,8 @@ router.post(['/attempt/:id/grade-essay', '/attempt/:id/grade', '/attempts/:id/gr
       attempt.id
     );
 
-    // Auto-issue Certificate if passed upon teacher grading
-    if (newScore >= (exam?.passing_score || 60)) {
+    // Auto-issue Certificate if exam.has_certificate === 1 and passed upon teacher grading
+    if (exam && Number(exam.has_certificate) === 1 && newScore >= (exam.passing_score || 60)) {
       const tier = newScore === 100 ? 'gold' : newScore >= 90 ? 'silver' : 'bronze';
       const certCode = `CERT-ZRA-${crypto.randomBytes(6).toString('hex').toUpperCase()}`;
       try {
@@ -764,7 +915,7 @@ router.post(['/attempt/:id/grade-essay', '/attempt/:id/grade', '/attempts/:id/gr
       `).run(
         attempt.user_id,
         'تم تصحيح إجابتك واعتماد النتيجة',
-        `قام أ/ زياد رمزي بمراجعة وتصحيح إجابتك في اختبار "${exam ? exam.title : 'امتحان كيمياء'}". نتيجتك النهائية المعتمدة: ${newScore}% (${earnedPoints} من ${totalPoints})`,
+        `قام المعلم بمراجعة وتصحيح إجابتك في اختبار "${exam ? exam.title : 'امتحان كيمياء'}". نتيجتك النهائية المعتمدة: ${newScore}% (${earnedPoints} من ${totalPoints})`,
         newScore >= (exam?.passing_score || 60) ? 'success' : 'info'
       );
     } catch (e) {}
@@ -903,6 +1054,7 @@ function formatAttemptReview(attempt, exam, user) {
       points: q.points,
       earned_points: questionEarned,
       explanation: q.explanation,
+      explanation_image: q.explanation_image || null,
       pedagogical_feedback,
       teacher_comment: teacherComment,
       is_essay: q.type === 'essay'
@@ -968,7 +1120,7 @@ router.get('/:id/details', authMiddleware, teacherMiddleware, (req, res) => {
     const exam = db.prepare('SELECT * FROM exams WHERE id = ?').get(req.params.id);
     if (!exam) return res.status(404).json({ error: 'الامتحان غير موجود' });
 
-    let questions = db.prepare('SELECT id, type, text, image_url, options, points, order_num, correct_answer FROM questions WHERE exam_id = ? ORDER BY order_num').all(exam.id);
+    let questions = db.prepare('SELECT id, type, text, image_url, options, points, order_num, correct_answer, explanation, explanation_image FROM questions WHERE exam_id = ? ORDER BY order_num').all(exam.id);
 
     questions.forEach(q => { if (q.options) q.options = JSON.parse(q.options); });
     exam.questions = questions;
@@ -976,11 +1128,15 @@ router.get('/:id/details', authMiddleware, teacherMiddleware, (req, res) => {
   } catch (err) { res.status(500).json({ error: 'حدث خطأ' }); }
 });
 
-// Create exam (teacher) — FIXED: now saves chapter_id, order_num, start_time, end_time
+// Create exam (teacher)
 router.post('/', authMiddleware, teacherMiddleware, (req, res) => {
   try {
-    const { course_id, chapter_id, title, description, duration_minutes, max_attempts, passing_score, random_questions_count, order_num, start_time, end_time } = req.body;
-    const result = db.prepare('INSERT INTO exams (course_id, chapter_id, title, description, duration_minutes, max_attempts, passing_score, random_questions_count, order_num, start_time, end_time) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').run(course_id, chapter_id || null, title, description, duration_minutes || 30, max_attempts || 1, passing_score || 60, random_questions_count || 0, order_num || 0, start_time || null, end_time || null);
+    const { course_id, chapter_id, title, description, duration_minutes, max_attempts, passing_score, random_questions_count, order_num, start_time, end_time, exam_type, has_certificate } = req.body;
+    const typeVal = exam_type === 'homework' ? 'homework' : 'exam';
+    const certVal = has_certificate !== undefined ? (has_certificate ? 1 : 0) : 0;
+    const result = db.prepare('INSERT INTO exams (course_id, chapter_id, title, description, duration_minutes, max_attempts, passing_score, random_questions_count, order_num, start_time, end_time, exam_type, has_certificate) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').run(
+      course_id, chapter_id || null, title, description, duration_minutes || 30, max_attempts || (typeVal === 'homework' ? 99 : 1), passing_score || 60, random_questions_count || 0, order_num || 0, start_time || null, end_time || null, typeVal, certVal
+    );
     res.status(201).json(db.prepare('SELECT * FROM exams WHERE id = ?').get(result.lastInsertRowid));
   } catch (err) { console.error(err); res.status(500).json({ error: 'حدث خطأ' }); }
 });
@@ -988,7 +1144,7 @@ router.post('/', authMiddleware, teacherMiddleware, (req, res) => {
 // Update exam
 router.put('/:id', authMiddleware, teacherMiddleware, (req, res) => {
   try {
-    const fields = ['title', 'description', 'duration_minutes', 'max_attempts', 'passing_score', 'random_questions_count', 'order_num', 'chapter_id'];
+    const fields = ['title', 'description', 'duration_minutes', 'max_attempts', 'passing_score', 'random_questions_count', 'order_num', 'chapter_id', 'exam_type'];
     const updates = [];
     const values = [];
 
@@ -999,6 +1155,10 @@ router.put('/:id', authMiddleware, teacherMiddleware, (req, res) => {
       }
     }
 
+    if (req.body.has_certificate !== undefined) {
+      updates.push('has_certificate = ?');
+      values.push(req.body.has_certificate ? 1 : 0);
+    }
     if (req.body.is_active !== undefined) {
       updates.push('is_active = ?');
       values.push(req.body.is_active ? 1 : 0);
@@ -1023,23 +1183,27 @@ router.put('/:id', authMiddleware, teacherMiddleware, (req, res) => {
 // Add question to exam
 router.post('/:id/questions', authMiddleware, teacherMiddleware, (req, res) => {
   try {
-    const { type, text, image_url, options, correct_answer, explanation, points } = req.body;
+    const { type, text, image_url, options, correct_answer, explanation, explanation_image, points } = req.body;
     const maxOrder = db.prepare('SELECT MAX(order_num) as m FROM questions WHERE exam_id = ?').get(req.params.id);
-    const result = db.prepare('INSERT INTO questions (exam_id, type, text, image_url, options, correct_answer, explanation, points, order_num) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)').run(req.params.id, type, text, image_url, options ? JSON.stringify(options) : null, typeof correct_answer === 'string' ? correct_answer : JSON.stringify(correct_answer), explanation, points || 1, (maxOrder?.m || 0) + 1);
+    const result = db.prepare('INSERT INTO questions (exam_id, type, text, image_url, options, correct_answer, explanation, explanation_image, points, order_num) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').run(
+      req.params.id, type, text, image_url || null, options ? JSON.stringify(options) : null, typeof correct_answer === 'string' ? correct_answer : JSON.stringify(correct_answer), explanation || null, explanation_image || null, points || 1, (maxOrder?.m || 0) + 1
+    );
     res.status(201).json(db.prepare('SELECT * FROM questions WHERE id = ?').get(result.lastInsertRowid));
   } catch (err) { console.error(err); res.status(500).json({ error: 'حدث خطأ' }); }
 });
 
-// Update question — FIXED: use /questions/:questionId pattern
+// Update question
 router.put('/questions/:questionId', authMiddleware, teacherMiddleware, (req, res) => {
   try {
-    const { type, text, image_url, options, correct_answer, explanation, points, order_num } = req.body;
-    db.prepare('UPDATE questions SET type=COALESCE(?,type), text=COALESCE(?,text), image_url=COALESCE(?,image_url), options=COALESCE(?,options), correct_answer=COALESCE(?,correct_answer), explanation=COALESCE(?,explanation), points=COALESCE(?,points), order_num=COALESCE(?,order_num) WHERE id=?').run(type, text, image_url, options ? JSON.stringify(options) : null, correct_answer ? (typeof correct_answer === 'string' ? correct_answer : JSON.stringify(correct_answer)) : null, explanation, points, order_num, req.params.questionId);
+    const { type, text, image_url, options, correct_answer, explanation, explanation_image, points, order_num } = req.body;
+    db.prepare('UPDATE questions SET type=COALESCE(?,type), text=COALESCE(?,text), image_url=COALESCE(?,image_url), options=COALESCE(?,options), correct_answer=COALESCE(?,correct_answer), explanation=COALESCE(?,explanation), explanation_image=COALESCE(?,explanation_image), points=COALESCE(?,points), order_num=COALESCE(?,order_num) WHERE id=?').run(
+      type, text, image_url !== undefined ? image_url : null, options ? JSON.stringify(options) : null, correct_answer ? (typeof correct_answer === 'string' ? correct_answer : JSON.stringify(correct_answer)) : null, explanation !== undefined ? explanation : null, explanation_image !== undefined ? explanation_image : null, points, order_num, req.params.questionId
+    );
     res.json(db.prepare('SELECT * FROM questions WHERE id = ?').get(req.params.questionId));
   } catch (err) { res.status(500).json({ error: 'حدث خطأ' }); }
 });
 
-// Delete question — FIXED: use /questions/:questionId pattern
+// Delete question
 router.delete('/questions/:questionId', authMiddleware, teacherMiddleware, (req, res) => {
   try { db.prepare('DELETE FROM questions WHERE id = ?').run(req.params.questionId); res.json({ message: 'تم حذف السؤال' }); }
   catch (err) { res.status(500).json({ error: 'حدث خطأ' }); }

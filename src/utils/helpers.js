@@ -1,7 +1,34 @@
 export function formatDate(dateStr) {
   if (!dateStr) return '';
   const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return '';
   return d.toLocaleDateString('ar-EG', { year: 'numeric', month: 'long', day: 'numeric' });
+}
+
+export function formatFullArabicDate(dateStr) {
+  if (!dateStr) return '';
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return '';
+  return d.toLocaleDateString('ar-EG', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+}
+
+export function getShortGradeBadge(grade) {
+  const g = String(grade || '');
+  if (g.includes('ثالث') && g.includes('ثانوي')) return '٣ ث';
+  if (g.includes('ثاني') && g.includes('ثانوي')) return '٢ ث';
+  if (g.includes('أول') && g.includes('ثانوي')) return '١ ث';
+  if (g.includes('ثالث') && g.includes('إعدادي')) return '٣ ع';
+  if (g.includes('ثاني') && g.includes('إعدادي')) return '٢ ع';
+  if (g.includes('أول') && g.includes('إعدادي')) return '١ ع';
+  if (g.includes('سادس') && g.includes('ابتدائي')) return '٦ ب';
+  if (g.includes('خامس') && g.includes('ابتدائي')) return '٥ ب';
+  if (g.includes('رابع') && g.includes('ابتدائي')) return '٤ ب';
+  return g || 'عام';
+}
+
+export function getShortStudentName(name) {
+  if (!name) return 'طالب';
+  return String(name).trim().split(/\s+/).slice(0, 2).join(' ');
 }
 
 export function formatDateTime(dateStr) {
@@ -73,9 +100,12 @@ export function debounce(fn, ms = 300) {
 }
 
 export const gradesList = [
-  'سادسة ابتدائي',
-  'أولى إعدادي', 'ثانية إعدادي', 'ثالثة إعدادي',
-  'أولى ثانوي', 'ثانية ثانوي', 'ثالثة ثانوي',
+  'أولى إعدادي',
+  'ثانية إعدادي',
+  'ثالثة إعدادي',
+  'أولى ثانوي',
+  'ثانية ثانوي',
+  'ثالثة ثانوي',
 ];
 
 export function createPaginatedList({ data, containerId, renderList, filterFn, itemsPerPage = 10, searchPlaceholder = 'بحث...', onRender }) {

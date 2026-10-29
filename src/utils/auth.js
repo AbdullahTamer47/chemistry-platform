@@ -25,8 +25,8 @@ export function setAuth(user, token) {
 export function logout() {
   localStorage.removeItem('user');
   localStorage.removeItem('token');
-  window.location.hash = '#/';
-  window.location.reload();
+  window.history.pushState(null, '', '/');
+  window.location.href = '/';
 }
 
 export function isLoggedIn() {
@@ -41,7 +41,11 @@ export function isTeacher() {
 export function requireAuth() {
   if (!isLoggedIn()) {
     showToast('يرجى تسجيل الدخول أولاً للوصول إلى هذه الصفحة', 'info');
-    window.location.hash = '#/login';
+    if (typeof window.navigateTo === 'function') {
+      window.navigateTo('/login');
+    } else {
+      window.history.pushState(null, '', '/login');
+    }
     return false;
   }
   return true;
@@ -50,12 +54,20 @@ export function requireAuth() {
 export function requireTeacher() {
   if (!isLoggedIn()) {
     showToast('يرجى تسجيل الدخول بحساب المعلم أولاً', 'info');
-    window.location.hash = '#/login';
+    if (typeof window.navigateTo === 'function') {
+      window.navigateTo('/login');
+    } else {
+      window.history.pushState(null, '', '/login');
+    }
     return false;
   }
   if (!isTeacher()) {
     showToast('غير مصرح لك بالدخول - هذه الصفحة خاصة بالمعلم وإدارة المنصة فقط', 'warning');
-    window.location.hash = '#/dashboard';
+    if (typeof window.navigateTo === 'function') {
+      window.navigateTo('/dashboard');
+    } else {
+      window.history.pushState(null, '', '/dashboard');
+    }
     return false;
   }
   return true;

@@ -10,7 +10,7 @@ const BACKUP_DIR = path.join(__dirname, '..', 'backups');
 export function createDatabaseBackup() {
   try {
     if (!fs.existsSync(DB_PATH)) {
-      console.warn('⚠️ data.db does not exist yet. Skipping backup.');
+      console.warn('[WARN] data.db does not exist yet. Skipping backup.');
       return null;
     }
 
@@ -27,9 +27,8 @@ export function createDatabaseBackup() {
     const backupPath = path.join(BACKUP_DIR, backupName);
 
     fs.copyFileSync(DB_PATH, backupPath);
-    console.log(`✅ Database backup created successfully: ${backupName}`);
+    console.log(`[OK] Database backup created successfully: ${backupName}`);
 
-    // Prune old backups keeping only latest 10
     const files = fs.readdirSync(BACKUP_DIR)
       .filter(f => f.startsWith('chemistry_backup_') && f.endsWith('.db'))
       .map(f => ({ name: f, time: fs.statSync(path.join(BACKUP_DIR, f)).mtime.getTime() }))
@@ -38,18 +37,17 @@ export function createDatabaseBackup() {
     if (files.length > 10) {
       files.slice(10).forEach(f => {
         fs.unlinkSync(path.join(BACKUP_DIR, f.name));
-        console.log(`🧹 Pruned old backup: ${f.name}`);
+        console.log(`[CLEAN] Pruned old backup: ${f.name}`);
       });
     }
 
     return { success: true, backupName, backupPath };
   } catch (err) {
-    console.error('❌ Database backup failed:', err.message);
+    console.error('[ERROR] Database backup failed:', err.message);
     return { success: false, error: err.message };
   }
 }
 
-// If run directly from CLI: node server/backup.js
 if (process.argv[1] && process.argv[1].endsWith('backup.js')) {
   createDatabaseBackup();
 }

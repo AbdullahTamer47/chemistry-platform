@@ -2,10 +2,10 @@ import { renderNavbar, initNavbar } from '../components/navbar.js';
 import { api } from '../utils/api.js';
 import { showToast } from '../components/toast.js';
 import { showModal, confirmModal } from '../components/modal.js';
-import { formatDate, esc, escRich } from '../utils/helpers.js';
+import { formatDate, esc, escRich, safeUrl } from '../utils/helpers.js';
 import { exportToCSV } from '../utils/export.js';
 
-export function renderAdminExamDetail(id) {
+export function renderAdminExamDetail() {
   return `<div class="app-layout">
     ${renderNavbar('admin-exams')}
     <main class="main-content">
@@ -17,9 +17,10 @@ export function renderAdminExamDetail(id) {
 export async function initAdminExamDetail(id) {
   initNavbar();
 
-  let activeTab = 'questions'; // 'questions' or 'submissions'
+  let activeTab = 'questions';
   let currentExam = null;
   let currentUploadedImage = null;
+  let currentExpUploadedImage = null;
 
   async function loadExam() {
     try {
@@ -34,13 +35,17 @@ export async function initAdminExamDetail(id) {
   function renderExamView() {
     const exam = currentExam;
     document.getElementById('aedContent').innerHTML = `
-      <a href="#/admin/exams" style="display:inline-flex;align-items:center;gap:6px;color:var(--text-muted);font-size:0.88rem;margin-bottom:16px">
+      <a href="/admin/exams" style="display:inline-flex;align-items:center;gap:6px;color:var(--text-muted);font-size:0.88rem;margin-bottom:16px">
         <span class="material-symbols-rounded">arrow_forward</span> الرجوع للامتحانات
       </a>
       
       <div class="page-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:16px;margin-bottom:20px;">
         <div>
-          <h1 class="page-title" style="margin-bottom:4px">${esc(exam.title)}</h1>
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px;">
+            <h1 class="page-title" style="margin:0">${esc(exam.title)}</h1>
+            <span class="badge ${exam.exam_type === 'homework' ? 'badge-info' : 'badge-warning'}">${exam.exam_type === 'homework' ? 'واجب منزلي' : 'امتحان تقييمي'}</span>
+            ${Number(exam.has_certificate) === 1 ? '<span class="badge badge-success"><span class="material-symbols-rounded" style="font-size:0.9rem;vertical-align:middle;">workspace_premium</span> يصدر شهادة</span>' : ''}
+          </div>
           <p class="page-subtitle">${exam.duration_minutes} دقيقة · ${exam.questions.length} سؤال · درجة النجاح ${exam.passing_score}%</p>
         </div>
         <div style="display:flex;gap:10px;">
@@ -53,13 +58,12 @@ export async function initAdminExamDetail(id) {
         </div>
       </div>
 
-      <!-- Navigation Tabs -->
       <div class="tabs" style="margin-bottom:24px;">
         <button type="button" class="tab ${activeTab === 'questions' ? 'active' : ''}" id="tabBtnQuestions">
           <span class="material-symbols-rounded">quiz</span> أسئلة الامتحان (${exam.questions.length})
         </button>
         <button type="button" class="tab ${activeTab === 'submissions' ? 'active' : ''}" id="tabBtnSubmissions">
-          <span class="material-symbols-rounded">assignment_turned_in</span> نتائج وإجابات الطلاب وتصحيح المقالي
+          <span class="material-symbols-rounded">assignment_turned_in</span> نتائج الطلاب وطلبات الإعادة وتصحيح المقالي
         </button>
       </div>
 
@@ -110,7 +114,7 @@ export async function initAdminExamDetail(id) {
             
             ${q.image_url ? `
               <div style="margin:14px 0;">
-                <img src="${q.image_url}" alt="صورة توضيحية للسؤال" style="max-height:200px;max-width:100%;border-radius:10px;border:1.5px solid var(--border);box-shadow:var(--shadow-sm);object-fit:contain;" />
+                <img src="${safeUrl(q.image_url)}" alt="صورة توضيحية للسؤال" style="max-height:200px;max-width:100%;border-radius:10px;border:1.5px solid var(--border);box-shadow:var(--shadow-sm);object-fit:contain;" />
               </div>
             ` : ''}
             
@@ -131,9 +135,10 @@ export async function initAdminExamDetail(id) {
               </div>
             `}
 
-            ${q.explanation ? `
-              <div style="margin-top:8px;font-size:0.82rem;color:var(--text-muted)">
-                <strong>الشرح:</strong> ${escRich(q.explanation)}
+            ${(q.explanation || q.explanation_image) ? `
+              <div style="margin-top:10px;padding:10px 12px;background:var(--bg-secondary);border-radius:8px;font-size:0.84rem;color:var(--text-secondary);">
+                <strong>التفسير العلمي:</strong> ${q.explanation ? escRich(q.explanation) : ''}
+                ${q.explanation_image ? `<div style="margin-top:8px;"><img src="${safeUrl(q.explanation_image)}" alt="صورة التفسير العلمي" style="max-height:140px;border-radius:8px;border:1px solid var(--border);" /></div>` : ''}
               </div>
             ` : ''}
           </div>
@@ -146,6 +151,7 @@ export async function initAdminExamDetail(id) {
     const isEdit = !!q;
     const type = q ? q.type : 'mcq';
     currentUploadedImage = q && q.image_url ? q.image_url : null;
+    currentExpUploadedImage = q && q.explanation_image ? q.explanation_image : null;
 
     return `
       <div class="form-group">
@@ -173,18 +179,18 @@ export async function initAdminExamDetail(id) {
         
         <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:10px;">
           <label class="btn btn-secondary btn-sm" style="cursor:pointer;display:inline-flex;align-items:center;gap:6px;">
-            <span class="material-symbols-rounded">upload_file</span> رفع صورة من جهازك
+            <span class="material-symbols-rounded">upload_file</span> رفع صورة السؤال من جهازك
             <input type="file" id="qImageFile" accept="image/*" style="display:none;">
           </label>
           <span style="font-size:0.78rem;color:var(--text-muted)">أو ضع رابط مباشر:</span>
         </div>
         
-        <input type="url" class="form-input" id="qImage" value="${q && q.image_url ? q.image_url : ''}" placeholder="https://... رابط صورة خارجي" dir="ltr">
+        <input type="url" class="form-input" id="qImage" value="${q && q.image_url && !q.image_url.startsWith('data:') ? esc(q.image_url) : ''}" placeholder="https://... رابط صورة خارجي" dir="ltr">
         
         <div id="qImagePreviewWrap" style="margin-top:12px;${currentUploadedImage ? '' : 'display:none;'}">
           <img id="qImagePreview" src="${currentUploadedImage || ''}" alt="معاينة صورة السؤال" style="max-height:160px;max-width:100%;border-radius:8px;border:1px solid var(--border);display:block;margin-bottom:8px;object-fit:contain;background:#fff;" />
           <button type="button" class="btn btn-ghost btn-sm text-danger" id="qRemoveImageBtn" style="color:var(--error);font-size:0.8rem;">
-            <span class="material-symbols-rounded" style="font-size:1rem;">delete</span> حذف الصورة المرفقة
+            <span class="material-symbols-rounded" style="font-size:1rem;">delete</span> حذف صورة السؤال
           </button>
         </div>
       </div>
@@ -200,13 +206,30 @@ export async function initAdminExamDetail(id) {
         </div>
       </div>
 
-      <div id="qOptionsArea">
-        <!-- Injected dynamically based on type -->
-      </div>
+      <div id="qOptionsArea"></div>
 
-      <div class="form-group">
-        <label class="form-label">شرح وتوضيح الإجابة (يظهر للطالب بعد إنهاء الامتحان)</label>
-        <textarea class="form-input" id="qExp" rows="2" placeholder="شرح مبسط للمعادلة أو سبب اختيار الإجابة...">${esc(q ? q.explanation || '' : '')}</textarea>
+      <!-- Scientific Explanation (Text + Image Upload) -->
+      <div class="form-group" style="background:rgba(5,150,105,0.05);padding:14px;border-radius:10px;border:1px solid rgba(5,150,105,0.25);">
+        <label class="form-label" style="font-weight:800;color:var(--primary);display:flex;align-items:center;gap:6px;">
+          <span class="material-symbols-rounded">lightbulb</span>
+          التفسير العلمي وشرح الإجابة (نص و/أو صورة يظهر للطالب بعد التسليم)
+        </label>
+        <textarea class="form-input" id="qExp" rows="2" placeholder="اكتب التفسير العلمي أو خطوات الحل النموذجية..." style="margin-bottom:10px;">${esc(q ? q.explanation || '' : '')}</textarea>
+        
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:8px;">
+          <label class="btn btn-secondary btn-sm" style="cursor:pointer;display:inline-flex;align-items:center;gap:6px;">
+            <span class="material-symbols-rounded">add_photo_alternate</span> إرفاق صورة للتفسير العلمي / الحل بالورقة والقلم
+            <input type="file" id="qExpImageFile" accept="image/*" style="display:none;">
+          </label>
+          <input type="url" class="form-input" id="qExpImageUrl" value="${q && q.explanation_image && !q.explanation_image.startsWith('data:') ? esc(q.explanation_image) : ''}" placeholder="أو رابط صورة للتفسير العلمي https://..." dir="ltr" style="flex:1;min-width:180px;">
+        </div>
+
+        <div id="qExpImagePreviewWrap" style="margin-top:10px;${currentExpUploadedImage ? '' : 'display:none;'}">
+          <img id="qExpImagePreview" src="${currentExpUploadedImage || ''}" alt="معاينة صورة التفسير العلمي" style="max-height:150px;max-width:100%;border-radius:8px;border:1px solid var(--border);display:block;margin-bottom:6px;object-fit:contain;background:#fff;" />
+          <button type="button" class="btn btn-ghost btn-sm text-danger" id="qRemoveExpImageBtn" style="color:var(--error);font-size:0.8rem;">
+            <span class="material-symbols-rounded" style="font-size:1rem;">delete</span> حذف صورة التفسير العلمي
+          </button>
+        </div>
       </div>
 
       <button class="btn btn-primary btn-block" id="saveQuestionBtn" style="padding:12px;font-size:1rem;margin-top:10px;">
@@ -216,14 +239,14 @@ export async function initAdminExamDetail(id) {
   }
 
   function initImageUploadHandlers() {
-    const fileInput = document.getElementById('qImageFile');
-    const urlInput = document.getElementById('qImage');
-    const previewWrap = document.getElementById('qImagePreviewWrap');
-    const previewImg = document.getElementById('qImagePreview');
-    const removeBtn = document.getElementById('qRemoveImageBtn');
+    const bindImagePair = (fileId, urlId, wrapId, imgId, removeId, setter) => {
+      const fileInput = document.getElementById(fileId);
+      const urlInput = document.getElementById(urlId);
+      const previewWrap = document.getElementById(wrapId);
+      const previewImg = document.getElementById(imgId);
+      const removeBtn = document.getElementById(removeId);
 
-    if (fileInput) {
-      fileInput.addEventListener('change', (e) => {
+      fileInput?.addEventListener('change', (e) => {
         const file = e.target.files[0];
         if (!file) return;
         if (!/^image\//.test(file.type)) return showToast('يرجى اختيار ملف صورة صالح', 'warning');
@@ -231,39 +254,38 @@ export async function initAdminExamDetail(id) {
         
         const reader = new FileReader();
         reader.onload = () => {
-          currentUploadedImage = reader.result;
+          setter(reader.result);
           if (previewImg) previewImg.src = reader.result;
           if (previewWrap) previewWrap.style.display = 'block';
           if (urlInput) urlInput.value = '';
-          showToast('تم تحميل الصورة بنجاح', 'success');
+          showToast('تم إرفاق الصورة بنجاح', 'success');
         };
         reader.readAsDataURL(file);
       });
-    }
 
-    if (urlInput) {
-      urlInput.addEventListener('input', () => {
+      urlInput?.addEventListener('input', () => {
         const val = urlInput.value.trim();
         if (val) {
-          currentUploadedImage = val;
+          setter(val);
           if (previewImg) previewImg.src = val;
           if (previewWrap) previewWrap.style.display = 'block';
         } else if (!fileInput?.files?.length) {
-          currentUploadedImage = null;
+          setter(null);
           if (previewWrap) previewWrap.style.display = 'none';
         }
       });
-    }
 
-    if (removeBtn) {
-      removeBtn.addEventListener('click', () => {
-        currentUploadedImage = null;
+      removeBtn?.addEventListener('click', () => {
+        setter(null);
         if (fileInput) fileInput.value = '';
         if (urlInput) urlInput.value = '';
         if (previewWrap) previewWrap.style.display = 'none';
         if (previewImg) previewImg.src = '';
       });
-    }
+    };
+
+    bindImagePair('qImageFile', 'qImage', 'qImagePreviewWrap', 'qImagePreview', 'qRemoveImageBtn', (val) => { currentUploadedImage = val; });
+    bindImagePair('qExpImageFile', 'qExpImageUrl', 'qExpImagePreviewWrap', 'qExpImagePreview', 'qRemoveExpImageBtn', (val) => { currentExpUploadedImage = val; });
   }
 
   function updateOptionsArea(type, q = null) {
@@ -309,7 +331,7 @@ export async function initAdminExamDetail(id) {
           <textarea class="form-input" id="qCorrectEssay" rows="3" placeholder="اكتب خطوات الحل النموذجية وتوزيع الدرجات هنا لتسهيل مراجعة إجابات الطلاب...">${esc(q ? q.correct_answer || '' : '')}</textarea>
           <div style="font-size:0.78rem;color:var(--text-muted);margin-top:6px;display:flex;align-items:center;gap:6px;">
             <span class="material-symbols-rounded" style="font-size:1rem;color:var(--primary);">info</span>
-            <span>الطالب سيتمكن من كتابة الحل نصياً، أو تصوير ورقة إجابته المكتوبة باليد ورفعها. وستظهر لك للمراجعة والتصحيح.</span>
+            <span>الطالب سيتمكن من كتابة الحل نصياً، أو تصوير ورقة إجابته المكتوبة باليد ورفعها، وستظهر لك للمراجعة والتصحيح.</span>
           </div>
         </div>
       `;
@@ -323,6 +345,7 @@ export async function initAdminExamDetail(id) {
       points: parseInt(document.getElementById('qPoints').value) || 1,
       order_num: parseInt(document.getElementById('qOrder').value) || 1,
       explanation: document.getElementById('qExp').value.trim(),
+      explanation_image: currentExpUploadedImage || document.getElementById('qExpImageUrl')?.value?.trim() || null,
       image_url: currentUploadedImage || document.getElementById('qImage')?.value?.trim() || null
     };
 
@@ -344,7 +367,7 @@ export async function initAdminExamDetail(id) {
     return data;
   }
 
-  function bindTabEvents(exam) {
+  function bindTabEvents() {
     document.getElementById('aedRefreshBtn')?.addEventListener('click', loadExam);
 
     document.getElementById('tabBtnQuestions')?.addEventListener('click', () => {
@@ -359,7 +382,6 @@ export async function initAdminExamDetail(id) {
   }
 
   function bindQuestionEvents(exam) {
-    // Add Question
     document.getElementById('addQuestionBtn')?.addEventListener('click', () => {
       showModal('إضافة سؤال جديد', getQuestionFormHtml(null, exam.questions.length + 1));
       initImageUploadHandlers();
@@ -381,7 +403,6 @@ export async function initAdminExamDetail(id) {
       });
     });
 
-    // Edit Question
     document.querySelectorAll('.edit-q-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         const q = exam.questions[btn.dataset.idx];
@@ -402,7 +423,6 @@ export async function initAdminExamDetail(id) {
       });
     });
 
-    // Delete Question
     document.querySelectorAll('.delete-q-btn').forEach(btn => {
       btn.addEventListener('click', async () => {
         const ok = await confirmModal('تأكيد حذف السؤال', 'هل أنت متأكد من حذف هذا السؤال نهائياً من الامتحان؟');
@@ -417,7 +437,6 @@ export async function initAdminExamDetail(id) {
     });
   }
 
-  // ---------------- Submissions & Essay Grading ----------------
   async function loadSubmissionsTab() {
     const container = document.getElementById('tabContentArea');
     if (!container) return;
@@ -431,14 +450,45 @@ export async function initAdminExamDetail(id) {
 
   function renderSubmissionsList(data) {
     const container = document.getElementById('tabContentArea');
-    const { exam, questions, attempts } = data;
+    const { exam, questions, attempts = [], locked_sessions = [] } = data;
     const hasEssayQuestions = questions.some(q => q.type === 'essay');
 
-    if (!attempts || attempts.length === 0) {
+    const lockedHtml = locked_sessions.length > 0 ? `
+      <div class="card" style="margin-bottom:20px;border:1.5px solid var(--warning);background:rgba(245,158,11,0.05);padding:18px 20px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
+          <h3 style="font-size:1.05rem;font-weight:900;color:var(--text-primary);margin:0;display:flex;align-items:center;gap:8px;">
+            <span class="material-symbols-rounded" style="color:var(--warning);">lock_reset</span>
+            طلبات إعادة فتح الامتحان والطلاب المغلق عليهم الامتحان (${locked_sessions.length})
+          </h3>
+          <span style="font-size:0.78rem;color:var(--text-secondary);">يمكنك السماح لأي طالب بالدخول مرة أخرى أو منحه محاولة إضافية بضغطة واحدة</span>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:10px;">
+          ${locked_sessions.map(ls => `
+            <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;padding:12px 16px;background:var(--bg-card);border:1px solid var(--border);border-radius:10px;">
+              <div>
+                <div style="font-weight:800;font-size:0.95rem;color:var(--text-primary);">
+                  ${esc(ls.student_name)} <span style="font-family:monospace;color:var(--text-muted);font-size:0.82rem;" dir="ltr">(${esc(ls.student_phone)})</span>
+                </div>
+                <div style="font-size:0.8rem;color:var(--text-secondary);margin-top:4px;">
+                  ${ls.retake_requested ? `<span class="badge badge-warning" style="margin-left:6px;">طلب إعادة فتح</span>` : ''}
+                  ${ls.is_locked ? `<span class="badge badge-danger" style="margin-left:6px;">مغلق للخروج</span>` : ''}
+                  <span>السبب: ${esc(ls.retake_reason || ls.lock_reason || 'خرج من الامتحان أو استنفذ المحاولات')}</span>
+                </div>
+              </div>
+              <button type="button" class="btn btn-primary btn-sm unlock-student-btn" data-uid="${ls.user_id}" style="gap:6px;font-weight:800;">
+                <span class="material-symbols-rounded" style="font-size:1.05rem;">lock_open</span> فتح الامتحان والسماح بالإعادة
+              </button>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    ` : '';
+
+    if (attempts.length === 0 && locked_sessions.length === 0) {
       container.innerHTML = `
         <div class="empty-state">
           <span class="material-symbols-rounded">assignment_late</span>
-          <h3>لا توجد تسليمات حتى الآن</h3>
+          <h3>لا توجد تسليمات أو طلبات إعادة حتى الآن</h3>
           <p>عندما يبدأ الطلاب في حل هذا الامتحان وتسليمه، ستظهر إجاباتهم ودرجاتهم هنا مباشرة للمراجعة والتصحيح.</p>
         </div>
       `;
@@ -446,77 +496,102 @@ export async function initAdminExamDetail(id) {
     }
 
     container.innerHTML = `
+      ${lockedHtml}
       <div style="background:var(--bg-card);border-radius:14px;border:1px solid var(--border);padding:20px;margin-top:16px;box-shadow:var(--shadow-sm);">
         <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:16px;">
           <div>
             <h3 style="font-size:1.15rem;font-weight:800;color:var(--text-primary);margin-bottom:4px;">
-              تسليمات وإجابات الطلاب (${attempts.length} طالب)
+              تسليمات وإجابات الطلاب (${attempts.length} محاولة مسجلة)
             </h3>
             <p style="font-size:0.82rem;color:var(--text-muted);">
-              ${hasEssayQuestions ? '💡 يحتوي هذا الامتحان على أسئلة مقالية تتطلب مراجعة المعلم واعتماد الدرجات.' : 'جميع الأسئلة موضوعية ومصححة تلقائياً.'}
+              ${hasEssayQuestions ? 'يحتوي هذا الامتحان على أسئلة مقالية تتطلب مراجعة المعلم واعتماد الدرجات.' : 'جميع الأسئلة موضوعية ومصححة تلقائياً.'}
             </p>
           </div>
-          <button class="btn btn-secondary btn-sm" id="exportExamCsvBtn" style="display:inline-flex;align-items:center;gap:6px;">
-            <span class="material-symbols-rounded" style="font-size:1.1rem;color:var(--success);">table_view</span> تصدير النتائج Excel
-          </button>
+          ${attempts.length > 0 ? `
+            <button class="btn btn-secondary btn-sm" id="exportExamCsvBtn" style="display:inline-flex;align-items:center;gap:6px;">
+              <span class="material-symbols-rounded" style="font-size:1.1rem;color:var(--success);">table_view</span> تصدير النتائج Excel
+            </button>
+          ` : ''}
         </div>
 
-        <div class="mobile-swipe-hint"><span class="material-symbols-rounded">swipe</span> اسحب أفقياً لعرض باقي تفاصيل الطلاب ونتائجهم</div>
-        <div class="table-wrapper">
-          <table style="width:100%;min-width:650px;border-collapse:collapse;font-size:0.9rem;text-align:right;">
-            <thead>
-              <tr style="border-bottom:2px solid var(--border);color:var(--text-secondary);font-size:0.82rem;">
-                <th style="padding:10px 12px;">الطالب</th>
-                <th style="padding:10px 12px;">رقم الهاتف</th>
-                <th style="padding:10px 12px;">تاريخ التسليم</th>
-                <th style="padding:10px 12px;">الدرجة</th>
-                <th style="padding:10px 12px;">حالة التصحيح</th>
-                <th style="padding:10px 12px;text-align:left;">الإجراء</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${attempts.map(att => {
-                const isPending = hasEssayQuestions && att.is_graded === 0;
-                return `
-                  <tr style="border-bottom:1px solid var(--border-light);">
-                    <td style="padding:12px;font-weight:700;color:var(--text-primary);">
-                      <div style="display:flex;align-items:center;gap:8px;">
-                        <span class="material-symbols-rounded" style="color:var(--primary);font-size:1.3rem;">account_circle</span>
-                        <span>${esc(att.student_name)}</span>
-                      </div>
-                    </td>
-                    <td style="padding:12px;color:var(--text-muted);font-family:monospace;" dir="ltr">${att.student_phone || '-'}</td>
-                    <td style="padding:12px;color:var(--text-secondary);font-size:0.82rem;">${formatDate(att.completed_at)}</td>
-                    <td style="padding:12px;font-weight:800;">
-                      <span style="font-size:1.05rem;color:${att.score >= exam.passing_score ? 'var(--success)' : 'var(--error)'};">
-                        ${att.score}%
-                      </span>
-                      <small style="color:var(--text-muted);display:block;font-size:0.75rem;">(من ${att.total_points} درجة)</small>
-                    </td>
-                    <td style="padding:12px;">
-                      ${isPending ? `
-                        <span class="badge badge-warning" style="display:inline-flex;align-items:center;gap:4px;font-weight:700;">
-                          <span class="material-symbols-rounded" style="font-size:0.95rem;">pending_actions</span> بانتظار تصحيح المقالي ✍️
+        ${attempts.length === 0 ? `<p style="color:var(--text-muted);text-align:center;padding:20px;">لا توجد محاولات مسلمة بعد.</p>` : `
+          <div class="mobile-swipe-hint"><span class="material-symbols-rounded">swipe</span> اسحب أفقياً لعرض باقي تفاصيل الطلاب ونتائجهم</div>
+          <div class="table-wrapper">
+            <table style="width:100%;min-width:720px;border-collapse:collapse;font-size:0.9rem;text-align:right;">
+              <thead>
+                <tr style="border-bottom:2px solid var(--border);color:var(--text-secondary);font-size:0.82rem;">
+                  <th style="padding:10px 12px;">الطالب</th>
+                  <th style="padding:10px 12px;">رقم الهاتف</th>
+                  <th style="padding:10px 12px;">تاريخ التسليم</th>
+                  <th style="padding:10px 12px;">الدرجة</th>
+                  <th style="padding:10px 12px;">حالة التصحيح</th>
+                  <th style="padding:10px 12px;text-align:left;">الإجراء</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${attempts.map(att => {
+                  const isPending = hasEssayQuestions && att.is_graded === 0;
+                  return `
+                    <tr style="border-bottom:1px solid var(--border-light);">
+                      <td style="padding:12px;font-weight:700;color:var(--text-primary);">
+                        <div style="display:flex;align-items:center;gap:8px;">
+                          <span class="material-symbols-rounded" style="color:var(--primary);font-size:1.3rem;">account_circle</span>
+                          <span>${esc(att.student_name)}</span>
+                        </div>
+                      </td>
+                      <td style="padding:12px;color:var(--text-muted);font-family:monospace;" dir="ltr">${esc(att.student_phone || '-')}</td>
+                      <td style="padding:12px;color:var(--text-secondary);font-size:0.82rem;">${formatDate(att.completed_at)}</td>
+                      <td style="padding:12px;font-weight:800;">
+                        <span style="font-size:1.05rem;color:${att.score >= exam.passing_score ? 'var(--success)' : 'var(--error)'};">
+                          ${att.score}%
                         </span>
-                      ` : `
-                        <span class="badge badge-success" style="display:inline-flex;align-items:center;gap:4px;font-weight:700;">
-                          <span class="material-symbols-rounded" style="font-size:0.95rem;">verified</span> تم التصحيح والاعتماد ✅
-                        </span>
-                      `}
-                    </td>
-                    <td style="padding:12px;text-align:left;">
-                      <button class="btn btn-primary btn-sm grade-attempt-btn" data-aid="${att.id}" style="padding:6px 14px;font-size:0.82rem;">
-                        <span class="material-symbols-rounded" style="font-size:1rem;">rate_review</span> مراجعة وتصحيح
-                      </button>
-                    </td>
-                  </tr>
-                `;
-              }).join('')}
-            </tbody>
-          </table>
-        </div>
+                        <small style="color:var(--text-muted);display:block;font-size:0.75rem;">(من ${att.total_points} درجة)</small>
+                      </td>
+                      <td style="padding:12px;">
+                        ${isPending ? `
+                          <span class="badge badge-warning" style="display:inline-flex;align-items:center;gap:4px;font-weight:700;">
+                            <span class="material-symbols-rounded" style="font-size:0.95rem;">pending_actions</span> بانتظار تصحيح المقالي
+                          </span>
+                        ` : `
+                          <span class="badge badge-success" style="display:inline-flex;align-items:center;gap:4px;font-weight:700;">
+                            <span class="material-symbols-rounded" style="font-size:0.95rem;">verified</span> تم التصحيح والاعتماد
+                          </span>
+                        `}
+                      </td>
+                      <td style="padding:12px;text-align:left;">
+                        <div style="display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap;">
+                          <button class="btn btn-primary btn-sm grade-attempt-btn" data-aid="${att.id}" style="padding:6px 12px;font-size:0.8rem;">
+                            <span class="material-symbols-rounded" style="font-size:1rem;">rate_review</span> مراجعة وتصحيح
+                          </button>
+                          <button class="btn btn-secondary btn-sm unlock-student-btn" data-uid="${att.user_id}" title="منح محاولة إضافية للطالب لإعادة الامتحان" style="padding:6px 10px;font-size:0.8rem;">
+                            <span class="material-symbols-rounded" style="font-size:1rem;">lock_reset</span> السماح بالإعادة
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  `;
+                }).join('')}
+              </tbody>
+            </table>
+          </div>
+        `}
       </div>
     `;
+
+    container.querySelectorAll('.unlock-student-btn').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const userId = btn.dataset.uid;
+        btn.disabled = true;
+        try {
+          const res = await api.allowExamRetake(id, userId);
+          showToast(res.message, 'success');
+          loadSubmissionsTab();
+        } catch (err) {
+          showToast(err.message, 'error');
+          btn.disabled = false;
+        }
+      });
+    });
 
     container.querySelector('#exportExamCsvBtn')?.addEventListener('click', () => {
       const headers = ['اسم الطالب', 'رقم الهاتف', 'النسبة المئوية', 'الدرجة المحققة', 'إجمالي الدرجات', 'حالة التصحيح', 'تاريخ التسليم', 'ملاحظات المعلم'];
@@ -545,14 +620,13 @@ export async function initAdminExamDetail(id) {
   function openGradingModal(exam, questions, attempt) {
     const answers = attempt.answers || {};
     const essayGrades = attempt.essay_grades || {};
-    const hasEssay = questions.some(q => q.type === 'essay');
 
     const modalContent = `
       <div style="max-height:75vh;overflow-y:auto;padding-left:6px;">
         <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;background:var(--bg-secondary);padding:12px 16px;border-radius:10px;margin-bottom:16px;">
           <div>
             <div style="font-weight:800;font-size:1.05rem;color:var(--text-primary);">${esc(attempt.student_name)}</div>
-            <div style="font-size:0.8rem;color:var(--text-muted);margin-top:2px;" dir="ltr">${attempt.student_phone || ''} · ${formatDate(attempt.completed_at)}</div>
+            <div style="font-size:0.8rem;color:var(--text-muted);margin-top:2px;" dir="ltr">${esc(attempt.student_phone || '')} · ${formatDate(attempt.completed_at)}</div>
           </div>
           <div style="text-align:left;">
             <div style="font-size:1.3rem;font-weight:900;color:${attempt.score >= exam.passing_score ? 'var(--success)' : 'var(--error)'};">
@@ -570,7 +644,7 @@ export async function initAdminExamDetail(id) {
           const userAns = answers[q.id];
           const isEssay = q.type === 'essay';
           const savedGrade = essayGrades[q.id] || {};
-          const currentEssayScore = savedGrade.points !== undefined ? savedGrade.points : (isEssay ? Math.round(q.points * 0.9) : 0);
+          const currentEssayScore = savedGrade.points !== undefined ? savedGrade.points : (isEssay ? q.points : 0);
           const currentEssayComment = savedGrade.comment || '';
 
           let textAnswer = '';
@@ -597,7 +671,7 @@ export async function initAdminExamDetail(id) {
               
               ${q.image_url ? `
                 <div style="margin-bottom:12px;">
-                  <img src="${q.image_url}" alt="صورة السؤال" style="max-height:160px;max-width:100%;border-radius:8px;border:1px solid var(--border);" />
+                  <img src="${safeUrl(q.image_url)}" alt="صورة السؤال" style="max-height:160px;max-width:100%;border-radius:8px;border:1px solid var(--border);" />
                 </div>
               ` : ''}
 
@@ -615,8 +689,8 @@ export async function initAdminExamDetail(id) {
                         <span class="material-symbols-rounded" style="vertical-align:middle;font-size:1.1rem;color:var(--primary);">photo_camera</span>
                         ورقة إجابة الطالب المرفقة (اضغط للتكبير):
                       </div>
-                      <a href="${imageAnswer}" target="_blank" title="اضغط لفتح الصورة بحجمها الكامل">
-                        <img src="${imageAnswer}" alt="صورة حل الطالب" style="max-height:220px;max-width:100%;border-radius:8px;border:2px solid var(--border);box-shadow:var(--shadow-sm);cursor:zoom-in;" />
+                      <a href="${safeUrl(imageAnswer)}" target="_blank" title="اضغط لفتح الصورة بحجمها الكامل">
+                        <img src="${safeUrl(imageAnswer)}" alt="صورة حل الطالب" style="max-height:220px;max-width:100%;border-radius:8px;border:2px solid var(--border);box-shadow:var(--shadow-sm);cursor:zoom-in;" />
                       </a>
                     </div>
                   ` : `
@@ -628,7 +702,6 @@ export async function initAdminExamDetail(id) {
                     <div style="font-size:0.85rem;color:var(--text-muted);">${esc(q.correct_answer || 'لا توجد')}</div>
                   </div>
 
-                  <!-- Grading inputs -->
                   <div style="margin-top:14px;display:flex;gap:14px;align-items:flex-end;flex-wrap:wrap;">
                     <div style="flex:0 0 160px;">
                       <label class="form-label" style="font-weight:800;color:#b45309;">الدرجة المستحقة</label>
@@ -644,7 +717,6 @@ export async function initAdminExamDetail(id) {
                   </div>
                 </div>
               ` : `
-                <!-- Auto graded review -->
                 <div style="background:var(--bg-secondary);padding:10px 14px;border-radius:8px;font-size:0.85rem;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
                   <div>
                     <span>إجابة الطالب: <strong>${esc(userAns !== undefined ? String(userAns) : '(لم يجب)')}</strong></span>
@@ -659,9 +731,8 @@ export async function initAdminExamDetail(id) {
           `;
         }).join('')}
 
-        <!-- General Feedback -->
         <div class="form-group" style="margin-top:16px;">
-          <label class="form-label" style="font-weight:800;">ملاحظات عامة وتوجيه شامل للطالب من أ/ زياد رمزي</label>
+          <label class="form-label" style="font-weight:800;">ملاحظات عامة وتوجيه شامل للطالب من د. زياد رمزي</label>
           <textarea class="form-input" id="teacherOverallFeedback" rows="2" placeholder="اكتب تقييمك الشامل للطالب وتوجيهات المذاكرة...">${esc(attempt.teacher_feedback || '')}</textarea>
         </div>
 

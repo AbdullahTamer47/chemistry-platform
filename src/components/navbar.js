@@ -1,7 +1,6 @@
 import { getUser, isTeacher, logout } from '../utils/auth.js';
 import { getInitials, esc } from '../utils/helpers.js';
 import { api } from '../utils/api.js';
-import { openChemistryLabModal } from './chemistryLabModal.js';
 import zraLogoFace from '../assets/zra-logo-face.png';
 import zraLogoText from '../assets/zra-logo-text.png';
 
@@ -12,100 +11,97 @@ export function renderNavbar(currentPage) {
 
   const studentNav = `
     <div class="nav-section-title">لوحة الطالب</div>
-    <a class="nav-item ${currentPage === 'dashboard' ? 'active' : ''}" href="#/dashboard">
+    <a class="nav-item ${currentPage === 'dashboard' ? 'active' : ''}" href="/dashboard">
       <span class="material-symbols-rounded">home</span> الرئيسية التعليمية
     </a>
-    <a class="nav-item ${currentPage === 'courses' ? 'active' : ''}" href="#/courses">
+    <a class="nav-item ${currentPage === 'courses' ? 'active' : ''}" href="/courses">
       <span class="material-symbols-rounded">school</span> الكورسات والمحاضرات
     </a>
-    <a class="nav-item ${currentPage === 'exams' ? 'active' : ''}" href="#/exams">
+    <a class="nav-item ${currentPage === 'exams' ? 'active' : ''}" href="/exams">
       <span class="material-symbols-rounded">assignment</span> الامتحانات والتقييمات
     </a>
-    <button type="button" class="nav-item" id="navOpenChemLab" style="width:100%;text-align:right;background:transparent;">
-      <span class="material-symbols-rounded" style="color:#10b981;">science</span> المختبر الكيميائي التفاعلي
-    </button>
-    <a class="nav-item ${currentPage === 'my-results' ? 'active' : ''}" href="#/my-results">
+    <a class="nav-item ${currentPage === 'lab' ? 'active' : ''}" href="/lab">
+      <span class="material-symbols-rounded">science</span> المختبر الكيميائي التفاعلي
+    </a>
+    <a class="nav-item ${currentPage === 'my-results' ? 'active' : ''}" href="/my-results">
       <span class="material-symbols-rounded">fact_check</span> نتائجي وتصحيحاتي
     </a>
-    <a class="nav-item ${currentPage === 'certificates' ? 'active' : ''}" href="#/certificates">
-      <span class="material-symbols-rounded" style="color:var(--warning);">workspace_premium</span> شهاداتي المعتمدة
+    <a class="nav-item ${currentPage === 'certificates' ? 'active' : ''}" href="/certificates">
+      <span class="material-symbols-rounded">workspace_premium</span> شهاداتي المعتمدة
     </a>
-    <a class="nav-item ${currentPage === 'leaderboard' ? 'active' : ''}" href="#/leaderboard">
+    <a class="nav-item ${currentPage === 'leaderboard' ? 'active' : ''}" href="/leaderboard">
       <span class="material-symbols-rounded">emoji_events</span> لوحة المتصدرين
     </a>
-    <a class="nav-item ${currentPage === 'live' ? 'active' : ''}" href="#/live">
+    <a class="nav-item ${currentPage === 'live' ? 'active' : ''}" href="/live">
       <span class="material-symbols-rounded">live_tv</span> الحصص اللايف
     </a>
     <div class="nav-section-title">حسابي والخدمات</div>
-    <a class="nav-item ${currentPage === 'wallet' ? 'active' : ''}" href="#/wallet">
+    <a class="nav-item ${currentPage === 'wallet' ? 'active' : ''}" href="/wallet">
       <span class="material-symbols-rounded">account_balance_wallet</span> المحفظة والشحن
     </a>
-    <a class="nav-item ${currentPage === 'store-locator' ? 'active' : ''}" href="#/store-locator">
-      <span class="material-symbols-rounded">storefront</span> دليل المكتبات والمنافذ
-    </a>
-    <a class="nav-item ${currentPage === 'notifications' ? 'active' : ''}" href="#/notifications" id="nav-notif">
+    <a class="nav-item ${currentPage === 'notifications' ? 'active' : ''}" href="/notifications" id="nav-notif">
       <span class="material-symbols-rounded">notifications</span> الإشعارات
       <span class="nav-badge" id="notifBadge" style="display:none">0</span>
     </a>
-    <a class="nav-item ${currentPage === 'profile' ? 'active' : ''}" href="#/profile">
+    <a class="nav-item ${currentPage === 'profile' ? 'active' : ''}" href="/profile">
       <span class="material-symbols-rounded">person</span> الملف الشخصي
     </a>
   `;
 
   const teacherNav = `
     <div class="nav-section-title">لوحة المعلم والإدارة</div>
-    <a class="nav-item ${currentPage === 'admin' ? 'active' : ''}" href="#/admin">
+    <a class="nav-item ${currentPage === 'admin' ? 'active' : ''}" href="/admin">
       <span class="material-symbols-rounded">admin_panel_settings</span> لوحة الإدارة العامة
     </a>
-    <a class="nav-item ${currentPage === 'admin-courses' ? 'active' : ''}" href="#/admin/courses">
+    <a class="nav-item ${currentPage === 'admin-courses' ? 'active' : ''}" href="/admin/courses">
       <span class="material-symbols-rounded">book</span> إدارة الكورسات
     </a>
-    <a class="nav-item ${currentPage === 'admin-exams' ? 'active' : ''}" href="#/admin/exams">
+    <a class="nav-item ${currentPage === 'admin-exams' ? 'active' : ''}" href="/admin/exams">
       <span class="material-symbols-rounded">assignment</span> إدارة الامتحانات
     </a>
-    <a class="nav-item ${currentPage === 'admin-students' ? 'active' : ''}" href="#/admin/students">
+    <a class="nav-item ${currentPage === 'admin-students' ? 'active' : ''}" href="/admin/students">
       <span class="material-symbols-rounded">group</span> سجل الطلاب
     </a>
-    <a class="nav-item ${currentPage === 'admin-codes' ? 'active' : ''}" href="#/admin/codes">
+    <a class="nav-item ${currentPage === 'admin-codes' ? 'active' : ''}" href="/admin/codes">
       <span class="material-symbols-rounded">key</span> أكواد التفعيل والشحن
     </a>
-    <a class="nav-item ${currentPage === 'admin-live' ? 'active' : ''}" href="#/admin/live">
+    <a class="nav-item ${currentPage === 'admin-live' ? 'active' : ''}" href="/admin/live">
       <span class="material-symbols-rounded">live_tv</span> بث الحصص اللايف
     </a>
-    <a class="nav-item ${currentPage === 'admin-notifications' ? 'active' : ''}" href="#/admin/notifications">
+    <a class="nav-item ${currentPage === 'admin-notifications' ? 'active' : ''}" href="/admin/notifications">
       <span class="material-symbols-rounded">notifications</span> إرسال الإشعارات
     </a>
-    <a class="nav-item ${currentPage === 'admin-stores' ? 'active' : ''}" href="#/admin/stores">
-      <span class="material-symbols-rounded">storefront</span> إدارة منافذ البيع والمكتبات
-    </a>
     <div class="nav-section-title">معاينة واجهة الطلاب</div>
-    <a class="nav-item ${currentPage === 'courses' ? 'active' : ''}" href="#/courses">
+    <a class="nav-item ${currentPage === 'courses' ? 'active' : ''}" href="/courses">
       <span class="material-symbols-rounded">visibility</span> تصفح الكورسات كطالب
     </a>
-    <button type="button" class="nav-item" id="navOpenChemLab" style="width:100%;text-align:right;background:transparent;">
-      <span class="material-symbols-rounded" style="color:#10b981;">science</span> المختبر الكيميائي التفاعلي
-    </button>
-    <a class="nav-item ${currentPage === 'leaderboard' ? 'active' : ''}" href="#/leaderboard">
+    <a class="nav-item ${currentPage === 'lab' ? 'active' : ''}" href="/lab">
+      <span class="material-symbols-rounded">science</span> المختبر الكيميائي التفاعلي
+    </a>
+    <a class="nav-item ${currentPage === 'leaderboard' ? 'active' : ''}" href="/leaderboard">
       <span class="material-symbols-rounded">emoji_events</span> لوحة المتصدرين
+    </a>
+    <a class="nav-item ${currentPage === 'parent-portal' ? 'active' : ''}" href="/parent-portal">
+      <span class="material-symbols-rounded">family_restroom</span> بوابة ولي الأمر
     </a>
   `;
 
   const mobileBottomBar = teacher
     ? `
       <nav class="mobile-bottom-nav" aria-label="التنقل السريع">
-        <a href="#/admin" class="mobile-bottom-tab ${currentPage === 'admin' ? 'active' : ''}">
+        <a href="/admin" class="mobile-bottom-tab ${currentPage === 'admin' ? 'active' : ''}">
           <span class="material-symbols-rounded">dashboard</span>
           <span>الإدارة</span>
         </a>
-        <a href="#/admin/courses" class="mobile-bottom-tab ${currentPage === 'admin-courses' ? 'active' : ''}">
+        <a href="/admin/courses" class="mobile-bottom-tab ${currentPage === 'admin-courses' ? 'active' : ''}">
           <span class="material-symbols-rounded">book</span>
           <span>الكورسات</span>
         </a>
-        <a href="#/admin/exams" class="mobile-bottom-tab ${currentPage === 'admin-exams' ? 'active' : ''}">
+        <a href="/admin/exams" class="mobile-bottom-tab ${currentPage === 'admin-exams' ? 'active' : ''}">
           <span class="material-symbols-rounded">assignment</span>
           <span>الامتحانات</span>
         </a>
-        <a href="#/admin/students" class="mobile-bottom-tab ${currentPage === 'admin-students' ? 'active' : ''}">
+        <a href="/admin/students" class="mobile-bottom-tab ${currentPage === 'admin-students' ? 'active' : ''}">
           <span class="material-symbols-rounded">group</span>
           <span>الطلاب</span>
         </a>
@@ -117,21 +113,21 @@ export function renderNavbar(currentPage) {
     `
     : `
       <nav class="mobile-bottom-nav" aria-label="التنقل السريع">
-        <a href="#/dashboard" class="mobile-bottom-tab ${currentPage === 'dashboard' ? 'active' : ''}">
+        <a href="/dashboard" class="mobile-bottom-tab ${currentPage === 'dashboard' ? 'active' : ''}">
           <span class="material-symbols-rounded">home</span>
           <span>الرئيسية</span>
         </a>
-        <a href="#/courses" class="mobile-bottom-tab ${currentPage === 'courses' ? 'active' : ''}">
+        <a href="/courses" class="mobile-bottom-tab ${currentPage === 'courses' ? 'active' : ''}">
           <span class="material-symbols-rounded">school</span>
           <span>الكورسات</span>
         </a>
-        <a href="#/exams" class="mobile-bottom-tab ${currentPage === 'exams' ? 'active' : ''}">
+        <a href="/exams" class="mobile-bottom-tab ${currentPage === 'exams' ? 'active' : ''}">
           <span class="material-symbols-rounded">assignment</span>
           <span>الامتحانات</span>
         </a>
-        <a href="#/wallet" class="mobile-bottom-tab ${currentPage === 'wallet' ? 'active' : ''}">
-          <span class="material-symbols-rounded">account_balance_wallet</span>
-          <span>المحفظة</span>
+        <a href="/lab" class="mobile-bottom-tab ${currentPage === 'lab' ? 'active' : ''}">
+          <span class="material-symbols-rounded">science</span>
+          <span>المختبر</span>
         </a>
         <button type="button" class="mobile-bottom-tab" id="mobileBottomMoreBtn">
           <span class="material-symbols-rounded">menu</span>
@@ -144,7 +140,7 @@ export function renderNavbar(currentPage) {
     <div class="sidebar-overlay" id="sidebarOverlay"></div>
     <div class="mobile-header" id="mobileHeader">
       <button class="mobile-menu-btn" id="mobileMenuBtn" aria-label="فتح القائمة"><span class="material-symbols-rounded">menu</span></button>
-      <a href="#/${teacher ? 'admin' : 'dashboard'}" class="sidebar-logo" style="display: flex; align-items: center; gap: 6px; text-decoration:none;">
+      <a href="/${teacher ? 'admin' : 'dashboard'}" class="sidebar-logo" style="display: flex; align-items: center; gap: 6px; text-decoration:none;">
         <img src="${zraLogoFace}" alt="Z.R.A" class="logo-face-img" style="height: 32px;" />
         <img src="${zraLogoText}" alt="Z.R.A" class="logo-text-img" style="height: 22px;" />
       </a>
@@ -158,7 +154,7 @@ export function renderNavbar(currentPage) {
         <button class="sidebar-close-btn" id="sidebarCloseBtn" aria-label="إغلاق القائمة">
           <span class="material-symbols-rounded">close</span>
         </button>
-        <a href="#/${teacher ? 'admin' : 'dashboard'}" class="sidebar-logo" style="display: flex; align-items: center; justify-content: center; gap: 8px; text-decoration:none;">
+        <a href="/${teacher ? 'admin' : 'dashboard'}" class="sidebar-logo" style="display: flex; align-items: center; justify-content: center; gap: 8px; text-decoration:none;">
           <img src="${zraLogoFace}" alt="Z.R.A" class="logo-face-img" style="height: 36px;" />
           <img src="${zraLogoText}" alt="Z.R.A" class="logo-text-img" style="height: 26px;" />
         </a>
@@ -178,7 +174,7 @@ export function renderNavbar(currentPage) {
       </div>
       
       ${user ? `
-        <a href="#/profile" class="sidebar-user" style="text-decoration:none; transition:var(--transition);">
+        <a href="/profile" class="sidebar-user" style="text-decoration:none; transition:var(--transition);">
           <div class="sidebar-user-avatar">${getInitials(user.name)}</div>
           <div class="sidebar-user-info">
             <div class="sidebar-user-name">${esc(user.name)}</div>
@@ -204,7 +200,6 @@ export function initNavbar() {
   const overlay = document.getElementById('sidebarOverlay');
   const closeBtn = document.getElementById('sidebarCloseBtn');
   const logoutBtn = document.getElementById('logoutBtn');
-  const chemLabBtn = document.getElementById('navOpenChemLab');
 
   function toggleMobileSidebar() {
     if (sidebar) sidebar.classList.toggle('open');
@@ -229,13 +224,6 @@ export function initNavbar() {
     closeBtn.addEventListener('click', closeMobileSidebar);
   }
 
-  if (chemLabBtn) {
-    chemLabBtn.addEventListener('click', () => {
-      closeMobileSidebar();
-      openChemistryLabModal();
-    });
-  }
-
   // Close sidebar on link click on mobile/tablet (<= 1024px)
   if (sidebar) {
     sidebar.querySelectorAll('.sidebar-nav a, .sidebar-user, #darkModeToggle').forEach(el => {
@@ -247,7 +235,6 @@ export function initNavbar() {
     });
   }
 
-  // Close on Escape key (replace previous listener to avoid leak)
   if (navbarKeyHandler) document.removeEventListener('keydown', navbarKeyHandler);
   navbarKeyHandler = (e) => {
     if (e.key === 'Escape' && sidebar?.classList.contains('open')) {
@@ -263,7 +250,6 @@ export function initNavbar() {
     });
   }
 
-  // Dark mode toggle in-place
   function toggleDark() {
     const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
     const newDark = !isDark;
