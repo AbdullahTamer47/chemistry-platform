@@ -300,9 +300,11 @@ router.post('/:id/submit', authMiddleware, (req, res) => {
       serverTimeSpent = Math.max(serverElapsed, time_spent || 0);
 
       // F-03: Reject submission if duration exceeded (with 60-second grace period)
-      const allowedSeconds = (exam.duration_minutes || 30) * 60 + 60;
-      if (!isTeacher(req.user) && serverElapsed > allowedSeconds) {
-        return res.status(400).json({ error: 'انتهى وقت الامتحان. لا يمكن تسليم الإجابات بعد انتهاء المهلة المحددة.' });
+      if (!isTeacher(req.user) && exam.duration_minutes && exam.duration_minutes > 0) {
+        const allowedSeconds = exam.duration_minutes * 60 + 60;
+        if (serverElapsed > allowedSeconds) {
+          return res.status(400).json({ error: 'انتهى وقت الامتحان. لا يمكن تسليم الإجابات بعد انتهاء المهلة المحددة.' });
+        }
       }
     }
 
