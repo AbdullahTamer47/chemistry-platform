@@ -5,6 +5,17 @@ import { authMiddleware, teacherMiddleware, canAccessCourse, isTeacher } from '.
 
 const router = Router();
 
+// SQLite UTC date parser (handles 'YYYY-MM-DD HH:MM:SS' without Z)
+function parseSqliteDate(str) {
+  if (!str) return Date.now();
+  if (typeof str === 'number') return str;
+  const s = String(str).trim();
+  if (s.includes(' ') && !s.endsWith('Z')) {
+    return new Date(s.replace(' ', 'T') + 'Z').getTime();
+  }
+  return new Date(s).getTime();
+}
+
 // Get exams for a course
 router.get('/course/:courseId', authMiddleware, (req, res) => {
   try {
@@ -243,7 +254,7 @@ router.get('/:id/take', authMiddleware, (req, res) => {
       session = { started_at: new Date().toISOString() };
     }
 
-    const startedAt = new Date(session.started_at || Date.now()).getTime();
+    const startedAt = parseSqliteDate(session.started_at);
     const elapsedSeconds = Math.max(0, Math.floor((Date.now() - startedAt) / 1000));
     const totalAllowedSeconds = (exam.duration_minutes || 30) * 60;
     exam.remaining_seconds = Math.max(0, totalAllowedSeconds - elapsedSeconds);
@@ -296,7 +307,8 @@ router.post('/:id/submit', authMiddleware, (req, res) => {
 
     let serverTimeSpent = time_spent || 0;
     if (session && session.started_at) {
-      const serverElapsed = Math.floor((Date.now() - new Date(session.started_at).getTime()) / 1000);
+      const startedAt = parseSqliteDate(session.started_at);
+      const serverElapsed = Math.floor((Date.now() - startedAt) / 1000);
       serverTimeSpent = Math.max(serverElapsed, time_spent || 0);
 
       // F-03: Reject submission if duration exceeded (with 60-second grace period)
