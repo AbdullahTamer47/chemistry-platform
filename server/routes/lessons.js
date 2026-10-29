@@ -141,12 +141,19 @@ router.post('/:id/video-token', authMiddleware, (req, res) => {
 
 router.post('/:id/progress', authMiddleware, (req, res) => {
   try {
-    const { completed, watch_time } = req.body;
-    const existing = db.prepare('SELECT * FROM lesson_progress WHERE user_id = ? AND lesson_id = ?').get(req.user.id, req.params.id);
+    const lesson = db.prepare('SELECT * FROM lessons WHERE id = ?').get(req.params.id);
+    if (!lesson) return res.status(404).json({ error: 'الدرس غير موجود' });
+    const denied = checkLessonAccess(req.user, lesson, getCourseItems(lesson.course_id));
+    if (denied) return res.status(denied.status).json(denied.body);
+
+    const completed = req.body.completed ? 1 : (req.body.completed === 0 || req.body.completed === false ? 0 : null);
+    const rawWatch = Number(req.body.watch_time);
+    const watch_time = Number.isFinite(rawWatch) && rawWatch >= 0 ? Math.min(Math.floor(rawWatch), 86400) : null;
+    const existing = db.prepare('SELECT * FROM lesson_progress WHERE user_id = ? AND lesson_id = ?').get(req.user.id, lesson.id);
     if (existing) {
-      db.prepare('UPDATE lesson_progress SET completed = COALESCE(?, completed), watch_time = COALESCE(?, watch_time), completed_at = CASE WHEN ? = 1 THEN CURRENT_TIMESTAMP ELSE completed_at END WHERE user_id = ? AND lesson_id = ?').run(completed, watch_time, completed, req.user.id, req.params.id);
+      db.prepare('UPDATE lesson_progress SET completed = COALESCE(?, completed), watch_time = COALESCE(?, watch_time), completed_at = CASE WHEN ? = 1 THEN CURRENT_TIMESTAMP ELSE completed_at END WHERE user_id = ? AND lesson_id = ?').run(completed, watch_time, completed, req.user.id, lesson.id);
     } else {
-      db.prepare('INSERT INTO lesson_progress (user_id, lesson_id, completed, watch_time, completed_at) VALUES (?, ?, ?, ?, CASE WHEN ? = 1 THEN CURRENT_TIMESTAMP ELSE NULL END)').run(req.user.id, req.params.id, completed || 0, watch_time || 0, completed);
+      db.prepare('INSERT INTO lesson_progress (user_id, lesson_id, completed, watch_time, completed_at) VALUES (?, ?, ?, ?, CASE WHEN ? = 1 THEN CURRENT_TIMESTAMP ELSE NULL END)').run(req.user.id, lesson.id, completed || 0, watch_time || 0, completed);
     }
     res.json({ message: 'تم تحديث التقدم' });
   } catch (err) { res.status(500).json({ error: 'حدث خطأ' }); }

@@ -31,7 +31,7 @@ import { renderNavbar, initNavbar } from './components/navbar.js';
 import { api } from './utils/api.js';
 import { isLoggedIn, isTeacher, requireAuth, requireTeacher, getUser } from './utils/auth.js';
 import { showToast } from './components/toast.js';
-import { timeAgo } from './utils/helpers.js';
+import { timeAgo, esc } from './utils/helpers.js';
 
 const app = document.getElementById('app');
 
@@ -85,7 +85,7 @@ function renderErrorState(containerId, message) {
     <div class="empty-state" style="padding:40px;">
       <span class="material-symbols-rounded" style="color:var(--danger,#ef4444);font-size:3rem;">error</span>
       <h3 style="margin:12px 0 6px;">حدث خطأ في التحميل</h3>
-      <p style="color:var(--text-muted);margin-bottom:16px;">${message}</p>
+      <p style="color:var(--text-muted);margin-bottom:16px;">${esc(message)}</p>
       <button class="btn btn-primary btn-sm" onclick="window.location.reload()">
         <span class="material-symbols-rounded">refresh</span> إعادة المحاولة
       </button>
@@ -146,10 +146,10 @@ async function initNotifications(navId) {
             </div>
             <div style="flex:1;min-width:0;">
               <div style="font-weight:700;font-size:0.92rem;display:flex;align-items:center;gap:8px;">
-                ${n.title}
+                ${esc(n.title)}
                 ${!n.is_read ? '<span class="badge badge-info" style="font-size:0.65rem;">جديد</span>' : ''}
               </div>
-              <div style="font-size:0.82rem;color:var(--text-secondary);margin-top:4px;line-height:1.5;">${n.message}</div>
+              <div style="font-size:0.82rem;color:var(--text-secondary);margin-top:4px;line-height:1.5;">${esc(n.message)}</div>
               <div style="font-size:0.7rem;color:var(--text-muted);margin-top:6px;display:flex;align-items:center;gap:4px;">
                 <span class="material-symbols-rounded" style="font-size:0.85rem;">schedule</span>
                 ${timeAgo(n.created_at)}
@@ -206,8 +206,8 @@ async function initProfile(navId) {
         <div class="card">
           <h3 style="font-weight:700;margin-bottom:20px"><span class="material-symbols-rounded" style="color:var(--primary)">person</span> بياناتي</h3>
           <form id="profileForm">
-            <div class="form-group"><label class="form-label">الاسم</label><input type="text" class="form-input" id="pName" value="${user.name}" required></div>
-            <div class="form-group"><label class="form-label">رقم الهاتف</label><input type="tel" class="form-input" id="pPhone" value="${user.phone}" disabled dir="ltr" style="opacity:0.6"></div>
+            <div class="form-group"><label class="form-label">الاسم</label><input type="text" class="form-input" id="pName" value="${esc(user.name)}" required></div>
+            <div class="form-group"><label class="form-label">رقم الهاتف</label><input type="tel" class="form-input" id="pPhone" value="${esc(user.phone)}" disabled dir="ltr" style="opacity:0.6"></div>
             <div class="form-group"><label class="form-label">المرحلة الدراسية</label>
               <select class="form-select" id="pGrade">
                 ${['سادسة ابتدائي','أولى إعدادي','ثانية إعدادي','ثالثة إعدادي','أولى ثانوي','ثانية ثانوي','ثالثة ثانوي'].map(g => `<option value="${g}" ${user.grade===g?'selected':''}>${g}</option>`).join('')}

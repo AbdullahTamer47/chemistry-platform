@@ -337,17 +337,6 @@ export async function initWallet() {
           </div>
           <div>ينتهي في: ${new Date(order.expires_at).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })}</div>
         </div>
-
-        <!-- Instant simulation button for real-time testing -->
-        <div style="background:rgba(255,255,255,0.05);border-radius:8px;padding:12px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
-          <div style="font-size:0.8rem;color:#e2e8f0;">
-            <span class="material-symbols-rounded" style="vertical-align:middle;color:#38bdf8;font-size:1rem;">touch_app</span>
-            <strong>زر تجربة السداد المباشر:</strong> اضغط لمحاكاة السداد بالماكينة الآن وشحن الرصيد فورياً
-          </div>
-          <button type="button" class="btn btn-success btn-sm" id="simulateFawryPayBtn" style="font-weight:800;gap:6px;">
-            <span class="material-symbols-rounded">credit_score</span> تجربة إتمام الدفع بالماكينة
-          </button>
-        </div>
       </div>
     `;
 
@@ -357,23 +346,6 @@ export async function initWallet() {
         showToast('تم نسخ رقم فوري بنجاح', 'success');
       } catch {
         showToast('انسخ الرقم يدوياً', 'warning');
-      }
-    });
-
-    document.getElementById('simulateFawryPayBtn')?.addEventListener('click', async () => {
-      const btn = document.getElementById('simulateFawryPayBtn');
-      btn.disabled = true;
-      btn.innerHTML = '<span class="material-symbols-rounded spin-icon">sync</span> جاري محاكاة السداد...';
-      try {
-        const res = await api.simulateFawryPay(order.reference_code);
-        showToast(res.message, 'success');
-        wrap.style.display = 'none';
-        await refreshWalletBalance();
-        await refreshCourses();
-      } catch (err) {
-        showToast(err.message, 'error');
-        btn.disabled = false;
-        btn.innerHTML = '<span class="material-symbols-rounded">credit_score</span> تجربة إتمام الدفع بالماكينة';
       }
     });
   }

@@ -2,7 +2,7 @@ import { renderNavbar, initNavbar } from '../components/navbar.js';
 import { api } from '../utils/api.js';
 import { showToast } from '../components/toast.js';
 import { showModal, confirmModal } from '../components/modal.js';
-import { formatTime } from '../utils/helpers.js';
+import { formatTime, esc, escRich } from '../utils/helpers.js';
 
 export function renderExams() {
   return `
@@ -105,12 +105,12 @@ export async function initExams() {
             </div>
             
             <div class="exam-info">
-              <h3 style="font-weight: 800; font-size: 1rem; color: var(--text-primary); margin-bottom: 6px;">${e.title}</h3>
+              <h3 style="font-weight: 800; font-size: 1rem; color: var(--text-primary); margin-bottom: 6px;">${esc(e.title)}</h3>
               <div class="exam-meta">
                 <span><span class="material-symbols-rounded" style="font-size:1.05rem;">schedule</span> ${e.duration_minutes} دقيقة</span>
                 <span><span class="material-symbols-rounded" style="font-size:1.05rem;">help</span> ${e.question_count} سؤال</span>
                 <span><span class="material-symbols-rounded" style="font-size:1.05rem;">repeat</span> المحاولات: ${e.my_attempts || 0} من ${e.max_attempts || 'غير محدود'}</span>
-                ${e.course_title ? `<span><span class="material-symbols-rounded" style="font-size:1.05rem;">book</span> ${e.course_title}</span>` : ''}
+                ${e.course_title ? `<span><span class="material-symbols-rounded" style="font-size:1.05rem;">book</span> ${esc(e.course_title)}</span>` : ''}
               </div>
             </div>
             
@@ -215,7 +215,7 @@ export async function initExamTake(id) {
             ${isLimit ? 'history_edu' : 'error'}
           </span>
           <h3 style="font-weight:800; margin:12px 0 6px;">${isLimit ? 'استنفذت عدد المحاولات المتاحة' : 'عذراً! تعذر فتح الامتحان'}</h3>
-          <p style="color:var(--text-secondary); max-width:480px; margin:0 auto 20px;">${err.message}</p>
+          <p style="color:var(--text-secondary); max-width:480px; margin:0 auto 20px;">${esc(err.message)}</p>
           <div style="display:flex; justify-content:center; gap:12px; flex-wrap:wrap;">
             ${isLimit ? `
               <a href="#/exams/${id}/review" class="btn btn-primary">
@@ -230,7 +230,9 @@ export async function initExamTake(id) {
     }
   }
 
-  timeLeft = exam.duration_minutes * 60;
+  // Server is the source of truth: remaining_seconds survives page refreshes.
+  timeLeft = Number.isFinite(exam.remaining_seconds) ? exam.remaining_seconds : exam.duration_minutes * 60;
+  let deadline = Date.now() + timeLeft * 1000;
   const draftKey = `exam_draft_${id}`;
 
   // Restore local draft for offline resilience
@@ -258,7 +260,7 @@ export async function initExamTake(id) {
       <!-- Sticky exam timer -->
       <div class="exam-timer">
         <div>
-          <h2 style="font-size: 1.1rem; font-weight: 800; color: var(--text-primary);">${exam.title}</h2>
+          <h2 style="font-size: 1.1rem; font-weight: 800; color: var(--text-primary);">${esc(exam.title)}</h2>
           <div style="display:flex; align-items:center; gap:12px; margin-top:2px;">
             <p style="font-size: 0.74rem; color: var(--text-muted); font-weight: 600;">إجمالي الأسئلة: ${exam.questions.length} سؤال</p>
             <span id="saveStatus" style="font-size:0.72rem; color:var(--primary); font-weight:700; display:inline-flex; align-items:center; gap:4px;">
@@ -303,7 +305,7 @@ export async function initExamTake(id) {
       optionsHtml = q.options.map((o, oi) => `
         <div class="option-item ${answers[q.id] === o.id ? 'selected' : ''}" data-qid="${q.id}" data-val="${o.id}">
           <span class="option-letter">${letters[oi]}</span>
-          <span class="option-text">${o.text}</span>
+          <span class="option-text">${escRich(o.text)}</span>
         </div>
       `).join('');
     } else if (q.type === 'true_false') {
@@ -332,7 +334,7 @@ export async function initExamTake(id) {
       optionsHtml = q.options.map((o, oi) => `
         <div class="option-item multi-option ${curArr.includes(o.id) ? 'selected' : ''}" data-qid="${q.id}" data-val="${o.id}">
           <span class="option-letter">${letters[oi]}</span>
-          <span class="option-text">${o.text}</span>
+          <span class="option-text">${escRich(o.text)}</span>
         </div>
       `).join('');
     } else if (q.type === 'essay') {
@@ -375,28 +377,46 @@ export async function initExamTake(id) {
           </button>
         </div>
         
-        <div class="question-text" style="margin-bottom: 20px;">${q.text}</div>
+        <div class="question-text" style="margin-bottom: 20px;">${escRich(q.text)}</div>
         ${q.image_url ? `<div style="margin-bottom:18px;"><img src="${q.image_url}" alt="توضيح السؤال" style="max-width:100%;max-height:320px;border-radius:var(--radius-md);border:1px solid var(--border-light);box-shadow:var(--shadow-sm);" /></div>` : ''}
         <div class="question-options">${optionsHtml}</div>
       </div>
     `;
   }
 
-  function startTimer() {
+  function tick() {
+    // Derive from the deadline, not from counting ticks: immune to throttled background tabs.
+    timeLeft = Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
     const display = document.getElementById('timerDisplay');
-    timerInterval = setInterval(() => {
-      timeLeft--;
-      if (timeLeft <= 0) { 
-        clearInterval(timerInterval); 
-        showToast('انتهى وقت الامتحان! جاري التسليم التلقائي...', 'warning');
-        submitExam(); 
-        return; 
-      }
-      if (display) {
-        display.textContent = formatTime(timeLeft);
-        display.className = 'timer-display' + (timeLeft <= 60 ? ' danger' : timeLeft <= 300 ? ' warning' : '');
-      }
-    }, 1000);
+    if (display) {
+      display.textContent = formatTime(timeLeft);
+      display.className = 'timer-display' + (timeLeft <= 60 ? ' danger' : timeLeft <= 300 ? ' warning' : '');
+    }
+    if (timeLeft <= 0) {
+      clearInterval(timerInterval);
+      showToast('انتهى وقت الامتحان! جاري التسليم التلقائي...', 'warning');
+      submitExam();
+      return false;
+    }
+    return true;
+  }
+
+  function startTimer() {
+    clearInterval(timerInterval);
+    if (!tick()) return;
+    timerInterval = setInterval(tick, 1000);
+    // Re-sync immediately when the tab becomes visible again.
+    document.addEventListener('visibilitychange', tickOnVisible);
+    // Leaving the page (any route change) must stop the timer and release listeners.
+    window.addEventListener('hashchange', leaveExamPage, { once: true });
+  }
+
+  function tickOnVisible() { if (!document.hidden) tick(); }
+
+  function leaveExamPage() {
+    clearInterval(timerInterval);
+    document.removeEventListener('visibilitychange', tickOnVisible);
+    unsecureExam();
   }
 
   function saveDraft() {
@@ -612,6 +632,8 @@ export async function initExamTake(id) {
 
   async function submitExam() {
     clearInterval(timerInterval);
+    document.removeEventListener('visibilitychange', tickOnVisible);
+    window.removeEventListener('hashchange', leaveExamPage);
     unsecureExam();
     localStorage.removeItem(draftKey);
     const timeTaken = Math.floor((Date.now() - startTime) / 1000);
@@ -797,7 +819,7 @@ export function renderResult(result, timeTaken) {
               </span>
             </div>
 
-            <div class="question-text" style="margin-bottom:16px;">${r.text}</div>
+            <div class="question-text" style="margin-bottom:16px;">${escRich(r.text)}</div>
             ${r.image_url ? `<div style="margin-bottom:16px;"><img src="${r.image_url}" alt="توضيح السؤال" style="max-width:100%;max-height:280px;border-radius:var(--radius-md);border:1px solid var(--border-light);" /></div>` : ''}
 
             <!-- Options render for MCQ -->
@@ -818,7 +840,7 @@ export function renderResult(result, timeTaken) {
                   return `
                     <div class="option-item ${optClass}" style="cursor:default; margin-bottom:6px;">
                       <span class="option-letter">${letters[oi]}</span>
-                      <span class="option-text">${o.text}</span>
+                      <span class="option-text">${escRich(o.text)}</span>
                       ${isCorrectOpt ? '<span style="margin-right:auto; font-size:0.7rem; font-weight:700; color:var(--success)">الإجابة النموذجية</span>' : ''}
                     </div>
                   `;
@@ -877,7 +899,7 @@ export function renderResult(result, timeTaken) {
                 <div style="margin-top:8px; padding-top:8px; border-top:1px dashed var(--border);">
                   <div style="font-weight:700; color:var(--text-secondary); font-size:0.8rem; margin-bottom:4px;">إجابة الطالب المدخلة:</div>
                   <div style="color:var(--text-primary); white-space:pre-wrap;">
-                    ${(typeof r.user_answer === 'object' ? r.user_answer?.text : r.user_answer) || '<span style="color:var(--text-muted);">(لم يكتب إجابة نصية)</span>'}
+                    ${esc((typeof r.user_answer === 'object' ? r.user_answer?.text : r.user_answer) || '') || '<span style="color:var(--text-muted);">(لم يكتب إجابة نصية)</span>'}
                   </div>
                   ${(typeof r.user_answer === 'object' && r.user_answer?.image_url) ? `
                     <div style="margin-top:10px;">
@@ -900,7 +922,7 @@ export function renderResult(result, timeTaken) {
                 <span class="material-symbols-rounded" style="font-size:1.2rem; color:var(--accent);">lightbulb</span>
                 <div>
                   <strong>التفسير العلمي المنهجي:</strong>
-                  <div>${r.explanation}</div>
+                  <div>${escRich(r.explanation)}</div>
                 </div>
               </div>
               ` 
@@ -967,7 +989,7 @@ export async function initExamReview(id) {
       <div class="empty-state" style="padding:48px 24px; text-align:center;">
         <span class="material-symbols-rounded" style="font-size:3.5rem; color:var(--error);">error</span>
         <h3 style="font-weight:800; margin:12px 0 6px;">تعذر عرض نتيجة وتصحيح الامتحان</h3>
-        <p style="color:var(--text-secondary); max-width:480px; margin:0 auto 20px;">${err.message || 'حدث خطأ في جلب بيانات المحاولة'}</p>
+        <p style="color:var(--text-secondary); max-width:480px; margin:0 auto 20px;">${esc(err.message || 'حدث خطأ في جلب بيانات المحاولة')}</p>
         <div style="display:flex; justify-content:center; gap:12px; flex-wrap:wrap;">
           <a href="#/exams" class="btn btn-primary">العودة لقائمة الامتحانات</a>
           <a href="#/dashboard" class="btn btn-secondary">لوحة التحكم</a>

@@ -2,10 +2,14 @@ import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import db from '../db.js';
 
-// JWT secret: uses env in production or dev. In development a random secret
-// is generated once and persisted. In production without env, a secure fallback is used.
+// JWT secret: must come from the environment in production. There is NO hardcoded fallback.
+// In local development only, a random secret is generated once and persisted in the DB.
 function resolveSecret() {
-  if (process.env.JWT_SECRET) return process.env.JWT_SECRET;
+  if (process.env.JWT_SECRET && process.env.JWT_SECRET.length >= 32) return process.env.JWT_SECRET;
+  const isProd = process.env.NODE_ENV === 'production' || !!process.env.VERCEL;
+  if (isProd) {
+    throw new Error('JWT_SECRET (min 32 chars) must be set in the environment in production');
+  }
   try {
     const row = db.prepare("SELECT value FROM platform_settings WHERE key = 'jwt_secret'").get();
     if (row?.value) return row.value;
@@ -15,7 +19,8 @@ function resolveSecret() {
     } catch (e) {}
     return secret;
   } catch (err) {
-    return 'ziad_ramzy_chemistry_platform_prod_secret_2026_zra_secure_key';
+    // Ephemeral random secret: sessions reset on restart, but never a known value.
+    return crypto.randomBytes(48).toString('hex');
   }
 }
 const JWT_SECRET = resolveSecret();
@@ -115,7 +120,7 @@ export function rateLimit({ windowMs, max, message }) {
     for (const [k, v] of hits) if (v.reset < now) hits.delete(k);
   }, windowMs).unref();
   return (req, res, next) => {
-    if (process.env.NODE_ENV === 'test' || req.headers['x-scenario-test']) {
+    if (process.env.NODE_ENV === 'test') {
       return next();
     }
     const key = `${req.ip}:${req.baseUrl}${req.path}`;

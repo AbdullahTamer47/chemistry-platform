@@ -552,6 +552,23 @@ try {
   }
 } catch (e) { console.error('Seed stores error', e); }
 
+// Create indexes for better query performance
+const indexes = [
+  'CREATE INDEX IF NOT EXISTS idx_exam_attempts_user_exam ON exam_attempts(user_id, exam_id)',
+  'CREATE INDEX IF NOT EXISTS idx_questions_exam ON questions(exam_id)',
+  'CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id)',
+  'CREATE INDEX IF NOT EXISTS idx_lesson_progress_user ON lesson_progress(user_id)',
+  'CREATE INDEX IF NOT EXISTS idx_code_usage_code ON code_usage(code_id)',
+  'CREATE INDEX IF NOT EXISTS idx_payment_requests_user_status ON payment_requests(user_id, status)',
+  'CREATE INDEX IF NOT EXISTS idx_fawry_orders_user_status ON fawry_orders(user_id, status)',
+  'CREATE INDEX IF NOT EXISTS idx_live_sessions_scheduled ON live_sessions(scheduled_at)',
+  'CREATE INDEX IF NOT EXISTS idx_enrollments_user ON enrollments(user_id)',
+  'CREATE INDEX IF NOT EXISTS idx_enrollments_course ON enrollments(course_id)',
+];
+for (const idx of indexes) {
+  try { db.exec(idx); } catch (e) { /* index may already exist */ }
+}
+
 // Seed default 3-month package if empty
 try {
   const pkgCount = db.prepare('SELECT COUNT(*) as c FROM packages').get().c;
@@ -574,16 +591,6 @@ try {
   }
 } catch (e) { console.error('Seed package error', e); }
 
-// Seed sample wallet vouchers if empty
-try {
-  const vCount = db.prepare('SELECT COUNT(*) as c FROM wallet_vouchers').get().c;
-  if (vCount === 0) {
-    const insertV = db.prepare('INSERT INTO wallet_vouchers (code, amount) VALUES (?, ?)');
-    insertV.run('KEM-50-DEMO1', 50);
-    insertV.run('KEM-100-DEMO2', 100);
-    insertV.run('KEM-200-DEMO3', 200);
-    insertV.run('KEM-350-PKG90', 350);
-  }
-} catch (e) { console.error('Seed vouchers error', e); }
+// Vouchers are created by teachers only - no demo vouchers seeded
 
 export default db;

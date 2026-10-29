@@ -2,7 +2,7 @@ import { renderNavbar, initNavbar } from '../components/navbar.js';
 import { api } from '../utils/api.js';
 import { getUser } from '../utils/auth.js';
 import { showToast } from '../components/toast.js';
-import { getInitials } from '../utils/helpers.js';
+import { getInitials, esc } from '../utils/helpers.js';
 
 export function renderLeaderboard() {
   return `<div class="app-layout">
@@ -70,13 +70,13 @@ export async function initLeaderboard() {
             <div class="leaderboard-avatar">${getInitials(s.name)}</div>
             <div class="leaderboard-info">
               <div class="leaderboard-name" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-                <span>${s.name} ${s.id === user?.id ? '(أنت)' : ''}</span>
-                ${s.badge ? `<span style="background:${s.badge.color}15;color:${s.badge.color};border:1px solid ${s.badge.color}35;font-size:0.75rem;padding:2px 8px;border-radius:12px;display:inline-flex;align-items:center;gap:4px">
+                <span>${esc(s.name)} ${s.id === user?.id ? '(أنت)' : ''}</span>
+                ${s.badge ? `<span style="background:${esc(s.badge.color)}15;color:${esc(s.badge.color)};border:1px solid ${esc(s.badge.color)}35;font-size:0.75rem;padding:2px 8px;border-radius:12px;display:inline-flex;align-items:center;gap:4px">
                   <span class="material-symbols-rounded" style="font-size:0.85rem">${badgeIcon(s.badge)}</span>
-                  <span>${s.badge.title}</span>
+                  <span>${esc(s.badge.title)}</span>
                 </span>` : ''}
               </div>
-              <div class="leaderboard-grade">${s.grade || ''} · ${s.exams_taken || 1} امتحان · ${s.total_score || (s.avg_score || 0)} نقطة</div>
+              <div class="leaderboard-grade">${esc(s.grade || '')} · ${s.exams_taken || 1} امتحان · ${s.total_score || (s.avg_score || 0)} نقطة</div>
             </div>
             <div class="leaderboard-score">${s.avg_score || s.score || 0}%</div>
           </li>

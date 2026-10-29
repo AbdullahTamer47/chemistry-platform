@@ -19,9 +19,32 @@ import packageRoutes from './routes/packages.js';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 
-app.use(cors({
-  origin: true,
-  credentials: true
+// Behind Vercel / reverse proxies: use the real client IP for rate limiting.
+app.set('trust proxy', 1);
+
+// Security headers
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+  res.setHeader('X-XSS-Protection', '1; mode=block');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  next();
+});
+
+// CORS: same-origin requests, local dev, and explicit origins from ALLOWED_ORIGINS (comma separated).
+const extraOrigins = (process.env.ALLOWED_ORIGINS || '').split(',').map(o => o.trim()).filter(Boolean);
+app.use(cors((req, cb) => {
+  const origin = req.headers.origin;
+  let allowed = !origin; // non-browser clients / same-origin GETs send no Origin
+  if (origin) {
+    try {
+      const host = new URL(origin).host;
+      allowed = host === req.headers.host
+        || /^(localhost|127\.0\.0\.1)(:\d+)?$/.test(host)
+        || extraOrigins.includes(origin);
+    } catch { allowed = false; }
+  }
+  cb(null, { origin: allowed, credentials: true });
 }));
 app.use(express.json({ limit: '5mb' }));
 app.use(express.urlencoded({ extended: true }));
@@ -63,7 +86,8 @@ app.get(['/api/health', '/health'], (req, res) => res.json({ status: 'ok', messa
 // Global API Error Handler
 app.use('/api', (err, req, res, next) => {
   console.error(`[API Error] ${req.method} ${req.url}:`, err.message || err);
-  res.status(err.status || 500).json({ error: err.message || 'حدث خطأ غير متوقع في الخادم' });
+  const status = err.status && err.status < 500 ? err.status : 500;
+  res.status(status).json({ error: status < 500 && err.expose ? err.message : 'حدث خطأ غير متوقع في الخادم' });
 });
 
 export default app;

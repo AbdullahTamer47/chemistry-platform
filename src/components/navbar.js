@@ -1,5 +1,5 @@
 import { getUser, isTeacher, logout } from '../utils/auth.js';
-import { getInitials } from '../utils/helpers.js';
+import { getInitials, esc } from '../utils/helpers.js';
 import { api } from '../utils/api.js';
 import zraLogoFace from '../assets/zra-logo-face.png';
 import zraLogoText from '../assets/zra-logo-text.png';
@@ -127,8 +127,8 @@ export function renderNavbar(currentPage) {
         <a href="#/profile" class="sidebar-user" style="text-decoration:none; transition:var(--transition);">
           <div class="sidebar-user-avatar">${getInitials(user.name)}</div>
           <div class="sidebar-user-info">
-            <div class="sidebar-user-name">${user.name}</div>
-            <div class="sidebar-user-role">${teacher ? 'معلم / إدارة المنصة' : (user.grade || 'طالب')}</div>
+            <div class="sidebar-user-name">${esc(user.name)}</div>
+            <div class="sidebar-user-role">${teacher ? 'معلم / إدارة المنصة' : esc(user.grade || 'طالب')}</div>
           </div>
         </a>
         <div class="sidebar-logout" id="logoutBtn">

@@ -1,22 +1,33 @@
 import { Router } from 'express';
 import db from '../db.js';
-import { authMiddleware, teacherMiddleware } from '../middleware/auth.js';
+import { authMiddleware, teacherMiddleware, optionalAuth, isTeacher, canAccessCourse } from '../middleware/auth.js';
 
 const router = Router();
 
+// Meeting / replay links are only released to teachers and enrolled students.
+function protectLinks(user, sessions) {
+  return sessions.map(sess => {
+    if (isTeacher(user)) return sess;
+    const allowed = !!user && (!sess.course_id || canAccessCourse(user, sess.course_id));
+    if (allowed) return sess;
+    const { meeting_link, replay_url, ...rest } = sess;
+    return { ...rest, links_locked: true };
+  });
+}
+
 // Get live sessions
-router.get('/', (req, res) => {
+router.get('/', optionalAuth, (req, res) => {
   try {
     const sessions = db.prepare(`SELECT ls.*, c.title as course_title, c.grade FROM live_sessions ls LEFT JOIN courses c ON ls.course_id = c.id ORDER BY ls.scheduled_at DESC`).all();
-    res.json(sessions);
+    res.json(protectLinks(req.user, sessions));
   } catch (err) { res.status(500).json({ error: 'حدث خطأ' }); }
 });
 
 // Get upcoming sessions
-router.get('/upcoming', (req, res) => {
+router.get('/upcoming', optionalAuth, (req, res) => {
   try {
     const sessions = db.prepare(`SELECT ls.*, c.title as course_title, c.grade FROM live_sessions ls LEFT JOIN courses c ON ls.course_id = c.id WHERE ls.status IN ('upcoming', 'live') AND ls.scheduled_at >= datetime('now', '-2 hours') ORDER BY ls.scheduled_at ASC`).all();
-    res.json(sessions);
+    res.json(protectLinks(req.user, sessions));
   } catch (err) { res.status(500).json({ error: 'حدث خطأ' }); }
 });
 

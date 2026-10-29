@@ -6,9 +6,15 @@
  */
 export function exportToCSV(filename, headers, rows) {
   const bom = '\uFEFF';
+  const sanitizeCell = (val) => {
+    let s = String(val ?? '').replace(/"/g, '""');
+    if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;
+    return s;
+  };
+
   const csvContent = bom + [
-    headers.map(h => `"${String(h || '').replace(/"/g, '""')}"`).join(','),
-    ...rows.map(row => row.map(cell => `"${String(cell ?? '').replace(/"/g, '""')}"`).join(','))
+    headers.map(h => `"${sanitizeCell(h)}"`).join(','),
+    ...rows.map(row => row.map(cell => `"${sanitizeCell(cell)}"`).join(','))
   ].join('\r\n');
 
   const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });

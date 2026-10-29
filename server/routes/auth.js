@@ -15,6 +15,22 @@ function normalizePhone(str) {
     .replace(/\s|-/g, '');
 }
 
+// Password policy: >= 8 chars, not trivially weak, not the phone number.
+const WEAK_PASSWORDS = new Set(['12345678', '123456789', '1234567890', '11111111', '00000000', 'password', 'password1', 'qwertyui', 'iloveyou', '01234567', '87654321']);
+export function checkPasswordStrength(password, phone) {
+  if (typeof password !== 'string' || password.length < 8) return 'كلمة المرور يجب ألا تقل عن 8 أحرف';
+  if (password.length > 72) return 'كلمة المرور طويلة جداً';
+  if (new Set(password).size < 4) return 'كلمة المرور ضعيفة جداً، استخدم حروفاً وأرقاماً متنوعة';
+  if (WEAK_PASSWORDS.has(password.toLowerCase())) return 'كلمة المرور شائعة جداً، اختر كلمة مرور أقوى';
+  if (phone && password.includes(phone)) return 'لا تستخدم رقم هاتفك ككلمة مرور';
+  return null;
+}
+
+// Strip HTML-significant characters from free-text names at the source.
+function cleanName(name) {
+  return String(name).replace(/[<>"'`&]/g, '').replace(/\s+/g, ' ').trim().slice(0, 60);
+}
+
 // Register
 router.post('/register', registerLimiter, (req, res) => {
   try {
@@ -31,6 +47,11 @@ router.post('/register', registerLimiter, (req, res) => {
       return res.status(400).json({ error: 'رقم الهاتف غير صحيح (يجب أن يكون 11 رقماً يبدأ بـ 01)' });
     }
 
+    const pwError = checkPasswordStrength(password, cleanPhone);
+    if (pwError) return res.status(400).json({ error: pwError });
+    const safeName = cleanName(name);
+    if (safeName.length < 2) return res.status(400).json({ error: 'الاسم غير صالح' });
+
     const existing = db.prepare('SELECT id FROM users WHERE phone = ?').get(cleanPhone);
     if (existing) {
       return res.status(400).json({ error: 'رقم الهاتف مسجل بالفعل في المنصة، يمكنك تسجيل الدخول مباشرة' });
@@ -39,7 +60,7 @@ router.post('/register', registerLimiter, (req, res) => {
     const hashedPassword = bcrypt.hashSync(password, 10);
     const result = db.prepare(
       'INSERT INTO users (name, phone, password, role, grade, parent_phone) VALUES (?, ?, ?, ?, ?, ?)'
-    ).run(name.trim(), cleanPhone, hashedPassword, 'student', grade, cleanParentPhone);
+    ).run(safeName, cleanPhone, hashedPassword, 'student', grade, cleanParentPhone);
 
     let user = db.prepare('SELECT id, name, role, phone, grade, parent_phone FROM users WHERE id = ?').get(result.lastInsertRowid);
     if (!user) {
@@ -47,7 +68,7 @@ router.post('/register', registerLimiter, (req, res) => {
     }
 
     if (!user) {
-      throw new Error('حدث خطأ في استرجاع بيانات الحساب بعد إنشائه، يرجى المحاولة مرة أخرى');
+      throw new Error('user lookup failed after insert');
     }
 
     const token = generateToken(user);
@@ -57,7 +78,7 @@ router.post('/register', registerLimiter, (req, res) => {
       db.prepare('INSERT INTO notifications (user_id, title, message, type) VALUES (?, ?, ?, ?)').run(
         user.id,
         'أهلاً بيك في كيمياوي!',
-        `مرحباً ${name}، نورتنا في منصة د. زياد رمزي عياد. يلا نبدأ نذاكر كيمياء!`,
+        `مرحباً ${safeName}، نورتنا في منصة د. زياد رمزي عياد. يلا نبدأ نذاكر كيمياء!`,
         'success'
       );
     } catch (notifErr) {
@@ -67,7 +88,7 @@ router.post('/register', registerLimiter, (req, res) => {
     res.json({ user, token });
   } catch (err) {
     console.error('Register error:', err);
-    res.status(500).json({ error: err.message || 'حدث خطأ في التسجيل' });
+    res.status(500).json({ error: 'حدث خطأ في التسجيل، حاول مرة أخرى' });
   }
 });
 
@@ -158,7 +179,9 @@ router.put(['/me', '/profile'], authMiddleware, (req, res) => {
 router.put('/change-password', authMiddleware, (req, res) => {
   try {
     const { currentPassword, newPassword } = req.body;
-    const user = db.prepare('SELECT password FROM users WHERE id = ?').get(req.user.id);
+    const user = db.prepare('SELECT password, phone FROM users WHERE id = ?').get(req.user.id);
+    const pwError = checkPasswordStrength(newPassword, user?.phone);
+    if (pwError) return res.status(400).json({ error: pwError });
 
     if (!bcrypt.compareSync(currentPassword, user.password)) {
       return res.status(400).json({ error: 'كلمة المرور الحالية غير صحيحة' });

@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import crypto from 'crypto';
 import db from '../db.js';
 import { authMiddleware, teacherMiddleware, canAccessCourse, isTeacher } from '../middleware/auth.js';
 
@@ -99,6 +100,18 @@ router.get('/certificates/verify/:certCode', (req, res) => {
 // Student: Generate Adaptive Mistakes Quiz ("امتحان خاص بيك")
 router.post('/adaptive-mistakes-quiz', authMiddleware, (req, res) => {
   try {
+    const isTeacherUser = isTeacher(req.user);
+    const enrollments = isTeacherUser 
+      ? db.prepare('SELECT id FROM courses').all()
+      : db.prepare('SELECT course_id as id FROM enrollments WHERE user_id = ?').all(req.user.id);
+    const enrolledCourseIds = enrollments.map(e => e.id);
+
+    if (enrolledCourseIds.length === 0) {
+      return res.status(400).json({ error: 'يجب الاشتراك في كورس واحد على الأقل لإنشاء الامتحان التكيفي' });
+    }
+
+    const coursePlaceholders = enrolledCourseIds.map(() => '?').join(',');
+
     const attempts = db.prepare(`
       SELECT answers FROM exam_attempts WHERE user_id = ? AND completed_at IS NOT NULL
     `).all(req.user.id);
@@ -126,11 +139,14 @@ router.post('/adaptive-mistakes-quiz', authMiddleware, (req, res) => {
     });
 
     if (wrongQuestionIds.size === 0) {
-      // If student has no wrong answers yet, pick 5 random challenging questions from the question bank to practice!
+      // Pick 5 random challenging questions from enrolled courses only (without leaking explanation before taking quiz)
       const fallbackQuestions = db.prepare(`
-        SELECT id, exam_id, type, text, image_url, options, points, explanation
-        FROM questions ORDER BY RANDOM() LIMIT 5
-      `).all();
+        SELECT q.id, q.exam_id, q.type, q.text, q.image_url, q.options, q.points
+        FROM questions q
+        JOIN exams e ON q.exam_id = e.id
+        WHERE e.course_id IN (${coursePlaceholders})
+        ORDER BY RANDOM() LIMIT 5
+      `).all(...enrolledCourseIds);
 
       fallbackQuestions.forEach(q => {
         if (q.options) {
@@ -151,9 +167,11 @@ router.post('/adaptive-mistakes-quiz', authMiddleware, (req, res) => {
     const idArray = Array.from(wrongQuestionIds).slice(0, 15);
     const placeholders = idArray.map(() => '?').join(',');
     const questions = db.prepare(`
-      SELECT id, exam_id, type, text, image_url, options, points, explanation
-      FROM questions WHERE id IN (${placeholders})
-    `).all(...idArray);
+      SELECT q.id, q.exam_id, q.type, q.text, q.image_url, q.options, q.points
+      FROM questions q
+      JOIN exams e ON q.exam_id = e.id
+      WHERE q.id IN (${placeholders}) AND e.course_id IN (${coursePlaceholders})
+    `).all(...idArray, ...enrolledCourseIds);
 
     questions.forEach(q => {
       if (q.options) {
@@ -280,6 +298,12 @@ router.post('/:id/submit', authMiddleware, (req, res) => {
     if (session && session.started_at) {
       const serverElapsed = Math.floor((Date.now() - new Date(session.started_at).getTime()) / 1000);
       serverTimeSpent = Math.max(serverElapsed, time_spent || 0);
+
+      // F-03: Reject submission if duration exceeded (with 60-second grace period)
+      const allowedSeconds = (exam.duration_minutes || 30) * 60 + 60;
+      if (!isTeacher(req.user) && serverElapsed > allowedSeconds) {
+        return res.status(400).json({ error: 'انتهى وقت الامتحان. لا يمكن تسليم الإجابات بعد انتهاء المهلة المحددة.' });
+      }
     }
 
     const feedbackByConcept = {
@@ -403,13 +427,13 @@ router.post('/:id/submit', authMiddleware, (req, res) => {
 
     // Clear exam session on successful submission
     db.prepare('DELETE FROM exam_sessions WHERE user_id = ? AND exam_id = ?').run(req.user.id, exam.id);
-    const rank = db.prepare('SELECT COUNT(*) + 1 as rank FROM exam_attempts WHERE exam_id = ? AND score > ? AND user_id != ?').get(exam.id, score, req.user.id);
+    const rank = db.prepare('SELECT COUNT(DISTINCT user_id) + 1 as rank FROM exam_attempts WHERE exam_id = ? AND score > ? AND user_id != ?').get(exam.id, score, req.user.id);
 
     // Auto-issue Certificate if passed and fully graded
     let certificate = null;
     if (isGraded === 1 && score >= (exam.passing_score || 60)) {
       const tier = score === 100 ? 'gold' : score >= 90 ? 'silver' : 'bronze';
-      const certCode = `CERT-ZRA-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+      const certCode = `CERT-ZRA-${crypto.randomBytes(6).toString('hex').toUpperCase()}`;
       try {
         db.prepare(`
           INSERT INTO certificates (cert_code, user_id, exam_id, attempt_id, score, total_points, percentage, tier)

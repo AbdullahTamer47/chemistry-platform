@@ -38,15 +38,15 @@ export async function initAdmin() {
     document.getElementById('recentStudents').innerHTML = `
       <div class="card-header"><h3 class="card-title"><span class="material-symbols-rounded" style="color:var(--primary)">person_add</span> آخر الطلاب المسجلين</h3></div>
       ${stats.recent_students.map(s => `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border-light)">
-        <div class="sidebar-user-avatar" style="width:34px;height:34px;font-size:0.75rem">${s.name[0]}</div>
-        <div style="flex:1"><div style="font-weight:600;font-size:0.85rem">${s.name}</div><div style="font-size:0.72rem;color:var(--text-muted)">${s.grade || ''} · ${s.phone}</div></div>
+        <div class="sidebar-user-avatar" style="width:34px;height:34px;font-size:0.75rem">${escA(s.name[0])}</div>
+        <div style="flex:1"><div style="font-weight:600;font-size:0.85rem">${escA(s.name)}</div><div style="font-size:0.72rem;color:var(--text-muted)">${escA(s.grade || '')} · ${escA(s.phone)}</div></div>
         <span style="font-size:0.7rem;color:var(--text-muted)">${formatDate(s.created_at)}</span>
       </div>`).join('')}
     `;
     document.getElementById('gradeChart').innerHTML = `
       <div class="card-header"><h3 class="card-title"><span class="material-symbols-rounded" style="color:var(--accent)">pie_chart</span> توزيع الطلاب</h3></div>
       ${stats.grade_distribution.map(g => `<div style="display:flex;align-items:center;gap:10px;padding:6px 0">
-        <span style="font-size:0.85rem;font-weight:600;min-width:100px">${g.grade}</span>
+        <span style="font-size:0.85rem;font-weight:600;min-width:100px">${escA(g.grade)}</span>
         <div class="progress-bar" style="flex:1"><div class="progress-fill" style="width:${(g.count / stats.total_students) * 100}%"></div></div>
         <span style="font-size:0.8rem;font-weight:700;color:var(--primary)">${g.count}</span>
       </div>`).join('')}
@@ -220,8 +220,8 @@ export async function initAdminCourses() {
         const id = btn.dataset.id;
         const c = courses.find(x => x.id == id);
         showModal('تعديل كورس أو باقة', `
-          <div class="form-group"><label class="form-label">عنوان الكورس / الباقة</label><input type="text" class="form-input" id="ecTitle" value="${c.title}" required></div>
-          <div class="form-group"><label class="form-label">الوصف والتعليمات</label><textarea class="form-input" id="ecDesc" rows="3">${c.description || ''}</textarea></div>
+          <div class="form-group"><label class="form-label">عنوان الكورس / الباقة</label><input type="text" class="form-input" id="ecTitle" value="${escA(c.title)}" required></div>
+          <div class="form-group"><label class="form-label">الوصف والتعليمات</label><textarea class="form-input" id="ecDesc" rows="3">${escA(c.description || '')}</textarea></div>
           <div class="form-group"><label class="form-label">المرحلة الدراسية</label><select class="form-select" id="ecGrade">${gradesList.map(g => `<option value="${g}" ${c.grade===g?'selected':''}>${g}</option>`).join('')}<option value="جميع المراحل" ${c.grade==='جميع المراحل'?'selected':''}>جميع المراحل</option></select></div>
           
           <div style="background:rgba(5, 150, 105, 0.08); border:1px solid rgba(5, 150, 105, 0.2); border-radius:8px; padding:10px 14px; margin-bottom:14px; font-size:0.83rem; color:var(--emerald-800); display:flex; align-items:center; gap:8px;">
@@ -260,7 +260,7 @@ export async function initAdminCourses() {
 
           <div class="form-group">
             <label class="form-label">بادج ترويجي مميز (اختياري)</label>
-            <input type="text" class="form-input" id="ecBadge" value="${c.badge_text || ''}" placeholder="مثال: الأكثر طلباً 🔥 / وفر 30%">
+            <input type="text" class="form-input" id="ecBadge" value="${escA(c.badge_text || '')}" placeholder="مثال: الأكثر طلباً 🔥 / وفر 30%">
           </div>
 
           <div class="form-group">
@@ -330,12 +330,12 @@ export async function initAdminCourses() {
           </div>
           <div class="exam-info">
             <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px;">
-              <h3 style="margin:0;">${c.title}</h3>
-              ${c.badge_text ? `<span class="badge badge-warning" style="font-size:0.72rem;">${c.badge_text}</span>` : ''}
+              <h3 style="margin:0;">${escA(c.title)}</h3>
+              ${c.badge_text ? `<span class="badge badge-warning" style="font-size:0.72rem;">${escA(c.badge_text)}</span>` : ''}
               ${c.course_type === 'quarterly' ? '<span class="badge badge-info" style="font-size:0.72rem;">باقة 3 شهور</span>' : c.course_type === 'term' ? '<span class="badge badge-primary" style="font-size:0.72rem;">باقة ترم كامل</span>' : ''}
             </div>
             <div class="exam-meta">
-              <span>${c.grade}</span>
+              <span>${escA(c.grade)}</span>
               <span><span class="material-symbols-rounded" style="font-size:0.9rem; color:var(--emerald-600);">menu_book</span> ${c.course_type === 'quarterly' ? 'محتوى 3 شهور' : c.course_type === 'term' ? 'محتوى ترم' : c.course_type === 'annual' ? 'منهج سنوي' : 'محتوى شهر'}</span>
               <span class="badge" style="background:rgba(16,185,129,0.1); color:var(--success); font-size:0.68rem; font-weight:700; padding:2px 6px;"><span class="material-symbols-rounded" style="font-size:0.75rem; vertical-align:middle;">all_inclusive</span> طوال العام</span>
               <span>${c.lesson_count || 0} درس</span>
@@ -516,8 +516,8 @@ export async function initAdminCodes() {
           const isExpired = c.expires_at && new Date(c.expires_at) < new Date();
           const badge = c.is_active && !isExpired ? '<span class="badge badge-success">فعال</span>' : '<span class="badge badge-danger">مغلق</span>';
           return `<tr>
-            <td><span class="code-text">${c.code}</span></td>
-            <td>${c.course_title || '-'}</td>
+            <td><span class="code-text">${escA(c.code)}</span></td>
+            <td>${escA(c.course_title || '-')}</td>
             <td>${c.type === 'universal' ? '<span class="badge badge-info">عام</span>' : '<span class="badge badge-warning">فردي</span>'}</td>
             <td><span style="direction:ltr;display:inline-block">${uses}</span></td>
             <td>${expiry}</td>
@@ -535,7 +535,7 @@ export async function initAdminCodes() {
 
   document.getElementById('genCodesBtn').addEventListener('click', () => {
     showModal('إنشاء أكواد تفعيل', `
-      <div class="form-group"><label class="form-label">الكورس</label><select class="form-select" id="gcCourse">${courses.map(c => `<option value="${c.id}">${c.title}</option>`).join('')}</select></div>
+      <div class="form-group"><label class="form-label">الكورس</label><select class="form-select" id="gcCourse">${courses.map(c => `<option value="${c.id}">${escA(c.title)}</option>`).join('')}</select></div>
       <div class="form-group"><label class="form-label">النوع</label><select class="form-select" id="gcType"><option value="universal">عام (لأي طالب)</option><option value="individual">فردي (لطالب محدد)</option></select></div>
       <div class="form-group"><label class="form-label">تاريخ الانتهاء (اختياري)</label><input type="date" class="form-input" id="gcExpiry"></div>
       <div class="form-group"><label class="form-label">عدد الأكواد (للفردي)</label><input type="number" class="form-input" id="gcCount" value="10" min="1" max="100"></div>
@@ -570,7 +570,15 @@ export async function initAdminCodes() {
           expires_at
         });
         showToast(res.message, 'success');
-        showModal('الأكواد المُنشأة', `<div style="direction:ltr;font-family:monospace;font-size:1.1rem;line-height:2.5">${res.codes.map(c => `<div class="code-item"><span class="code-text">${c}</span><button class="btn btn-ghost btn-sm" onclick="navigator.clipboard.writeText('${c}');this.innerHTML='<span class=\\'material-symbols-rounded\\' style=\\'font-size: 1.1rem; color: var(--success);\\'>done</span>'"><span class="material-symbols-rounded">content_copy</span></button></div>`).join('')}</div>`);
+        const codesModal = showModal('الأكواد المُنشأة', `<div style="direction:ltr;font-family:monospace;font-size:1.1rem;line-height:2.5">${res.codes.map(c => `<div class="code-item"><span class="code-text">${escA(c)}</span><button class="btn btn-ghost btn-sm copy-code-btn" data-code="${escA(c)}"><span class="material-symbols-rounded">content_copy</span></button></div>`).join('')}</div>`);
+        codesModal.overlay.querySelectorAll('.copy-code-btn').forEach(btn => {
+          btn.addEventListener('click', async () => {
+            try {
+              await navigator.clipboard.writeText(btn.dataset.code);
+              btn.innerHTML = '<span class="material-symbols-rounded" style="font-size: 1.1rem; color: var(--success);">done</span>';
+            } catch { showToast('انسخ الكود يدوياً', 'warning'); }
+          });
+        });
         initAdminCodes(); // Refresh
       } catch (err) { showToast(err.message, 'error'); }
     });
@@ -616,7 +624,7 @@ export async function initAdminStudents() {
             const examsHtml = details.exam_attempts && details.exam_attempts.length > 0 
               ? details.exam_attempts.map(e => `
                 <div style="display:flex;justify-content:space-between;align-items:center;background:var(--bg-secondary);padding:10px;border-radius:6px;margin-bottom:8px">
-                  <div><strong style="font-size:0.9rem">${e.exam_title}</strong><div style="font-size:0.75rem;color:var(--text-muted)">${new Date(e.completed_at).toLocaleDateString('ar-EG')}</div></div>
+                  <div><strong style="font-size:0.9rem">${escA(e.exam_title)}</strong><div style="font-size:0.75rem;color:var(--text-muted)">${new Date(e.completed_at).toLocaleDateString('ar-EG')}</div></div>
                   <span class="badge ${e.score >= 60 ? 'badge-success' : 'badge-danger'}">${e.score}%</span>
                 </div>`).join('') 
               : '<div style="font-size:0.85rem;color:var(--text-muted)">لم يقم بأي امتحانات.</div>';
@@ -626,7 +634,7 @@ export async function initAdminStudents() {
                 <div style="display:flex;justify-content:space-between;align-items:center;background:var(--bg-secondary);padding:10px;border-radius:6px;margin-bottom:8px">
                   <div>
                     <strong style="font-size:0.9rem">${l.lesson_title}</strong>
-                    <div style="font-size:0.75rem;color:var(--text-muted)">${l.course_title}</div>
+                    <div style="font-size:0.75rem;color:var(--text-muted)">${escA(l.course_title)}</div>
                   </div>
                   <div style="text-align:left">
                     <div style="font-size:0.8rem;color:var(--text-secondary)">المشاهدات: ${l.views_count} / ${l.max_views || 8}</div>
@@ -635,7 +643,7 @@ export async function initAdminStudents() {
                 </div>`).join('')
               : '<div style="font-size:0.85rem;color:var(--text-muted)">لم يقم بمشاهدة أي دروس.</div>';
 
-            showModal(`تقرير الطالب: ${s.name}`, `
+            showModal(`تقرير الطالب: ${escA(s.name)}`, `
               <div style="margin-bottom:20px;display:grid;grid-template-columns:1fr 1fr;gap:12px">
                 <div class="card" style="padding:12px"><div style="font-size:0.8rem;color:var(--text-muted)">متوسط درجاته</div><div style="font-size:1.4rem;font-weight:700;color:var(--primary)">${s.avg_score || 0}%</div></div>
                 <div class="card" style="padding:12px"><div style="font-size:0.8rem;color:var(--text-muted)">عدد الكورسات</div><div style="font-size:1.4rem;font-weight:700;color:var(--accent)">${details.enrollments?.length || 0}</div></div>
@@ -653,7 +661,7 @@ export async function initAdminStudents() {
             `);
 
             document.getElementById('modalResetDeviceBtn')?.addEventListener('click', async () => {
-              const ok = await confirmModal('إعادة ضبط الأجهزة', `هل أنت متأكد من مسح الأجهزة المسجلة للطالب ${s.name}؟ سيمكنه ذلك من الدخول من أجهزة جديدة.`);
+              const ok = await confirmModal('إعادة ضبط الأجهزة', `هل أنت متأكد من مسح الأجهزة المسجلة للطالب ${escA(s.name)}؟ سيمكنه ذلك من الدخول من أجهزة جديدة.`);
               if (ok) {
                 try {
                   const res = await api.resetStudentDevices(s.id);
@@ -675,7 +683,7 @@ export async function initAdminStudents() {
                   <h4 style="margin-bottom:12px;font-weight:700">كورسات الطالب:</h4>
                   ${studentDetails.enrollments.map(e => `
                     <div style="display:flex;justify-content:space-between;align-items:center;background:var(--bg-secondary);padding:8px 12px;border-radius:6px;margin-bottom:8px">
-                      <span style="font-size:0.9rem">${e.course_title}</span>
+                      <span style="font-size:0.9rem">${escA(e.course_title)}</span>
                       <label class="form-label" style="margin:0;display:flex;align-items:center;gap:6px;font-size:0.85rem">
                         <input type="checkbox" class="suspend-toggle" data-course="${e.course_id}" ${e.is_suspended ? 'checked' : ''}>
                         إيقاف الطالب
@@ -686,8 +694,8 @@ export async function initAdminStudents() {
               : '<div style="margin-top:16px;color:var(--text-muted);font-size:0.85rem">لا يوجد كورسات مشترك بها.</div>';
 
             showModal('تعديل بيانات الطالب', `
-              <div class="form-group"><label class="form-label">الاسم</label><input type="text" class="form-input" id="esName" value="${s.name}" required></div>
-              <div class="form-group"><label class="form-label">رقم الهاتف</label><input type="text" class="form-input" id="esPhone" value="${s.phone}" required dir="ltr"></div>
+              <div class="form-group"><label class="form-label">الاسم</label><input type="text" class="form-input" id="esName" value="${escA(s.name)}" required></div>
+              <div class="form-group"><label class="form-label">رقم الهاتف</label><input type="text" class="form-input" id="esPhone" value="${escA(s.phone)}" required dir="ltr"></div>
               <div class="form-group"><label class="form-label">رقم ولي الأمر</label><input type="text" class="form-input" id="esParent" value="${s.parent_phone || ''}" dir="ltr"></div>
               <div class="form-group"><label class="form-label">المرحلة</label><select class="form-select" id="esGrade">${gradesList.map(g => `<option value="${g}" ${s.grade===g?'selected':''}>${g}</option>`).join('')}</select></div>
               <div class="form-group"><label class="form-label">كلمة مرور جديدة (اتركها فارغة لعدم التغيير)</label><input type="password" class="form-input" id="esPass"></div>
@@ -733,7 +741,7 @@ export async function initAdminStudents() {
           const s = students.find(x => x.id == btn.dataset.id);
           try {
             const rep = await api.getStudentWhatsAppReport(s.id);
-            showModal(`تقرير ولي الأمر (واتساب) — ${s.name}`, `
+            showModal(`تقرير ولي الأمر (واتساب) — ${escA(s.name)}`, `
               <div style="text-align:right;">
                 <p style="font-size:0.85rem; color:var(--text-secondary); margin-bottom:12px;">نص التقرير الجاهز للإرسال:</p>
                 <div style="background:var(--bg-secondary); border:1px solid var(--border-light); border-radius:8px; padding:12px; font-size:0.85rem; line-height:1.6; white-space:pre-wrap; margin-bottom:16px;">${rep.report_text}</div>
@@ -778,7 +786,7 @@ export async function initAdminStudents() {
       renderList: (items, totalFiltered) => {
         if (totalFiltered === 0) return '<div class="empty-state"><span class="material-symbols-rounded">group</span><h3>لا يوجد طلاب مطابقين</h3></div>';
         return `<div class="mobile-swipe-hint"><span class="material-symbols-rounded">swipe</span> اسحب أفقياً لعرض باقي سجلات الطلاب</div><div class="table-wrapper"><table><thead><tr><th>الاسم</th><th>الهاتف</th><th>المرحلة</th><th>الكورسات</th><th>المعدل</th><th>إجراءات</th></tr></thead><tbody>
-          ${items.map(s => `<tr><td style="font-weight:600">${s.name}</td><td dir="ltr">${s.phone}</td><td>${s.grade || '-'}</td><td>${s.enrolled_courses}</td><td><span class="badge ${(s.avg_score || 0) >= 60 ? 'badge-success' : 'badge-danger'}">${s.avg_score || 0}%</span></td>
+          ${items.map(s => `<tr><td style="font-weight:600">${escA(s.name)}</td><td dir="ltr">${escA(s.phone)}</td><td>${escA(s.grade || '-')}</td><td>${s.enrolled_courses}</td><td><span class="badge ${(s.avg_score || 0) >= 60 ? 'badge-success' : 'badge-danger'}">${s.avg_score || 0}%</span></td>
           <td><div style="display:flex;gap:4px">
             <button class="btn btn-ghost btn-sm wa-st-btn" data-id="${s.id}" title="تقرير الواتساب لولي الأمر"><span class="material-symbols-rounded" style="color:#25D366">chat</span></button>
             <button class="btn btn-ghost btn-sm report-st-btn" data-id="${s.id}" title="تقرير الطالب"><span class="material-symbols-rounded" style="color:var(--info)">analytics</span></button>
@@ -841,7 +849,7 @@ export async function initAdminExams() {
         const id = btn.dataset.id;
         const e = exams.find(x => x.id == id);
         showModal('تعديل امتحان', `
-          <div class="form-group"><label class="form-label">عنوان الامتحان</label><input type="text" class="form-input" id="eeT" value="${e.title}"></div>
+          <div class="form-group"><label class="form-label">عنوان الامتحان</label><input type="text" class="form-input" id="eeT" value="${escA(e.title)}"></div>
           <div style="display:flex;gap:12px">
             <div class="form-group" style="flex:1"><label class="form-label">المدة (دقائق)</label><input type="number" class="form-input" id="eeD" value="${e.duration_minutes}"></div>
             <div class="form-group" style="flex:1"><label class="form-label">عدد المحاولات</label><input type="number" class="form-input" id="eeA" value="${e.max_attempts}"></div>
@@ -904,7 +912,7 @@ export async function initAdminExams() {
       if (totalFiltered === 0) return '<div class="empty-state"><span class="material-symbols-rounded">assignment</span><h3>لا توجد امتحانات مطابقة</h3></div>';
       return items.map(e => `
         <div class="exam-card"><div class="exam-icon gold" style="background:var(--gold-100);color:var(--gold-700)"><span class="material-symbols-rounded">assignment</span></div>
-        <div class="exam-info"><h3>${e.title}</h3><div class="exam-meta"><span>${e.course_title || '-'}</span><span>${e.question_count} سؤال إجمالي</span><span>${e.random_questions_count > 0 ? `<span class="material-symbols-rounded" style="color:var(--warning)">shuffle</span> بنك (${e.random_questions_count} للطالب)` : 'ثابت'}</span><span>${e.duration_minutes} دقيقة</span><span>${e.attempt_count || 0} محاولة</span></div></div>
+        <div class="exam-info"><h3>${escA(e.title)}</h3><div class="exam-meta"><span>${escA(e.course_title || '-')}</span><span>${e.question_count} سؤال إجمالي</span><span>${e.random_questions_count > 0 ? `<span class="material-symbols-rounded" style="color:var(--warning)">shuffle</span> بنك (${e.random_questions_count} للطالب)` : 'ثابت'}</span><span>${e.duration_minutes} دقيقة</span><span>${e.attempt_count || 0} محاولة</span></div></div>
         <div style="display:flex;gap:8px">
           <a href="#/admin/exams/${e.id}" class="btn btn-ghost btn-sm" title="إدارة الأسئلة"><span class="material-symbols-rounded">settings</span></a>
           <button class="btn btn-ghost btn-sm edit-exam-btn" data-id="${e.id}" title="تعديل"><span class="material-symbols-rounded">edit</span></button>
@@ -917,7 +925,7 @@ export async function initAdminExams() {
 
   document.getElementById('addExamBtn').addEventListener('click', () => {
     showModal('إضافة امتحان جديد', `
-      <div class="form-group"><label class="form-label">الكورس</label><select class="form-select" id="meC"><option value="">-- اختر الكورس --</option>${courses.map(c => `<option value="${c.id}">${c.title}</option>`).join('')}</select></div>
+      <div class="form-group"><label class="form-label">الكورس</label><select class="form-select" id="meC"><option value="">-- اختر الكورس --</option>${courses.map(c => `<option value="${c.id}">${escA(c.title)}</option>`).join('')}</select></div>
       <div class="form-group"><label class="form-label">الفصل (اختر الكورس أولاً)</label><select class="form-select" id="meCh" disabled><option value="">-- اختر الفصل --</option></select></div>
       <div class="form-group"><label class="form-label">عنوان الامتحان</label><input type="text" class="form-input" id="meT"></div>
       <div style="display:flex;gap:12px">
@@ -946,7 +954,7 @@ export async function initAdminExams() {
       try {
         const course = await api.getCourse(courseId);
         chSelect.disabled = false;
-        chSelect.innerHTML = '<option value="">-- اختر الفصل --</option>' + (course.chapters || []).map(ch => `<option value="${ch.id}">${ch.title}</option>`).join('');
+        chSelect.innerHTML = '<option value="">-- اختر الفصل --</option>' + (course.chapters || []).map(ch => `<option value="${ch.id}">${escA(ch.title)}</option>`).join('');
       } catch (err) {}
     });
 
@@ -999,7 +1007,7 @@ export async function initAdminLive() {
         const dt = new Date(s.scheduled_at);
         dt.setMinutes(dt.getMinutes() - dt.getTimezoneOffset());
         showModal('تعديل حصة', `
-          <div class="form-group"><label class="form-label">العنوان</label><input type="text" class="form-input" id="esT" value="${s.title}"></div>
+          <div class="form-group"><label class="form-label">العنوان</label><input type="text" class="form-input" id="esT" value="${escA(s.title)}"></div>
           <div class="form-group"><label class="form-label">الموعد</label><input type="datetime-local" class="form-input" id="esD" value="${dt.toISOString().slice(0,16)}"></div>
           <div class="form-group"><label class="form-label">الحالة</label>
             <select class="form-select" id="esStatus">
@@ -1046,7 +1054,7 @@ export async function initAdminLive() {
     renderList: (items, totalFiltered) => {
       if (totalFiltered === 0) return '<div class="empty-state"><span class="material-symbols-rounded">live_tv</span><h3>لا توجد حصص مطابقة</h3></div>';
       return items.map(s => `<div class="live-card"><div class="stat-icon purple" style="width:45px;height:45px;font-size:1.1rem;flex-shrink:0;background:#EDE9FE;color:#7C3AED"><span class="material-symbols-rounded">live_tv</span></div>
-        <div style="flex:1"><h3 style="font-weight:700;font-size:0.9rem">${s.title}</h3><div style="font-size:0.78rem;color:var(--text-muted)">${formatDate(s.scheduled_at)} · ${s.course_title || ''}</div></div>
+        <div style="flex:1"><h3 style="font-weight:700;font-size:0.9rem">${escA(s.title)}</h3><div style="font-size:0.78rem;color:var(--text-muted)">${formatDate(s.scheduled_at)} · ${escA(s.course_title || '')}</div></div>
         <span class="badge ${s.status === 'upcoming' ? 'badge-info' : s.status === 'live' ? 'badge-danger' : 'badge-success'}">${s.status === 'upcoming' ? 'قادمة' : s.status === 'live' ? 'مباشر' : 'انتهت'}</span>
         <div style="display:flex;gap:8px;margin-right:12px">
           <button class="btn btn-ghost btn-sm edit-live-btn" data-id="${s.id}" title="تعديل"><span class="material-symbols-rounded">edit</span></button>
@@ -1059,7 +1067,7 @@ export async function initAdminLive() {
   document.getElementById('addLiveBtn').addEventListener('click', () => {
     showModal('إضافة حصة لايف', `
       <div class="form-group"><label class="form-label">العنوان</label><input type="text" class="form-input" id="lsT"></div>
-      <div class="form-group"><label class="form-label">الكورس</label><select class="form-select" id="lsC"><option value="">عام</option>${courses.map(c => `<option value="${c.id}">${c.title}</option>`).join('')}</select></div>
+      <div class="form-group"><label class="form-label">الكورس</label><select class="form-select" id="lsC"><option value="">عام</option>${courses.map(c => `<option value="${c.id}">${escA(c.title)}</option>`).join('')}</select></div>
       <div class="form-group"><label class="form-label">الموعد</label><input type="datetime-local" class="form-input" id="lsD"></div>
       <div class="form-group"><label class="form-label">رابط الحصة</label><input type="url" class="form-input" id="lsL" placeholder="https://meet.google.com/..." dir="ltr"></div>
       <button class="btn btn-primary btn-block" id="saveLiveBtn">حفظ</button>
@@ -1093,7 +1101,7 @@ export async function initAdminNotifications() {
     const courses = await api.getCourses();
     const targetSelect = document.getElementById('notifTarget');
     courses.forEach(c => {
-      targetSelect.innerHTML += `<option value="${c.id}">${c.title}</option>`;
+      targetSelect.innerHTML += `<option value="${c.id}">${escA(c.title)}</option>`;
     });
   } catch (err) {
     console.error(err);

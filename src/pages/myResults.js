@@ -1,7 +1,7 @@
 import { renderNavbar, initNavbar } from '../components/navbar.js';
 import { api } from '../utils/api.js';
 import { showToast } from '../components/toast.js';
-import { formatDate, formatTime } from '../utils/helpers.js';
+import { formatDate, formatTime, esc } from '../utils/helpers.js';
 
 export function renderMyResults() {
   return `
@@ -195,7 +195,7 @@ export async function initMyResults() {
                 const barColor = isPassed ? 'linear-gradient(180deg, #10b981, #059669)' : 'linear-gradient(180deg, #ef4444, #b91c1c)';
 
                 return `
-                  <div style="display:flex;flex-direction:column;align-items:center;gap:6px;flex:1;min-width:38px;" title="${item.exam_title} (${item.percent}%)">
+                  <div style="display:flex;flex-direction:column;align-items:center;gap:6px;flex:1;min-width:38px;" title="${esc(item.exam_title)} (${item.percent}%)">
                     <span style="font-size:0.7rem;font-weight:800;color:${isPassed ? 'var(--success)' : 'var(--error)'};">${item.percent}%</span>
                     <div style="width:100%;height:${barHeight}px;background:${barColor};border-radius:6px 6px 2px 2px;transition:height 0.8s ease;box-shadow:0 2px 8px rgba(0,0,0,0.15);"></div>
                     <span style="font-size:0.65rem;color:var(--text-muted);font-weight:700;">مـ${idx + 1}</span>
@@ -206,7 +206,7 @@ export async function initMyResults() {
 
             <!-- Trend Indicators -->
             <div style="display:flex;align-items:center;justify-content:space-between;margin-top:14px;font-size:0.8rem;color:var(--text-secondary);flex-wrap:wrap;gap:8px;">
-              <div>أعلى نتيجة: <strong style="color:var(--success);">${e.max_percent}%</strong> ${e.best_exam ? `(${e.best_exam.title.slice(0, 15)}...)` : ''}</div>
+              <div>أعلى نتيجة: <strong style="color:var(--success);">${e.max_percent}%</strong> ${e.best_exam ? `(${esc(e.best_exam.title.slice(0, 15))}...)` : ''}</div>
               <div>أضعف نتيجة: <strong style="color:var(--error);">${e.min_percent}%</strong></div>
               <div>نسبة النجاح: <strong style="color:var(--primary);">${e.total_taken > 0 ? Math.round((e.passed_count / e.total_taken) * 100) : 0}%</strong></div>
             </div>
@@ -301,11 +301,11 @@ export async function initMyResults() {
                 <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:12px;">
                   <div style="min-width:0; flex:1;">
                     <div style="display:flex; align-items:center; gap:8px; margin-bottom:4px; flex-wrap:wrap;">
-                      <h3 style="font-size:1.05rem; font-weight:800; color:var(--text-primary); margin:0;">${a.exam_title}</h3>
+                      <h3 style="font-size:1.05rem; font-weight:800; color:var(--text-primary); margin:0;">${esc(a.exam_title)}</h3>
                       <span class="badge ${isGraded ? (passed ? 'badge-success' : 'badge-danger') : 'badge-warning'}" style="font-size:0.72rem; font-weight:700;">
                         ${isGraded ? (passed ? 'اجتياز بنجاح ✨' : 'لم يحقق نسبة النجاح') : 'قيد تصحيح المقالي ⏳'}
                       </span>
-                      ${a.course_title ? `<span style="font-size:0.75rem; color:var(--text-muted); font-weight:600;">• ${a.course_title}</span>` : ''}
+                      ${a.course_title ? `<span style="font-size:0.75rem; color:var(--text-muted); font-weight:600;">• ${esc(a.course_title)}</span>` : ''}
                     </div>
                     <div style="font-size:0.8rem; color:var(--text-secondary); display:flex; gap:16px; flex-wrap:wrap; margin-top:6px;">
                       <span><span class="material-symbols-rounded" style="font-size:0.95rem; vertical-align:middle; color:var(--primary);">schedule</span> وقت التسليم: ${formatDate(a.completed_at)}</span>
@@ -371,6 +371,6 @@ export async function initMyResults() {
     });
 
   } catch (err) {
-    listEl.innerHTML = `<p style="color:var(--error); text-align:center; padding:30px;">حدث خطأ أثناء تحميل السجل: ${err.message}</p>`;
+    listEl.innerHTML = `<p style="color:var(--error); text-align:center; padding:30px;">حدث خطأ أثناء تحميل السجل: ${esc(err.message)}</p>`;
   }
 }

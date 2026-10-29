@@ -2,7 +2,7 @@ import { renderNavbar, initNavbar } from '../components/navbar.js';
 import { api } from '../utils/api.js';
 import { showToast } from '../components/toast.js';
 import { showModal, confirmModal } from '../components/modal.js';
-import { sanitize } from '../utils/helpers.js';
+import { esc } from '../utils/helpers.js';
 
 export function renderAdminCourseDetail(id) {
   return `<div class="app-layout">
@@ -23,8 +23,8 @@ export async function initAdminCourseDetail(id) {
         <a href="#/admin/courses" style="display:inline-flex;align-items:center;gap:6px;color:var(--text-muted);font-size:0.88rem;margin-bottom:16px"><span class="material-symbols-rounded">arrow_forward</span> الرجوع للكورسات</a>
         <div class="page-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:16px">
           <div>
-            <h1 class="page-title" style="margin-bottom:4px">${course.title}</h1>
-            <p class="page-subtitle">${course.grade} · ${course.total_lessons} درس · ${course.student_count} طالب</p>
+            <h1 class="page-title" style="margin-bottom:4px">${esc(course.title)}</h1>
+            <p class="page-subtitle">${esc(course.grade)} · ${course.total_lessons} درس · ${course.student_count} طالب</p>
           </div>
           <div style="display:flex;gap:12px">
             <button class="btn btn-secondary" id="editCourseSettingsBtn"><span class="material-symbols-rounded">settings</span> إعدادات الكورس</button>
@@ -54,10 +54,10 @@ export async function initAdminCourseDetail(id) {
           ${(course.chapters || []).map(ch => `
             <div class="card" style="margin-bottom:16px;padding:0;overflow:hidden">
               <div style="background:var(--bg-main);padding:16px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border-light)">
-                <h3 style="font-weight:700;display:flex;align-items:center;gap:8px"><span class="material-symbols-rounded" style="color:var(--primary)">folder</span> ${ch.title}</h3>
+                <h3 style="font-weight:700;display:flex;align-items:center;gap:8px"><span class="material-symbols-rounded" style="color:var(--primary)">folder</span> ${esc(ch.title)}</h3>
                 <div style="display:flex;gap:8px">
                   <button class="btn btn-primary btn-sm add-lesson-btn" data-chid="${ch.id}"><span class="material-symbols-rounded">add</span> درس جديد</button>
-                  <button class="btn btn-ghost btn-sm edit-chapter-btn" data-chid="${ch.id}" data-title="${ch.title}" data-order="${ch.order_num}" title="تعديل"><span class="material-symbols-rounded">edit</span></button>
+                  <button class="btn btn-ghost btn-sm edit-chapter-btn" data-chid="${ch.id}" data-title="${esc(ch.title)}" data-order="${ch.order_num}" title="تعديل"><span class="material-symbols-rounded">edit</span></button>
                   <button class="btn btn-ghost btn-sm text-danger delete-chapter-btn" data-chid="${ch.id}" title="حذف" style="color:var(--error)"><span class="material-symbols-rounded">delete</span></button>
                 </div>
               </div>
@@ -69,7 +69,7 @@ export async function initAdminCourseDetail(id) {
                     <div style="flex:1">
                       <div style="font-weight:600;font-size:0.9rem;display:flex;align-items:center;gap:4px">
                         <span class="material-symbols-rounded" style="font-size:1.1rem;color:var(--text-muted)">${item.item_type === 'exam' ? 'assignment' : 'play_circle'}</span>
-                        ${item.title}
+                        ${esc(item.title)}
                       </div>
                       <div style="font-size:0.75rem;color:var(--text-muted)">
                         ${item.item_type === 'exam' ? `${item.duration_minutes} دقيقة · ${item.max_attempts} محاولات` : `${item.duration} دقيقة ${item.is_free ? '· <span style="color:var(--success)">مجاني</span>' : ''}`}
@@ -102,7 +102,7 @@ export async function initAdminCourseDetail(id) {
 
       bindEvents(course);
     } catch (err) {
-      document.getElementById('acdContent').innerHTML = `<div class="empty-state"><span class="material-symbols-rounded">error</span><h3>${err.message}</h3></div>`;
+      document.getElementById('acdContent').innerHTML = `<div class="empty-state"><span class="material-symbols-rounded">error</span><h3>${esc(err.message)}</h3></div>`;
     }
   }
 
@@ -159,7 +159,7 @@ export async function initAdminCourseDetail(id) {
       btn.addEventListener('click', () => {
         const chId = btn.dataset.chid;
         showModal('تعديل الفصل', `
-          <div class="form-group"><label class="form-label">عنوان الفصل</label><input type="text" class="form-input" id="ecTitle" value="${btn.dataset.title}" required></div>
+          <div class="form-group"><label class="form-label">عنوان الفصل</label><input type="text" class="form-input" id="ecTitle" value="${esc(btn.dataset.title)}" required></div>
           <div class="form-group"><label class="form-label">الترتيب</label><input type="number" class="form-input" id="ecOrder" value="${btn.dataset.order}"></div>
           <button class="btn btn-primary btn-block" id="updateChapterBtn">تحديث</button>
         `);
@@ -232,10 +232,10 @@ export async function initAdminCourseDetail(id) {
         if(!lesson) return;
         
         showModal('تعديل الدرس', `
-          <div class="form-group"><label class="form-label">عنوان الدرس</label><input type="text" class="form-input" id="elTitle" value="${lesson.title}" required></div>
+          <div class="form-group"><label class="form-label">عنوان الدرس</label><input type="text" class="form-input" id="elTitle" value="${esc(lesson.title)}" required></div>
           <div class="form-group"><label class="form-label">رابط الفيديو</label><input type="url" class="form-input" id="elUrl" value="${lesson.video_url || ''}" dir="ltr" required></div>
           <div class="form-group"><label class="form-label">رابط مذكرة أو ملخص الدرس (PDF)</label><input type="url" class="form-input" id="elPdf" value="${lesson.pdf_url || ''}" placeholder="https://.../notes.pdf" dir="ltr"></div>
-          <div class="form-group"><label class="form-label">الوصف</label><textarea class="form-input" id="elDesc" rows="3">${lesson.description || ''}</textarea></div>
+          <div class="form-group"><label class="form-label">الوصف</label><textarea class="form-input" id="elDesc" rows="3">${esc(lesson.description || '')}</textarea></div>
           <div style="display:flex;gap:12px">
             <div class="form-group" style="flex:1"><label class="form-label">المدة (دقائق)</label><input type="number" class="form-input" id="elDur" value="${lesson.duration}"></div>
             <div class="form-group" style="flex:1"><label class="form-label">الترتيب</label><input type="number" class="form-input" id="elOrder" value="${lesson.order_num}"></div>
@@ -283,13 +283,13 @@ export async function initAdminCourseDetail(id) {
           : discs.map(d => `
             <div class="discussion-item" style="border-bottom:1px solid var(--border-color);padding:16px 0">
               <div style="display:flex;gap:12px;margin-bottom:8px">
-                <div style="width:36px;height:36px;border-radius:50%;background:var(--primary-light);color:var(--primary);display:flex;align-items:center;justify-content:center;font-weight:bold">${sanitize(d.user_name.charAt(0))}</div>
+                <div style="width:36px;height:36px;border-radius:50%;background:var(--primary-light);color:var(--primary);display:flex;align-items:center;justify-content:center;font-weight:bold">${esc(d.user_name.charAt(0))}</div>
                 <div style="flex:1">
                   <div style="display:flex;justify-content:space-between">
-                    <strong style="font-size:0.9rem">${sanitize(d.user_name)} ${d.user_role === 'teacher' || d.user_role === 'admin' ? '<span class="material-symbols-rounded" style="color:var(--primary);font-size:1.1rem;vertical-align:middle">verified</span>' : ''}</strong>
+                    <strong style="font-size:0.9rem">${esc(d.user_name)} ${d.user_role === 'teacher' || d.user_role === 'admin' ? '<span class="material-symbols-rounded" style="color:var(--primary);font-size:1.1rem;vertical-align:middle">verified</span>' : ''}</strong>
                     <button class="btn btn-ghost delete-disc-btn" data-id="${d.id}" style="color:var(--error);padding:2px 6px"><span class="material-symbols-rounded">delete</span></button>
                   </div>
-                  <p style="font-size:0.95rem;margin-top:4px">${sanitize(d.content)}</p>
+                  <p style="font-size:0.95rem;margin-top:4px">${esc(d.content)}</p>
                 </div>
               </div>
               
@@ -297,13 +297,13 @@ export async function initAdminCourseDetail(id) {
               <div style="margin-right:48px;background:var(--bg-secondary);border-radius:8px;padding:12px;margin-top:8px">
                 ${d.replies.map(r => `
                   <div style="display:flex;gap:8px;margin-bottom:8px">
-                    <div style="width:24px;height:24px;border-radius:50%;background:var(--accent-light);color:var(--accent);display:flex;align-items:center;justify-content:center;font-size:0.7rem;font-weight:bold">${sanitize(r.user_name.charAt(0))}</div>
+                    <div style="width:24px;height:24px;border-radius:50%;background:var(--accent-light);color:var(--accent);display:flex;align-items:center;justify-content:center;font-size:0.7rem;font-weight:bold">${esc(r.user_name.charAt(0))}</div>
                     <div style="flex:1">
                       <div style="display:flex;justify-content:space-between">
-                        <strong style="font-size:0.8rem">${sanitize(r.user_name)} ${r.user_role === 'teacher' || r.user_role === 'admin' ? '<span class="material-symbols-rounded" style="color:var(--primary);font-size:1rem;vertical-align:middle">verified</span>' : ''}</strong>
+                        <strong style="font-size:0.8rem">${esc(r.user_name)} ${r.user_role === 'teacher' || r.user_role === 'admin' ? '<span class="material-symbols-rounded" style="color:var(--primary);font-size:1rem;vertical-align:middle">verified</span>' : ''}</strong>
                         <button class="btn btn-ghost delete-reply-btn" data-id="${r.id}" style="color:var(--error);padding:0"><span class="material-symbols-rounded">close</span></button>
                       </div>
-                      <p style="font-size:0.85rem">${sanitize(r.content)}</p>
+                      <p style="font-size:0.85rem">${esc(r.content)}</p>
                     </div>
                   </div>
                 `).join('')}

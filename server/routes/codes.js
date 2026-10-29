@@ -17,14 +17,21 @@ router.post('/generate', authMiddleware, teacherMiddleware, (req, res) => {
     const { course_id, type, count, assigned_to, max_uses, expires_at } = req.body;
     if (!course_id) return res.status(400).json({ error: 'يجب تحديد الكورس' });
     const codes = [];
-    const num = type === 'universal' ? 1 : count || 1;
-    // For universal codes, default max_uses to -1 (unlimited) if not specified.
-    const actualMaxUses = type === 'universal' ? (max_uses || -1) : (max_uses || 1);
+    const requested = Number.parseInt(count, 10);
+    const num = type === 'universal' ? 1 : Math.min(Math.max(Number.isFinite(requested) ? requested : 1, 1), 100);
+    // Universal codes must never be unlimited AND immortal: default to 100 uses / 30 days.
+    let actualMaxUses = type === 'universal' ? (Number.parseInt(max_uses, 10) || 100) : (Number.parseInt(max_uses, 10) || 1);
+    let expiry = expires_at || null;
+    if (type === 'universal' && !expiry) expiry = new Date(Date.now() + 30 * 24 * 3600 * 1000).toISOString();
+    if (actualMaxUses < -1 || actualMaxUses === 0) actualMaxUses = 1;
+    if (actualMaxUses === -1 && !expires_at) {
+      return res.status(400).json({ error: 'الكود غير المحدود يتطلب تاريخ انتهاء صلاحية' });
+    }
 
     for (let i = 0; i < num; i++) {
       const code = uuidv4().split('-')[0].toUpperCase();
       db.prepare('INSERT INTO activation_codes (code, course_id, type, assigned_to, max_uses, created_by, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
-        .run(code, course_id, type || 'universal', assigned_to || null, actualMaxUses, req.user.id, expires_at || null);
+        .run(code, course_id, type || 'universal', assigned_to || null, actualMaxUses, req.user.id, expiry);
       codes.push(code);
     }
     res.json({ codes, message: `تم إنشاء ${num} كود بنجاح` });
@@ -55,14 +62,17 @@ router.post('/activate', authMiddleware, activateLimiter, (req, res) => {
 
     const existing = db.prepare('SELECT id FROM enrollments WHERE user_id = ? AND course_id = ?').get(req.user.id, ac.course_id);
     if (existing) return res.status(400).json({ error: 'أنت مشترك بالفعل في هذا الكورس' });
-    db.prepare('INSERT INTO enrollments (user_id, course_id, code_id) VALUES (?, ?, ?)').run(req.user.id, ac.course_id, ac.id);
-    db.prepare('UPDATE activation_codes SET used_count = used_count + 1 WHERE id = ?').run(ac.id);
 
-    if (ac.max_uses !== -1 && ac.used_count + 1 >= ac.max_uses) {
-      db.prepare('UPDATE activation_codes SET is_active = 0 WHERE id = ?').run(ac.id);
-    }
-
-    db.prepare('INSERT INTO code_usage (code_id, user_id) VALUES (?, ?)').run(ac.id, req.user.id);
+    // Atomic claim: the conditional UPDATE guarantees the last use can't be consumed twice.
+    const claim = db.transaction(() => {
+      const upd = db.prepare('UPDATE activation_codes SET used_count = used_count + 1 WHERE id = ? AND is_active = 1 AND (max_uses = -1 OR used_count < max_uses)').run(ac.id);
+      if (!upd || upd.changes === 0) return false;
+      db.prepare('INSERT INTO enrollments (user_id, course_id, code_id) VALUES (?, ?, ?)').run(req.user.id, ac.course_id, ac.id);
+      db.prepare('UPDATE activation_codes SET is_active = 0 WHERE id = ? AND max_uses != -1 AND used_count >= max_uses').run(ac.id);
+      db.prepare('INSERT INTO code_usage (code_id, user_id) VALUES (?, ?)').run(ac.id, req.user.id);
+      return true;
+    });
+    if (!claim()) return res.status(400).json({ error: 'تم استخدام هذا الكود بالكامل' });
     const course = db.prepare('SELECT title FROM courses WHERE id = ?').get(ac.course_id);
     db.prepare('INSERT INTO notifications (user_id, title, message, type) VALUES (?, ?, ?, ?)').run(req.user.id, 'تم تفعيل الاشتراك', `تم تفعيل اشتراكك في كورس "${course.title}" بنجاح!`, 'success');
     res.json({ message: 'تم تفعيل الكود بنجاح', course_id: ac.course_id, course_title: course.title });

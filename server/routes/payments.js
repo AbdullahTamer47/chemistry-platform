@@ -286,60 +286,6 @@ router.post('/fawry/generate', authMiddleware, (req, res) => {
   }
 });
 
-// Student/Simulation: Simulate instant payment callback from Fawry machine
-router.post('/fawry/simulate-pay', authMiddleware, (req, res) => {
-  try {
-    const { reference_code } = req.body;
-    if (!reference_code) return res.status(400).json({ error: 'يرجى تقديم الرقم المرجعي' });
-
-    const order = db.prepare('SELECT * FROM fawry_orders WHERE reference_code = ?').get(reference_code);
-    if (!order) return res.status(404).json({ error: 'طلب فوري غير موجود' });
-    if (order.status === 'paid') return res.status(400).json({ error: 'تم سداد هذا الطلب مسبقاً بالفعل' });
-    if (order.status === 'expired' || new Date(order.expires_at) < new Date()) {
-      return res.status(400).json({ error: 'انتهت صلاحية هذا الكود (24 ساعة). يرجى توليد كود جديد.' });
-    }
-
-    const tx = db.transaction(() => {
-      // 1. Mark order as paid
-      db.prepare(`UPDATE fawry_orders SET status = 'paid', paid_at = CURRENT_TIMESTAMP WHERE id = ?`).run(order.id);
-
-      // 2. Ensure wallet row
-      db.prepare(`
-        INSERT INTO student_wallets (user_id, balance) VALUES (?, ?)
-        ON CONFLICT(user_id) DO UPDATE SET balance = balance + excluded.balance, updated_at = CURRENT_TIMESTAMP
-      `).run(order.user_id, order.amount);
-
-      // 3. Log transaction
-      db.prepare(`
-        INSERT INTO wallet_transactions (user_id, amount, type, description, reference_code)
-        VALUES (?, ?, 'credit', ?, ?)
-      `).run(order.user_id, order.amount, `شحن فوري آلي ناجح (كود مرجعي: ${order.reference_code})`, order.reference_code);
-
-      // 4. Send notification
-      db.prepare(`
-        INSERT INTO notifications (user_id, title, message, type)
-        VALUES (?, ?, ?, 'success')
-      `).run(
-        order.user_id,
-        'تم تأكيد سداد فوري وشحن المحفظة! 💳',
-        `تم استلام مبلغ ${order.amount} ج.م وإضافته إلى رصيد محفظتك بنجاح عبر خدمة فوري الآلية. يمكنك الآن الاشتراك في أي باقة أو كورس.`
-      );
-    });
-
-    tx();
-
-    const newBalance = db.prepare('SELECT balance FROM student_wallets WHERE user_id = ?').get(order.user_id).balance;
-
-    res.json({
-      message: `تم السداد بنجاح وإضافة ${order.amount} ج.م إلى رصيد محفظتك!`,
-      new_balance: newBalance,
-      reference_code: order.reference_code
-    });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'حدث خطأ في محاكاة السداد' });
-  }
-});
 
 // Student: Recharge wallet using 14-digit prepaid scratch card / voucher
 router.post('/wallet/charge-voucher', authMiddleware, (req, res) => {

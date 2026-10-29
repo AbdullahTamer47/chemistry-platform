@@ -117,13 +117,15 @@ router.get('/my-rank', authMiddleware, (req, res) => {
     `).get(req.user.id);
 
     const rank = db.prepare(`
-      SELECT COUNT(DISTINCT ea.user_id) + 1 AS rank
-      FROM exam_attempts ea
-      WHERE ea.completed_at IS NOT NULL
-        AND (ea.is_graded = 1 OR ea.is_graded IS NULL)
-        ${timeFilter}
-      GROUP BY ea.user_id
-      HAVING AVG(ea.score) > ?
+      SELECT COUNT(*) + 1 AS rank FROM (
+        SELECT ea2.user_id, AVG(ea2.score) AS avg_s
+        FROM exam_attempts ea2
+        WHERE ea2.completed_at IS NOT NULL
+          AND (ea2.is_graded = 1 OR ea2.is_graded IS NULL)
+          ${timeFilter}
+        GROUP BY ea2.user_id
+        HAVING avg_s > ?
+      )
     `).get(stats?.avg_score || 0);
 
     res.json({

@@ -1,5 +1,20 @@
 import bcrypt from 'bcryptjs';
 import db from './db.js';
+import crypto from 'crypto';
+
+// ---- Safety guards (this script WIPES all data) ----
+if ((process.env.NODE_ENV === 'production' || process.env.VERCEL) && process.env.FORCE_SEED !== '1') {
+  console.error('Refusing to seed in production. Set FORCE_SEED=1 only if you really intend to wipe the database.');
+  process.exit(1);
+}
+if (!process.argv.includes('--yes')) {
+  console.error('This command DELETES existing data. Re-run with: npm run seed -- --yes');
+  process.exit(1);
+}
+const rand = () => crypto.randomBytes(9).toString('base64url');
+const TEACHER_PLAIN = process.env.SEED_TEACHER_PASSWORD || rand();
+const STUDENT_PLAIN = process.env.SEED_STUDENT_PASSWORD || rand();
+console.log(`\nGenerated demo passwords (shown once):\n  teacher 01000000000 -> ${TEACHER_PLAIN}\n  students            -> ${STUDENT_PLAIN}\n`);
 
 console.log('Seeding database with full educational demo content...');
 
@@ -9,7 +24,7 @@ const tables = [
   'code_usage', 'activation_codes', 'discussion_replies', 'course_discussions',
   'lesson_progress', 'exam_attempts', 'exam_overrides', 'questions', 'exams',
   'lessons', 'chapters', 'enrollments', 'notifications', 'video_tokens',
-  'live_sessions', 'courses', 'payment_requests', 'platform_settings', 'exam_sessions', 'fawry_orders', 'wallet_vouchers', 'saved_lessons', 'certificates', 'packages', 'package_enrollments', 'bookstores'
+  'live_sessions', 'courses', 'payment_requests', 'exam_sessions', 'fawry_orders', 'wallet_vouchers', 'saved_lessons', 'certificates', 'packages', 'package_enrollments', 'bookstores'
 ];
 
 tables.forEach(t => {
@@ -27,19 +42,19 @@ let teacherId;
 if (teacher) {
   teacherId = teacher.id;
 } else {
-  const teacherPass = bcrypt.hashSync('teacher123', 10);
+  const teacherPass = bcrypt.hashSync(TEACHER_PLAIN, 10);
   const teacherRes = db.prepare('INSERT INTO users (name, phone, password, role, grade) VALUES (?, ?, ?, ?, ?)')
     .run('د. زياد رمزي عياد', '01000000000', teacherPass, 'teacher', 'ثالثة ثانوي');
   teacherId = teacherRes.lastInsertRowid;
 }
 
 // 2. Create demo students
-const studentPass = bcrypt.hashSync('student123', 10);
+const studentPass = bcrypt.hashSync(STUDENT_PLAIN, 10);
 const studentRes = db.prepare('INSERT INTO users (name, phone, password, role, grade, parent_phone) VALUES (?, ?, ?, ?, ?, ?)')
   .run('طالب تجريبي', '01111111111', studentPass, 'student', 'ثالثة ثانوي', '01222222222');
 const studentId = studentRes.lastInsertRowid;
 
-const student2Pass = bcrypt.hashSync('student123', 10);
+const student2Pass = bcrypt.hashSync(STUDENT_PLAIN, 10);
 const student2Res = db.prepare('INSERT INTO users (name, phone, password, role, grade, parent_phone) VALUES (?, ?, ?, ?, ?, ?)')
   .run('مريم أحمد محمود', '01234567890', student2Pass, 'student', 'ثالثة ثانوي', '01099999999');
 const student2Id = student2Res.lastInsertRowid;

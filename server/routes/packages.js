@@ -141,7 +141,10 @@ router.post('/:id(\\d+)/subscribe', authMiddleware, (req, res) => {
           throw new Error(`رصيدك الحالي (${currentBalance} ج) غير كافٍ. سعر الباقة هو ${pkg.price} ج. يرجى شحن محفظتك أولاً.`);
         }
 
-        db.prepare('UPDATE student_wallets SET balance = balance - ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ?').run(pkg.price, req.user.id);
+        const deductResult = db.prepare('UPDATE student_wallets SET balance = balance - ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ? AND balance >= ?').run(pkg.price, req.user.id, pkg.price);
+        if (deductResult.changes === 0) {
+          throw new Error('رصيد غير كافٍ أو تم خصمه بالفعل');
+        }
         db.prepare(`
           INSERT INTO wallet_transactions (user_id, amount, type, description)
           VALUES (?, ?, 'debit', ?)

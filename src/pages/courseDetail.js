@@ -3,7 +3,7 @@ import { api } from '../utils/api.js';
 import { isLoggedIn, isTeacher } from '../utils/auth.js';
 import { showToast } from '../components/toast.js';
 import { confirmModal } from '../components/modal.js';
-import { sanitize } from '../utils/helpers.js';
+import { esc } from '../utils/helpers.js';
 import { renderPublicHeader, initPublicHeader } from '../components/publicHeader.js';
 import { openChemistryLabModal } from '../components/chemistryLabModal.js';
 
@@ -14,7 +14,6 @@ import drZiadFace from '../assets/zra-logo-face.png';
 import chemCurriculum from '../assets/chem-curriculum-3d.jpg';
 import chemExam from '../assets/chem-exam-mastery-3d.jpg';
 
-const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
 function getCourseCover(c) {
   if (c.thumbnail && c.thumbnail.startsWith('/')) return c.thumbnail;
@@ -709,12 +708,12 @@ export async function initCourseDetail(id) {
             <div class="discussion-card">
               <div class="discussion-header">
                 <div class="discussion-avatar" style="background: var(--green-50); color: var(--primary); font-weight: 800; border: 1px solid var(--green-200);">
-                  ${(d.user_name || 'ط').charAt(0)}
+                  ${esc((d.user_name || 'ط').charAt(0))}
                 </div>
                 <div style="flex:1;">
                   <div style="display:flex; align-items:center; justify-content:space-between;">
                     <div style="font-size:0.85rem; font-weight:800; color:var(--text-primary); display:flex; align-items:center; gap:5px;">
-                      <span>${sanitize(d.user_name)}</span>
+                      <span>${esc(d.user_name)}</span>
                       ${d.user_role === 'teacher' || d.user_role === 'admin' 
                         ? '<span class="badge badge-success" style="font-size:0.6rem; padding:1px 6px;">مُدرّس المنصة</span>' 
                         : ''
@@ -730,7 +729,7 @@ export async function initCourseDetail(id) {
               </div>
               
               <div class="discussion-body">
-                ${sanitize(d.content)}
+                ${esc(d.content)}
               </div>
               
               <!-- Replies block -->
@@ -738,17 +737,17 @@ export async function initCourseDetail(id) {
                 ${(d.replies || []).map(r => `
                   <div class="reply-item">
                     <div class="reply-avatar" style="background:var(--gold-50); color:var(--accent); font-weight:800; border:1px solid var(--gold-200);">
-                      ${sanitize(r.user_name.charAt(0))}
+                      ${esc(r.user_name.charAt(0))}
                     </div>
                     <div class="reply-content">
                       <div style="display:flex; align-items:center; justify-content:space-between;">
-                        <strong style="font-size:0.78rem; font-weight:700; color:var(--text-primary);">${sanitize(r.user_name)}</strong>
+                        <strong style="font-size:0.78rem; font-weight:700; color:var(--text-primary);">${esc(r.user_name)}</strong>
                         ${(isTeacher() || currentUser.id === r.user_id) 
                           ? `<button class="btn btn-ghost delete-reply-btn" data-id="${r.id}" style="color:var(--error); padding:2px;" title="حذف الرد"><span class="material-symbols-rounded" style="font-size:1rem;">close</span></button>` 
                           : ''
                         }
                       </div>
-                      <p class="reply-text">${sanitize(r.content)}</p>
+                      <p class="reply-text">${esc(r.content)}</p>
                     </div>
                   </div>
                 `).join('')}

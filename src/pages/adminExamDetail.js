@@ -2,7 +2,7 @@ import { renderNavbar, initNavbar } from '../components/navbar.js';
 import { api } from '../utils/api.js';
 import { showToast } from '../components/toast.js';
 import { showModal, confirmModal } from '../components/modal.js';
-import { formatDate } from '../utils/helpers.js';
+import { formatDate, esc, escRich } from '../utils/helpers.js';
 import { exportToCSV } from '../utils/export.js';
 
 export function renderAdminExamDetail(id) {
@@ -27,7 +27,7 @@ export async function initAdminExamDetail(id) {
       currentExam = exam;
       renderExamView();
     } catch (err) {
-      document.getElementById('aedContent').innerHTML = `<div class="empty-state"><span class="material-symbols-rounded">error</span><h3>${err.message}</h3></div>`;
+      document.getElementById('aedContent').innerHTML = `<div class="empty-state"><span class="material-symbols-rounded">error</span><h3>${esc(err.message)}</h3></div>`;
     }
   }
 
@@ -40,7 +40,7 @@ export async function initAdminExamDetail(id) {
       
       <div class="page-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:16px;margin-bottom:20px;">
         <div>
-          <h1 class="page-title" style="margin-bottom:4px">${exam.title}</h1>
+          <h1 class="page-title" style="margin-bottom:4px">${esc(exam.title)}</h1>
           <p class="page-subtitle">${exam.duration_minutes} دقيقة · ${exam.questions.length} سؤال · درجة النجاح ${exam.passing_score}%</p>
         </div>
         <div style="display:flex;gap:10px;">
@@ -106,7 +106,7 @@ export async function initAdminExamDetail(id) {
               <span style="font-size:0.78rem;color:var(--text-muted);font-weight:700">(${q.points} ${q.points > 1 ? 'درجات' : 'درجة'})</span>
             </div>
             
-            <div class="question-text" style="padding-left:80px;font-size:1.05rem;line-height:1.6;font-weight:600;">${q.text}</div>
+            <div class="question-text" style="padding-left:80px;font-size:1.05rem;line-height:1.6;font-weight:600;">${escRich(q.text)}</div>
             
             ${q.image_url ? `
               <div style="margin:14px 0;">
@@ -116,7 +116,7 @@ export async function initAdminExamDetail(id) {
             
             ${q.options && q.type !== 'essay' ? `
               <div style="margin-top:14px;font-size:0.88rem;background:var(--bg-secondary);padding:10px 14px;border-radius:8px;">
-                <strong style="color:var(--text-secondary)">الخيارات:</strong> ${q.options.map(o => o.text).join(' | ')}
+                <strong style="color:var(--text-secondary)">الخيارات:</strong> ${q.options.map(o => esc(o.text)).join(' | ')}
               </div>
             ` : ''}
 
@@ -133,7 +133,7 @@ export async function initAdminExamDetail(id) {
 
             ${q.explanation ? `
               <div style="margin-top:8px;font-size:0.82rem;color:var(--text-muted)">
-                <strong>الشرح:</strong> ${q.explanation}
+                <strong>الشرح:</strong> ${escRich(q.explanation)}
               </div>
             ` : ''}
           </div>
@@ -161,7 +161,7 @@ export async function initAdminExamDetail(id) {
 
       <div class="form-group">
         <label class="form-label">نص السؤال</label>
-        <textarea class="form-input" id="qText" rows="3" placeholder="اكتب نص السؤال الكيميائي أو المسألة..." required>${q ? q.text : ''}</textarea>
+        <textarea class="form-input" id="qText" rows="3" placeholder="اكتب نص السؤال الكيميائي أو المسألة..." required>${esc(q ? q.text : '')}</textarea>
       </div>
 
       <!-- Question Image Upload / URL -->
@@ -206,7 +206,7 @@ export async function initAdminExamDetail(id) {
 
       <div class="form-group">
         <label class="form-label">شرح وتوضيح الإجابة (يظهر للطالب بعد إنهاء الامتحان)</label>
-        <textarea class="form-input" id="qExp" rows="2" placeholder="شرح مبسط للمعادلة أو سبب اختيار الإجابة...">${q ? q.explanation || '' : ''}</textarea>
+        <textarea class="form-input" id="qExp" rows="2" placeholder="شرح مبسط للمعادلة أو سبب اختيار الإجابة...">${esc(q ? q.explanation || '' : '')}</textarea>
       </div>
 
       <button class="btn btn-primary btn-block" id="saveQuestionBtn" style="padding:12px;font-size:1rem;margin-top:10px;">
@@ -283,7 +283,7 @@ export async function initAdminExamDetail(id) {
         ${opts.map((o, i) => `
           <div style="display:flex;gap:8px;margin-bottom:8px;align-items:center">
             <input type="${type === 'mcq' ? 'radio' : 'checkbox'}" name="qCorrectOpt" value="${o.id}" ${correctArr.includes(o.id) ? 'checked' : ''} style="width:20px;height:20px;cursor:pointer;">
-            <input type="text" class="form-input q-opt-input" data-id="${o.id}" value="${o.text}" placeholder="خيار ${i + 1}" style="flex:1">
+            <input type="text" class="form-input q-opt-input" data-id="${o.id}" value="${esc(o.text)}" placeholder="خيار ${i + 1}" style="flex:1">
           </div>
         `).join('')}
       `;
@@ -425,7 +425,7 @@ export async function initAdminExamDetail(id) {
       const data = await api.getExamSubmissions(id);
       renderSubmissionsList(data);
     } catch (err) {
-      container.innerHTML = `<div class="empty-state"><span class="material-symbols-rounded">error</span><h3>تعذر تحميل النتائج</h3><p>${err.message}</p></div>`;
+      container.innerHTML = `<div class="empty-state"><span class="material-symbols-rounded">error</span><h3>تعذر تحميل النتائج</h3><p>${esc(err.message)}</p></div>`;
     }
   }
 
@@ -482,7 +482,7 @@ export async function initAdminExamDetail(id) {
                     <td style="padding:12px;font-weight:700;color:var(--text-primary);">
                       <div style="display:flex;align-items:center;gap:8px;">
                         <span class="material-symbols-rounded" style="color:var(--primary);font-size:1.3rem;">account_circle</span>
-                        <span>${att.student_name}</span>
+                        <span>${esc(att.student_name)}</span>
                       </div>
                     </td>
                     <td style="padding:12px;color:var(--text-muted);font-family:monospace;" dir="ltr">${att.student_phone || '-'}</td>
@@ -551,7 +551,7 @@ export async function initAdminExamDetail(id) {
       <div style="max-height:75vh;overflow-y:auto;padding-left:6px;">
         <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;background:var(--bg-secondary);padding:12px 16px;border-radius:10px;margin-bottom:16px;">
           <div>
-            <div style="font-weight:800;font-size:1.05rem;color:var(--text-primary);">${attempt.student_name}</div>
+            <div style="font-weight:800;font-size:1.05rem;color:var(--text-primary);">${esc(attempt.student_name)}</div>
             <div style="font-size:0.8rem;color:var(--text-muted);margin-top:2px;" dir="ltr">${attempt.student_phone || ''} · ${formatDate(attempt.completed_at)}</div>
           </div>
           <div style="text-align:left;">
@@ -593,7 +593,7 @@ export async function initAdminExamDetail(id) {
                 </span>
               </div>
 
-              <div style="font-size:0.98rem;font-weight:700;color:var(--text-primary);margin-bottom:10px;">${q.text}</div>
+              <div style="font-size:0.98rem;font-weight:700;color:var(--text-primary);margin-bottom:10px;">${escRich(q.text)}</div>
               
               ${q.image_url ? `
                 <div style="margin-bottom:12px;">
@@ -606,7 +606,7 @@ export async function initAdminExamDetail(id) {
                   <div style="font-size:0.85rem;font-weight:800;color:#b45309;margin-bottom:8px;">إجابة الطالب:</div>
                   
                   <div style="background:var(--bg-card);padding:10px 14px;border-radius:8px;border:1px solid var(--border);color:var(--text-primary);font-size:0.92rem;line-height:1.6;white-space:pre-wrap;">
-                    ${textAnswer || '<span style="color:var(--text-muted);">(لم يكتب الطالب إجابة نصية)</span>'}
+                    ${esc(textAnswer || '') || '<span style="color:var(--text-muted);">(لم يكتب الطالب إجابة نصية)</span>'}
                   </div>
 
                   ${imageAnswer ? `
@@ -673,7 +673,7 @@ export async function initAdminExamDetail(id) {
       </div>
     `;
 
-    showModal(`مراجعة وتصحيح امتحان: ${attempt.student_name}`, modalContent);
+    showModal(`مراجعة وتصحيح امتحان: ${esc(attempt.student_name)}`, modalContent);
 
     document.getElementById('saveGradingBtn')?.addEventListener('click', async () => {
       const essay_grades = {};

@@ -213,7 +213,7 @@ export function renderRegister() {
             <label class="sakr-input-label">كلمة المرور</label>
             <div class="sakr-input-wrap">
               <span class="material-symbols-rounded input-icon">lock</span>
-              <input type="password" class="sakr-input-field has-toggle" id="regPassword" placeholder="6 أحرف على الأقل" required minlength="6">
+              <input type="password" class="sakr-input-field has-toggle" id="regPassword" placeholder="8 أحرف على الأقل" required minlength="8">
               <button type="button" id="toggleRegPassword" class="sakr-toggle-pw" title="إظهار/إخفاء كلمة المرور">
                 <span class="material-symbols-rounded" style="font-size: 1.25rem;">visibility</span>
               </button>

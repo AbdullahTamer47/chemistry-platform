@@ -153,8 +153,11 @@ router.post('/:id/enroll', authMiddleware, (req, res) => {
     }
 
     const tx = db.transaction(() => {
-      // Deduct balance
-      db.prepare('UPDATE student_wallets SET balance = balance - ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ?').run(coursePrice, req.user.id);
+      // Deduct balance atomically
+      const deductResult = db.prepare('UPDATE student_wallets SET balance = balance - ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ? AND balance >= ?').run(coursePrice, req.user.id, coursePrice);
+      if (deductResult.changes === 0) {
+        throw new Error('رصيد غير كافٍ أو تم خصمه بالفعل');
+      }
       
       // Record transaction
       db.prepare("INSERT INTO wallet_transactions (user_id, amount, type, description) VALUES (?, ?, 'debit', ?)").run(

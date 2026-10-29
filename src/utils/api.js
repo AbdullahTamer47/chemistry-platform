@@ -201,7 +201,6 @@ export const api = {
   // Pillar 1: Wallet & Instant Fawry & Vouchers
   getWalletBalance: () => request('/payments/wallet/balance'),
   generateFawry: (amount) => request('/payments/fawry/generate', { method: 'POST', body: { amount } }),
-  simulateFawryPay: (reference_code) => request('/payments/fawry/simulate-pay', { method: 'POST', body: { reference_code } }),
   chargeVoucher: (voucher_code) => request('/payments/wallet/charge-voucher', { method: 'POST', body: { voucher_code } }),
   getVouchers: () => request('/payments/vouchers'),
   generateVouchers: (body) => request('/payments/vouchers/generate', { method: 'POST', body }),

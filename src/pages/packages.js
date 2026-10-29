@@ -1,9 +1,9 @@
+import { esc } from '../utils/helpers.js';
 import { renderNavbar, initNavbar } from '../components/navbar.js';
 import { api } from '../utils/api.js';
 import { showToast } from '../components/toast.js';
 import { showModal } from '../components/modal.js';
 
-const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
 export function renderPackages() {
   return `
@@ -255,7 +255,7 @@ export async function initPackages() {
           try {
             const res = await api.subscribePackage(pkgId, { payment_method: 'voucher', voucher_code: code });
             showToast(res.message, 'success');
-            document.querySelector('.modal-backdrop')?.remove();
+            document.querySelector('.modal-overlay')?.remove();
             await initPackages();
           } catch (err) {
             showToast(err.message, 'error');
@@ -268,6 +268,6 @@ export async function initPackages() {
     });
 
   } catch (err) {
-    listEl.innerHTML = `<p style="color:var(--error);text-align:center;padding:30px;">حدث خطأ في تحميل الباقات: ${err.message}</p>`;
+    listEl.innerHTML = `<p style="color:var(--error);text-align:center;padding:30px;">حدث خطأ في تحميل الباقات: ${esc(err.message)}</p>`;
   }
 }

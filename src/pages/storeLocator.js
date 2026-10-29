@@ -1,10 +1,10 @@
+import { esc } from '../utils/helpers.js';
 import { renderNavbar, initNavbar } from '../components/navbar.js';
 import { renderPublicHeader, initPublicHeader } from '../components/publicHeader.js';
 import { isLoggedIn, isTeacher } from '../utils/auth.js';
 import { api } from '../utils/api.js';
 import { showToast } from '../components/toast.js';
 
-const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
 const EGYPT_GOVERNORATES = [
   'القاهرة', 'الجيزة', 'الإسكندرية', 'الدقهلية', 'الغربية', 'الشرقية', 
@@ -578,7 +578,7 @@ export async function initStoreLocator() {
     gridEl.innerHTML = `
       <div class="card" style="text-align:center;padding:40px;color:var(--error);">
         <span class="material-symbols-rounded" style="font-size:3rem;margin-bottom:8px;">error</span>
-        <p style="font-weight:800;">حدث خطأ في تحميل دليل المكتبات: ${err.message}</p>
+        <p style="font-weight:800;">حدث خطأ في تحميل دليل المكتبات: ${esc(err.message)}</p>
         <button type="button" class="btn btn-secondary btn-sm" onclick="location.reload()" style="margin-top:12px;">إعادة المحاولة</button>
       </div>
     `;

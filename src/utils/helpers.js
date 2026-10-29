@@ -37,13 +37,34 @@ export function getGradeColor(grade) {
 
 export function getInitials(name) {
   if (!name) return '?';
-  return name.split(' ').slice(0, 2).map(w => w[0]).join('');
+  return esc(String(name || '').split(' ').filter(Boolean).slice(0, 2).map(w => w[0]).join(''));
 }
 
+const ESC_MAP = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;', '`': '&#96;' };
+
+/** Escape any value for safe use inside HTML text OR quoted attribute values. */
+export function esc(v) {
+  return String(v ?? '').replace(/[&<>"'`]/g, c => ESC_MAP[c]);
+}
+
+/** Kept for backwards compatibility: same as esc(). */
 export function sanitize(str) {
-  const div = document.createElement('div');
-  div.textContent = str;
-  return div.innerHTML;
+  return esc(str);
+}
+
+/**
+ * For teacher-authored question text: escapes everything, then restores a tiny
+ * whitelist of formatting tags used for chemistry formulas (H<sub>2</sub>O, x<sup>2</sup>).
+ */
+export function escRich(v) {
+  return esc(v).replace(/&lt;(\/?)(sub|sup|b|i|strong|em)&gt;/gi, '<$1$2>').replace(/&lt;br\s*\/?&gt;/gi, '<br>');
+}
+
+/** Only allow http(s)/relative URLs in href/src; anything else (javascript:, data:) becomes '#'. */
+export function safeUrl(u) {
+  const s = String(u ?? '').trim();
+  if (/^(https?:\/\/|\/(?!\/)|#\/)/i.test(s)) return esc(s);
+  return '#';
 }
 
 export function debounce(fn, ms = 300) {

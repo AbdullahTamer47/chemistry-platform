@@ -42,3 +42,8 @@ yarn-error.log*
 # OS Files
 .DS_Store
 Thumbs.db
+
+# AI-tooling scratch (contained a leaked API key; never commit)
+opencode.json
+scratch/
+scripts/

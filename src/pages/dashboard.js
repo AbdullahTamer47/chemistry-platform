@@ -2,7 +2,7 @@ import { renderNavbar, initNavbar } from '../components/navbar.js';
 import { api } from '../utils/api.js';
 import { getUser } from '../utils/auth.js';
 import { showToast } from '../components/toast.js';
-import { getInitials, formatCurrency } from '../utils/helpers.js';
+import { getInitials, formatCurrency, esc } from '../utils/helpers.js';
 import { safeSetHTML, errorState } from '../utils/dom.js';
 import chemCurriculum from '../assets/chem-curriculum-3d.jpg';
 import { openChemistryLabModal } from '../components/chemistryLabModal.js';
@@ -103,9 +103,9 @@ export async function initDashboard() {
           ${getInitials(data.user?.name || user.name)}
         </div>
         <div style="min-width: 0; flex: 1;">
-          <h1 style="font-size: clamp(1.2rem, 3vw, 1.55rem); font-weight: 900; line-height: 1.3;">${greeting}، ${data.user?.name || user.name}</h1>
+          <h1 style="font-size: clamp(1.2rem, 3vw, 1.55rem); font-weight: 900; line-height: 1.3;">${greeting}، ${esc(data.user?.name || user.name)}</h1>
           <p style="opacity: 0.9; font-size: 0.85rem; margin-top: 4px; font-weight: 600;">
-            <span class="badge" style="background: rgba(255,255,255,0.15); color: white;">${data.user?.grade || user.grade}</span> 
+            <span class="badge" style="background: rgba(255,255,255,0.15); color: white;">${esc(data.user?.grade || user.grade)}</span> 
             · مستعد لحصة جديدة من المتعة والتعلم؟
           </p>
         </div>
@@ -168,14 +168,14 @@ export async function initDashboard() {
       : courses.map(c => `
         <div class="card" style="padding: 24px; display: flex; align-items: center; gap: 20px; cursor: pointer; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); border-radius: 16px; border: 1px solid var(--border-light);" onmouseover="this.style.boxShadow='var(--shadow-md)'; this.style.transform='translateY(-2px)';" onmouseout="this.style.boxShadow='var(--shadow-sm)'; this.style.transform='translateY(0)';" onclick="window.location.hash='#/courses/${c.id}'">
           <div style="width: 80px; height: 80px; border-radius: 12px; overflow: hidden; flex-shrink: 0; position: relative; box-shadow: var(--shadow-sm);">
-            <img src="${c.thumbnail || chemCurriculum}" alt="${c.title}" style="width:100%; height:100%; object-fit:cover;">
+            <img src="${c.thumbnail || chemCurriculum}" alt="${esc(c.title)}" style="width:100%; height:100%; object-fit:cover;">
           </div>
           <div style="flex: 1; min-width: 0;">
             <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px;">
               <span class="badge" style="background:rgba(5, 150, 105, 0.1); color:var(--primary); font-size:0.7rem; padding:4px 10px; font-weight:700; border-radius: 8px;">مفتوح طوال العام</span>
-              <span style="font-size:0.75rem; color:var(--text-muted); font-weight:600;">${c.grade || 'ثانوية عامة'}</span>
+              <span style="font-size:0.75rem; color:var(--text-muted); font-weight:600;">${esc(c.grade || 'ثانوية عامة')}</span>
             </div>
-            <h3 style="font-size: 1.05rem; font-weight: 800; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 10px;">${c.title}</h3>
+            <h3 style="font-size: 1.05rem; font-weight: 800; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 10px;">${esc(c.title)}</h3>
             <div style="display: flex; align-items: center; gap: 12px;">
               <div class="progress-bar" style="max-width: 200px; height: 8px; flex: 1; border-radius: 4px;">
                 <div class="progress-fill" style="width: ${c.progress || 0}%"></div>

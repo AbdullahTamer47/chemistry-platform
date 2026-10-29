@@ -1,8 +1,8 @@
+import { esc } from '../utils/helpers.js';
 import { renderNavbar, initNavbar } from '../components/navbar.js';
 import { api } from '../utils/api.js';
 import { showToast } from '../components/toast.js';
 
-const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
 export function renderCertificates() {
   return `
@@ -184,6 +184,6 @@ export async function initCertificates() {
     });
 
   } catch (err) {
-    container.innerHTML = `<p style="color:var(--error);text-align:center;padding:30px;">حدث خطأ في تحميل الشهادات: ${err.message}</p>`;
+    container.innerHTML = `<p style="color:var(--error);text-align:center;padding:30px;">حدث خطأ في تحميل الشهادات: ${esc(err.message)}</p>`;
   }
 }

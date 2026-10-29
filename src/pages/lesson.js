@@ -39,8 +39,8 @@ export async function initLesson(id) {
       </div>
 
       <div class="page-header" style="margin-bottom: 20px;">
-        <h1 class="page-title"><span class="material-symbols-rounded" style="color:var(--primary)">play_circle</span> ${lesson.title}</h1>
-        <p class="page-subtitle">${lesson.chapter_title || 'شرح الدرس الحالي من الكورس المنهجي'}</p>
+        <h1 class="page-title"><span class="material-symbols-rounded" style="color:var(--primary)">play_circle</span> ${esc(lesson.title)}</h1>
+        <p class="page-subtitle">${esc(lesson.chapter_title || 'شرح الدرس الحالي من الكورس المنهجي')}</p>
       </div>
 
       <!-- Secure Video Box -->
@@ -54,9 +54,9 @@ export async function initLesson(id) {
         
         <!-- Anti-leak Moving Watermark (Anti-Piracy DRM) -->
         <div id="watermark" class="video-watermark">
-          <span style="font-weight:800;">${user.name}</span>
+          <span style="font-weight:800;">${esc(user.name)}</span>
           <span style="opacity:0.6; margin: 0 6px;">•</span>
-          <span style="direction:ltr; display:inline-block;">${user.phone}</span>
+          <span style="direction:ltr; display:inline-block;">${esc(user.phone)}</span>
           <span style="opacity:0.6; margin: 0 6px;">•</span>
           <span style="color:#FBBF24; font-weight:800;">ID:#${user.id}</span>
         </div>
@@ -108,7 +108,7 @@ export async function initLesson(id) {
         ? `
         <div class="card" style="margin-bottom: 24px;">
           <h3 class="card-title" style="margin-bottom: 10px;"><span class="material-symbols-rounded">description</span> مذكرات وتفاصيل الحصة</h3>
-          <p style="color:var(--text-secondary); font-size:0.88rem; line-height:1.75;">${lesson.description}</p>
+          <p style="color:var(--text-secondary); font-size:0.88rem; line-height:1.75;">${esc(lesson.description)}</p>
         </div>
         ` 
         : ''
@@ -160,33 +160,40 @@ export async function initLesson(id) {
     // Load Video URL/Iframe Source securely
     try {
       const res = await api.getVideoToken(id);
-      let url = res.video_url;
+      const url = String(res.video_url || '');
       let iframeSrc = '';
 
       if (url.includes('youtube.com') || url.includes('youtu.be')) {
         let videoId = '';
         if (url.includes('youtu.be/')) videoId = url.split('youtu.be/')[1].split('?')[0];
         else if (url.includes('v=')) videoId = url.split('v=')[1].split('&')[0];
+        videoId = videoId.replace(/[^A-Za-z0-9_-]/g, '');
+        if (!videoId) throw new Error('رابط الفيديو غير صالح');
 
         iframeSrc = `https://www.youtube-nocookie.com/embed/${videoId}?rel=0&modestbranding=1&showinfo=0&fs=0&controls=1&disablekb=1`;
       } else if (url.includes('drive.google.com')) {
         let fileId = '';
         if (url.includes('/d/')) fileId = url.split('/d/')[1].split('/')[0];
         else if (url.includes('id=')) fileId = url.split('id=')[1].split('&')[0];
+        fileId = fileId.replace(/[^A-Za-z0-9_-]/g, '');
+        if (!fileId) throw new Error('رابط الفيديو غير صالح');
 
         iframeSrc = `https://drive.google.com/file/d/${fileId}/preview`;
-      } else {
+      } else if (/^https:\/\//i.test(url)) {
         iframeSrc = url;
+      } else {
+        throw new Error('رابط الفيديو غير صالح');
       }
 
+      // Fullscreen stays disabled simply by omitting the allowfullscreen attribute.
       document.getElementById('videoContainer').innerHTML = `
-        <iframe src="${iframeSrc}" style="width:100%; height:100%; border:none;" allow="autoplay; encrypted-media" allowfullscreen="false"></iframe>
+        <iframe src="${esc(iframeSrc)}" title="فيديو الدرس" style="width:100%; height:100%; border:none;" allow="autoplay; encrypted-media" referrerpolicy="no-referrer"></iframe>
       `;
     } catch (err) {
       document.getElementById('videoContainer').innerHTML = `
         <div style="display:flex; align-items:center; justify-content:center; height:100%; color:var(--error); flex-direction:column; gap:12px; background:var(--bg-secondary);">
           <span class="material-symbols-rounded" style="font-size:3rem;">error</span>
-          <p style="font-size:0.85rem; font-weight:700;">${err.message}</p>
+          <p style="font-size:0.85rem; font-weight:700;">${esc(err.message)}</p>
         </div>
       `;
     }
@@ -263,7 +270,7 @@ export async function initLesson(id) {
           <div class="discussion-card">
             <div class="discussion-header">
               <div class="discussion-avatar" style="background:var(--green-50); color:var(--primary); font-weight:800; border:1px solid var(--green-200);">
-                ${d.user_name.charAt(0)}
+                ${esc(d.user_name.charAt(0))}
               </div>
               <div style="flex:1;">
                 <div style="display:flex; align-items:center; justify-content:space-between;">
@@ -393,7 +400,7 @@ export async function initLesson(id) {
         </div>
         <h2 style="font-size:1.4rem; font-weight:900; color:var(--text-primary); margin-bottom:10px;">عفواً، المحتوى مغلق (نظام التسلسل الإجباري)</h2>
         <p style="color:var(--text-secondary); font-size:0.92rem; line-height:1.7; max-width:520px; margin:0 auto 24px;">
-          ${err.message || 'لا يمكنك فتح هذا الدرس إلا بعد اجتياز المحاضرة أو الكويز السابق بنجاح وفقاً لنظام المتابعة الصارم.'}
+          ${esc(err.message || 'لا يمكنك فتح هذا الدرس إلا بعد اجتياز المحاضرة أو الكويز السابق بنجاح وفقاً لنظام المتابعة الصارم.')}
         </p>
         <div style="display:flex; justify-content:center; gap:12px; flex-wrap:wrap;">
           <a href="#/courses" class="btn btn-secondary"><span class="material-symbols-rounded">book</span> جدول الكورسات</a>
