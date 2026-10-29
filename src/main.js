@@ -48,38 +48,9 @@ function isDomMounted(elementId) {
 // Expose helpers globally so page modules can use them without circular imports
 window.__nav = { getId: () => navigationId, isDomMounted };
 
-// ── Global Null-Safe getElementById Proxy ───────────────────────────────────
-// Wraps document.getElementById so that when a page's async init() tries to
-// write innerHTML on an element that no longer exists (because the user
-// navigated away during the await), it gets a no-op proxy instead of crashing.
-//
-// This single patch protects ALL 20+ bare .innerHTML assignments across every
-// page file in the codebase without needing to touch each one individually.
-const _origGetById = document.getElementById.bind(document);
-document.getElementById = function safeGetById(id) {
-  const el = _origGetById(id);
-  if (el !== null) return el;
-
-  // Return a Proxy that silently swallows any property set/call on null
-  return new Proxy({}, {
-    set() { return true; },          // el.innerHTML = '…' → no-op
-    get(_, prop) {
-      // Allow chaining: el.querySelector(…) → returns same proxy
-      if (typeof prop === 'string') {
-        return new Proxy(() => new Proxy({}, { set() { return true; }, get() { return () => {}; } }), {
-          apply() { return new Proxy({}, { set() { return true; }, get() { return () => {}; } }); },
-          set() { return true; },
-        });
-      }
-      return undefined;
-    }
-  });
-};
-// ────────────────────────────────────────────────────────────────────────────
-
 // Render a consistent error fallback inside a container element
 function renderErrorState(containerId, message) {
-  const el = _origGetById(containerId);
+  const el = document.getElementById(containerId);
   if (!el) return;
   el.innerHTML = `
     <div class="empty-state" style="padding:40px;">

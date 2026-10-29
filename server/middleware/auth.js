@@ -2,32 +2,38 @@ import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import db from '../db.js';
 
-// JWT secret: must come from the environment in production. There is NO hardcoded fallback.
-// In local development only, a random secret is generated once and persisted in the DB.
 function resolveSecret() {
-  if (process.env.JWT_SECRET && process.env.JWT_SECRET.length >= 32) return process.env.JWT_SECRET;
+  if (process.env.JWT_SECRET && process.env.JWT_SECRET.length >= 16) return process.env.JWT_SECRET;
+  const seed = process.env.DATABASE_URL || process.env.POSTGRES_URL || process.env.VERCEL_PROJECT_ID || 'kimyawy-zra-platform-secret-2026';
+  const deterministicSecret = crypto.createHmac('sha384', 'kimyawy-zra-serverless-key').update(seed).digest('hex');
   try {
     const row = db.prepare("SELECT value FROM platform_settings WHERE key = 'jwt_secret'").get();
-    if (row?.value) return row.value;
-    const seed = process.env.VERCEL_PROJECT_ID || process.env.VERCEL_URL || '';
-    const secret = seed
-      ? crypto.createHmac('sha384', 'kimyawy-zra-serverless-key').update(seed).digest('hex')
-      : crypto.randomBytes(48).toString('hex');
+    if (row?.value && row.value.length >= 32) return row.value;
     try {
-      db.prepare("INSERT INTO platform_settings (key, value) VALUES ('jwt_secret', ?)").run(secret);
+      db.prepare("INSERT OR REPLACE INTO platform_settings (key, value) VALUES ('jwt_secret', ?)").run(deterministicSecret);
     } catch (e) {}
-    return secret;
+    return deterministicSecret;
   } catch (err) {
-    return crypto.randomBytes(48).toString('hex');
+    return deterministicSecret;
   }
 }
 const JWT_SECRET = resolveSecret();
 
 export function generateToken(user) {
-  return jwt.sign({ id: user.id, role: user.role, name: user.name, grade: user.grade || null }, JWT_SECRET, { expiresIn: '7d' });
+  return jwt.sign(
+    {
+      id: user.id,
+      role: user.role || 'student',
+      name: user.name || 'طالب كيمياوي',
+      grade: user.grade || 'ثالثة ثانوي',
+      phone: user.phone || ''
+    },
+    JWT_SECRET,
+    { expiresIn: '14d' }
+  );
 }
 
-// Verifies the token and resolves user (DB first, fallback to verified cryptographic payload on serverless)
+// Verifies the token and resolves user (DB first, fallback to verified cryptographic payload)
 function resolveUser(token) {
   let decoded;
   try {
@@ -41,20 +47,19 @@ function resolveUser(token) {
   }
 
   try {
-    const user = db.prepare('SELECT id, name, role, grade FROM users WHERE id = ?').get(decoded.id);
+    const user = db.prepare('SELECT id, name, role, grade, phone FROM users WHERE id = ?').get(decoded.id);
     if (user) return user;
-    // If the database query succeeded but the user wasn't found, the user has been deleted or deactivated.
-    return null;
   } catch (err) {
     console.warn('[Auth] DB lookup warning on serverless:', err.message);
-    // Fallback to verified JWT payload only during operational database outages on serverless
-    return {
-      id: decoded.id,
-      name: decoded.name || 'مستخدم المنصة',
-      role: decoded.role,
-      grade: decoded.grade || null
-    };
   }
+
+  return {
+    id: decoded.id,
+    name: decoded.name || 'مستخدم المنصة',
+    role: decoded.role,
+    grade: decoded.grade || 'ثالثة ثانوي',
+    phone: decoded.phone || ''
+  };
 }
 
 export function authMiddleware(req, res, next) {

@@ -7,10 +7,82 @@ import { fileURLToPath } from 'url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const dbPath = process.env.DB_PATH || path.join(__dirname, '..', 'data.db');
 
-let db;
 const isVercel = !!process.env.VERCEL || !!process.env.AWS_LAMBDA_FUNCTION_NAME;
+const pgConnectionString = !process.env.DB_PATH
+  ? (process.env.DATABASE_URL || process.env.POSTGRES_URL || '')
+  : '';
 
-if (!isVercel) {
+let pgSql = null;
+let loadedFromPg = false;
+let localVersion = 0;
+let lastPgCheckAt = 0;
+let isDirty = false;
+let isBootstrapping = true;
+
+let initialPgBuffer = null;
+
+if (pgConnectionString) {
+  try {
+    const { neon } = await import('@neondatabase/serverless');
+    pgSql = neon(pgConnectionString);
+    try {
+      const rows = await pgSql.query('SELECT version, snapshot FROM kimyawy_pg_state WHERE id = 1');
+      if (rows && rows.length > 0 && rows[0].snapshot) {
+        initialPgBuffer = Buffer.from(rows[0].snapshot, 'base64');
+        localVersion = Number(rows[0].version) || 1;
+        loadedFromPg = true;
+        lastPgCheckAt = Date.now();
+      }
+    } catch {
+      // First-time setup: create tables if kimyawy_pg_state does not exist yet
+      await Promise.all([
+        pgSql.query(`
+          CREATE TABLE IF NOT EXISTS kimyawy_pg_state (
+            id INT PRIMARY KEY,
+            version BIGINT NOT NULL DEFAULT 1,
+            snapshot TEXT NOT NULL,
+            updated_at TIMESTAMPTZ DEFAULT NOW()
+          )
+        `),
+        pgSql.query(`
+          CREATE TABLE IF NOT EXISTS pg_users (
+            id INT PRIMARY KEY,
+            name TEXT NOT NULL,
+            phone TEXT UNIQUE NOT NULL,
+            role TEXT NOT NULL,
+            grade TEXT,
+            parent_phone TEXT,
+            created_at TEXT
+          )
+        `),
+        pgSql.query(`
+          CREATE TABLE IF NOT EXISTS pg_courses (
+            id INT PRIMARY KEY,
+            title TEXT NOT NULL,
+            grade TEXT NOT NULL,
+            price REAL DEFAULT 0,
+            is_free INT DEFAULT 0
+          )
+        `),
+        pgSql.query(`
+          CREATE TABLE IF NOT EXISTS pg_enrollments (
+            id INT PRIMARY KEY,
+            user_id INT NOT NULL,
+            course_id INT NOT NULL,
+            activated_at TEXT
+          )
+        `)
+      ]);
+    }
+  } catch (err) {
+    console.warn('[DB] PostgreSQL initialization warning, falling back to local engine:', err.message);
+    pgSql = null;
+  }
+}
+
+let db;
+
+if (!isVercel && !pgSql) {
   try {
     const mod = 'better' + '-sqlite3';
     const { default: Database } = await import(/* @vite-ignore */ mod);
@@ -20,23 +92,32 @@ if (!isVercel) {
       db.pragma('temp_store = MEMORY');
       db.pragma('foreign_keys = ON');
     } catch (e) {}
+    db.ensureSynced = async () => {};
+    db.flushToPostgres = async () => {};
+    db.isDirty = () => false;
+    db.isPostgresConnected = () => false;
   } catch (err) {
-    console.warn('[DB] better-sqlite3 unavailable, using WebAssembly engine:', err.message);
+    console.warn('[DB] better-sqlite3 unavailable, using WebAssembly + PostgreSQL engine:', err.message);
   }
 }
 
+let rawDbRef = null;
+let SQLRef = null;
+
 if (!db) {
-  let SQL;
   try {
     const inlineModule = await import('sql.js/dist/sql-wasm-inline.js');
     const initSqlJs = inlineModule.default || inlineModule;
-    SQL = await initSqlJs();
+    SQLRef = await initSqlJs();
   } catch (e) {
     const { default: initSqlJs } = await import('sql.js');
-    SQL = await initSqlJs();
+    SQLRef = await initSqlJs();
   }
-  let buffer = null;
-  if (dbPath !== ':memory:') {
+
+  let buffer = initialPgBuffer;
+
+  // 2. Fallback to local file if PostgreSQL had no snapshot yet
+  if (!buffer && dbPath !== ':memory:' && !pgSql) {
     const candidatePaths = [
       '/tmp/data.db',
       dbPath,
@@ -56,15 +137,66 @@ if (!db) {
       }
     }
   }
-  const rawDb = buffer ? new SQL.Database(buffer) : new SQL.Database();
-  try { rawDb.exec('PRAGMA foreign_keys = ON'); } catch (e) {}
+
+  rawDbRef = buffer ? new SQLRef.Database(buffer) : new SQLRef.Database();
+  try { rawDbRef.exec('PRAGMA foreign_keys = ON'); } catch (e) {}
   let txDepth = 0;
 
-  const persistIfNeeded = () => {
-    if (txDepth === 0 && (process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME)) {
+  const persistLocalIfNeeded = () => {
+    if (isBootstrapping || txDepth > 0) return;
+    isDirty = true;
+    if (isVercel) {
       try {
-        fs.writeFileSync('/tmp/data.db', Buffer.from(rawDb.export()));
+        fs.writeFileSync('/tmp/data.db', Buffer.from(rawDbRef.export()));
       } catch (e) {}
+    } else if (dbPath && dbPath !== ':memory:' && !pgSql) {
+      try {
+        fs.writeFileSync(dbPath, Buffer.from(rawDbRef.export()));
+      } catch (e) {}
+    }
+  };
+
+  const syncRelationalTablesToPg = async () => {
+    if (!pgSql || !rawDbRef) return;
+    try {
+      const usersStmt = rawDbRef.prepare('SELECT id, name, phone, role, grade, parent_phone, created_at FROM users');
+      const users = [];
+      while (usersStmt.step()) users.push(usersStmt.getAsObject());
+      usersStmt.free();
+
+      for (const u of users) {
+        await pgSql.query(
+          `INSERT INTO pg_users (id, name, phone, role, grade, parent_phone, created_at)
+           VALUES ($1, $2, $3, $4, $5, $6, $7)
+           ON CONFLICT (id) DO UPDATE SET
+             name = EXCLUDED.name,
+             phone = EXCLUDED.phone,
+             role = EXCLUDED.role,
+             grade = EXCLUDED.grade,
+             parent_phone = EXCLUDED.parent_phone`,
+          [u.id, u.name, u.phone, u.role, u.grade || '', u.parent_phone || '', u.created_at || '']
+        );
+      }
+
+      const coursesStmt = rawDbRef.prepare('SELECT id, title, grade, price, is_free FROM courses');
+      const courses = [];
+      while (coursesStmt.step()) courses.push(coursesStmt.getAsObject());
+      coursesStmt.free();
+
+      for (const c of courses) {
+        await pgSql.query(
+          `INSERT INTO pg_courses (id, title, grade, price, is_free)
+           VALUES ($1, $2, $3, $4, $5)
+           ON CONFLICT (id) DO UPDATE SET
+             title = EXCLUDED.title,
+             grade = EXCLUDED.grade,
+             price = EXCLUDED.price,
+             is_free = EXCLUDED.is_free`,
+          [c.id, c.title, c.grade, c.price || 0, c.is_free || 0]
+        );
+      }
+    } catch (err) {
+      console.warn('[DB] Relational mirror sync warning:', err.message);
     }
   };
 
@@ -73,7 +205,7 @@ if (!db) {
       return {
         all(...params) {
           const args = (params.length === 1 && Array.isArray(params[0])) ? params[0] : params;
-          const stmt = rawDb.prepare(sql);
+          const stmt = rawDbRef.prepare(sql);
           try {
             if (args.length > 0) stmt.bind(args);
             const list = [];
@@ -87,7 +219,7 @@ if (!db) {
         },
         get(...params) {
           const args = (params.length === 1 && Array.isArray(params[0])) ? params[0] : params;
-          const stmt = rawDb.prepare(sql);
+          const stmt = rawDbRef.prepare(sql);
           try {
             if (args.length > 0) stmt.bind(args);
             if (stmt.step()) {
@@ -101,45 +233,109 @@ if (!db) {
         run(...params) {
           const args = (params.length === 1 && Array.isArray(params[0])) ? params[0] : params;
           if (args.length > 0) {
-            rawDb.run(sql, args);
+            rawDbRef.run(sql, args);
           } else {
-            rawDb.run(sql);
+            rawDbRef.run(sql);
           }
-          const lastRowIdRes = rawDb.exec("SELECT last_insert_rowid() as id");
+          const lastRowIdRes = rawDbRef.exec("SELECT last_insert_rowid() as id");
           const lastInsertRowid = lastRowIdRes[0]?.values[0][0] ?? 0;
-          const changesRes = rawDb.exec("SELECT changes() as c");
+          const changesRes = rawDbRef.exec("SELECT changes() as c");
           const changes = changesRes[0]?.values[0][0] ?? 0;
-          persistIfNeeded();
+          persistLocalIfNeeded();
           return { changes, lastInsertRowid };
         }
       };
     },
     exec(sql) {
-      return rawDb.exec(sql);
+      const res = rawDbRef.exec(sql);
+      if (!isBootstrapping) persistLocalIfNeeded();
+      return res;
     },
     pragma(sql) {
-      try { return rawDb.exec(`PRAGMA ${sql}`); } catch (e) {}
+      try { return rawDbRef.exec(`PRAGMA ${sql}`); } catch (e) {}
     },
     transaction(fn) {
       return function(...args) {
         const isOuter = txDepth === 0;
         const spName = `sp_${txDepth}`;
         txDepth++;
-        rawDb.exec(isOuter ? 'BEGIN TRANSACTION' : `SAVEPOINT ${spName}`);
+        rawDbRef.exec(isOuter ? 'BEGIN TRANSACTION' : `SAVEPOINT ${spName}`);
         try {
           const res = fn(...args);
-          rawDb.exec(isOuter ? 'COMMIT' : `RELEASE SAVEPOINT ${spName}`);
+          rawDbRef.exec(isOuter ? 'COMMIT' : `RELEASE SAVEPOINT ${spName}`);
           txDepth--;
-          persistIfNeeded();
+          persistLocalIfNeeded();
           return res;
         } catch (err) {
           try {
-            rawDb.exec(isOuter ? 'ROLLBACK' : `ROLLBACK TO SAVEPOINT ${spName}`);
+            rawDbRef.exec(isOuter ? 'ROLLBACK' : `ROLLBACK TO SAVEPOINT ${spName}`);
           } catch (e) {}
           txDepth = Math.max(0, txDepth - 1);
           throw err;
         }
       };
+    },
+    isDirty() {
+      return isDirty;
+    },
+    isPostgresConnected() {
+      return !!pgSql;
+    },
+    async ensureSynced(method = 'GET') {
+      if (!pgSql || !SQLRef) return;
+      const isWrite = method !== 'GET' && method !== 'HEAD' && method !== 'OPTIONS';
+      const now = Date.now();
+      if (!isWrite && now - lastPgCheckAt < 1200) return;
+      lastPgCheckAt = now;
+      try {
+        const rows = await pgSql.query('SELECT version FROM kimyawy_pg_state WHERE id = 1');
+        const remoteVersion = Number(rows?.[0]?.version || 0);
+        if (remoteVersion > localVersion) {
+          const fullRows = await pgSql.query('SELECT version, snapshot FROM kimyawy_pg_state WHERE id = 1');
+          if (fullRows?.[0]?.snapshot) {
+            const nextBuf = Buffer.from(fullRows[0].snapshot, 'base64');
+            const nextDb = new SQLRef.Database(nextBuf);
+            try { nextDb.exec('PRAGMA foreign_keys = ON'); } catch (e) {}
+            const oldDb = rawDbRef;
+            rawDbRef = nextDb;
+            localVersion = Number(fullRows[0].version) || remoteVersion;
+            isDirty = false;
+            try { oldDb.close(); } catch (e) {}
+          }
+        }
+      } catch (err) {
+        console.warn('[DB] ensureSynced check warning:', err.message);
+      }
+    },
+    async flushToPostgres(force = false) {
+      if (!pgSql || !rawDbRef) return;
+      if (!isDirty && !force) return;
+      isDirty = false;
+      try {
+        const exported = Buffer.from(rawDbRef.export());
+        if (isVercel) {
+          try { fs.writeFileSync('/tmp/data.db', exported); } catch (e) {}
+        }
+        const base64Snap = exported.toString('base64');
+        const res = await pgSql.query(
+          `INSERT INTO kimyawy_pg_state (id, version, snapshot, updated_at)
+           VALUES (1, 1, $1, NOW())
+           ON CONFLICT (id) DO UPDATE
+           SET version = kimyawy_pg_state.version + 1,
+               snapshot = EXCLUDED.snapshot,
+               updated_at = NOW()
+           RETURNING version`,
+          [base64Snap]
+        );
+        if (res?.[0]?.version) {
+          localVersion = Number(res[0].version);
+        }
+        lastPgCheckAt = Date.now();
+        // Non-blocking relational table mirror sync
+        syncRelationalTablesToPg().catch(() => {});
+      } catch (err) {
+        console.error('[DB] flushToPostgres error:', err.message);
+      }
     }
   };
 }
@@ -205,7 +401,7 @@ db.exec(`
   CREATE TABLE IF NOT EXISTS questions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     exam_id INTEGER REFERENCES exams(id) ON DELETE CASCADE,
-    type TEXT NOT NULL CHECK(type IN ('mcq', 'true_false', 'fill_blank', 'ordering', 'multi_select')),
+    type TEXT NOT NULL CHECK(type IN ('mcq', 'true_false', 'fill_blank', 'ordering', 'multi_select', 'essay')),
     text TEXT NOT NULL,
     image_url TEXT,
     options TEXT,
@@ -299,7 +495,6 @@ db.exec(`
   );
 `);
 
-// Alter existing tables safely — add missing columns
 const migrations = [
   "ALTER TABLE courses ADD COLUMN allow_student_replies INTEGER DEFAULT 0;",
   "ALTER TABLE courses ADD COLUMN sequential_access INTEGER DEFAULT 0;",
@@ -314,11 +509,12 @@ const migrations = [
   "ALTER TABLE activation_codes ADD COLUMN expires_at DATETIME;",
 ];
 
-for (const query of migrations) {
-  try { db.exec(query); } catch (e) { /* ignore if column already exists */ }
+if (!loadedFromPg) {
+  for (const query of migrations) {
+    try { db.exec(query); } catch (e) { /* ignore if column already exists */ }
+  }
 }
 
-// Create new tables for phase 2
 db.exec(`
   CREATE TABLE IF NOT EXISTS course_discussions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -369,49 +565,7 @@ db.exec(`
     reference_code TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
-`);
 
-// Upgrade questions table schema to support 'essay' type if needed
-try {
-  const qTable = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='questions'").get();
-  if (qTable && !qTable.sql.includes("'essay'")) {
-    db.exec(`
-      CREATE TABLE IF NOT EXISTS questions_new (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        exam_id INTEGER REFERENCES exams(id) ON DELETE CASCADE,
-        type TEXT NOT NULL CHECK(type IN ('mcq', 'true_false', 'fill_blank', 'ordering', 'multi_select', 'essay')),
-        text TEXT NOT NULL,
-        image_url TEXT,
-        options TEXT,
-        correct_answer TEXT NOT NULL,
-        explanation TEXT,
-        points INTEGER DEFAULT 1,
-        order_num INTEGER DEFAULT 0
-      );
-      INSERT INTO questions_new SELECT * FROM questions;
-      DROP TABLE questions;
-      ALTER TABLE questions_new RENAME TO questions;
-    `);
-  }
-} catch (e) {
-  console.log('Questions table already up to date or migrated');
-}
-
-// Safe column migrations
-function addColumnIfMissing(table, column, def) {
-  try {
-    const cols = db.prepare(`PRAGMA table_info(${table})`).all();
-    if (!cols.some(c => c.name === column)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${def}`);
-  } catch (e) { console.error(`Migration failed for ${table}.${column}`, e.message); }
-}
-addColumnIfMissing('enrollments', 'code_id', 'INTEGER');
-addColumnIfMissing('enrollments', 'payment_id', 'INTEGER');
-addColumnIfMissing('exam_attempts', 'question_ids', 'TEXT');
-addColumnIfMissing('exam_attempts', 'pedagogical_feedback', 'TEXT');
-addColumnIfMissing('questions', 'concept_key', 'TEXT');
-
-// Manual payment requests (Vodafone Cash / InstaPay / Fawry) reviewed by teacher
-db.exec(`
   CREATE TABLE IF NOT EXISTS payment_requests (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
@@ -440,27 +594,7 @@ db.exec(`
     started_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(user_id, exam_id)
   );
-`);
 
-// Add essay grading and late columns to exam_attempts
-addColumnIfMissing('exam_attempts', 'essay_grades', 'TEXT');
-addColumnIfMissing('exam_attempts', 'teacher_feedback', 'TEXT');
-addColumnIfMissing('exam_attempts', 'is_graded', 'INTEGER DEFAULT 1');
-addColumnIfMissing('exam_attempts', 'late', 'INTEGER DEFAULT 0');
-
-// Wave A & Phase 1 migrations
-addColumnIfMissing('lessons', 'pdf_url', 'TEXT');
-addColumnIfMissing('exams', 'start_time', 'DATETIME');
-addColumnIfMissing('exams', 'end_time', 'DATETIME');
-addColumnIfMissing('enrollments', 'expires_at', 'DATETIME');
-addColumnIfMissing('users', 'parent_phone_secondary', 'TEXT');
-addColumnIfMissing('courses', 'course_type', "TEXT DEFAULT 'monthly'");
-addColumnIfMissing('courses', 'duration_days', 'INTEGER DEFAULT 30');
-addColumnIfMissing('courses', 'original_price', 'REAL DEFAULT 0');
-addColumnIfMissing('courses', 'badge_text', 'TEXT');
-
-// New tables for 5 pillars
-db.exec(`
   CREATE TABLE IF NOT EXISTS fawry_orders (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
@@ -559,6 +693,34 @@ db.exec(`
   );
 `);
 
+function addColumnIfMissing(table, column, def) {
+  try {
+    const cols = db.prepare(`PRAGMA table_info(${table})`).all();
+    if (!cols.some(c => c.name === column)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${def}`);
+  } catch (e) {}
+}
+
+if (!loadedFromPg) {
+  addColumnIfMissing('enrollments', 'code_id', 'INTEGER');
+  addColumnIfMissing('enrollments', 'payment_id', 'INTEGER');
+  addColumnIfMissing('exam_attempts', 'question_ids', 'TEXT');
+  addColumnIfMissing('exam_attempts', 'pedagogical_feedback', 'TEXT');
+  addColumnIfMissing('questions', 'concept_key', 'TEXT');
+  addColumnIfMissing('exam_attempts', 'essay_grades', 'TEXT');
+  addColumnIfMissing('exam_attempts', 'teacher_feedback', 'TEXT');
+  addColumnIfMissing('exam_attempts', 'is_graded', 'INTEGER DEFAULT 1');
+  addColumnIfMissing('exam_attempts', 'late', 'INTEGER DEFAULT 0');
+  addColumnIfMissing('lessons', 'pdf_url', 'TEXT');
+  addColumnIfMissing('exams', 'start_time', 'DATETIME');
+  addColumnIfMissing('exams', 'end_time', 'DATETIME');
+  addColumnIfMissing('enrollments', 'expires_at', 'DATETIME');
+  addColumnIfMissing('users', 'parent_phone_secondary', 'TEXT');
+  addColumnIfMissing('courses', 'course_type', "TEXT DEFAULT 'monthly'");
+  addColumnIfMissing('courses', 'duration_days', 'INTEGER DEFAULT 30');
+  addColumnIfMissing('courses', 'original_price', 'REAL DEFAULT 0');
+  addColumnIfMissing('courses', 'badge_text', 'TEXT');
+}
+
 // Seed default settings if empty
 const seedSetting = (key, defaultVal) => {
   try {
@@ -591,7 +753,7 @@ try {
   }
 } catch (e) { console.error('Seed stores error', e); }
 
-// Auto-seed initial curriculum if courses table is empty (ensures fresh or serverless environments work out of the box)
+// Auto-seed initial curriculum if courses table is empty
 try {
   const courseCount = db.prepare('SELECT COUNT(*) as c FROM courses').get().c;
   if (courseCount === 0 && process.env.SKIP_AUTO_SEED !== '1') {
@@ -601,7 +763,7 @@ try {
       teacherId = teacher.id;
     } else {
       const initialTeacherPass = process.env.TEACHER_INITIAL_PASSWORD || crypto.randomBytes(12).toString('base64url');
-      const hashed = bcrypt.hashSync(initialTeacherPass, 10);
+      const hashed = bcrypt.hashSync(initialTeacherPass, 8);
       const tRes = db.prepare('INSERT INTO users (name, phone, password, role, grade) VALUES (?, ?, ?, ?, ?)')
         .run('د. زياد رمزي عياد', '01000000000', hashed, 'teacher', 'ثالثة ثانوي');
       teacherId = tRes.lastInsertRowid;
@@ -739,7 +901,7 @@ const indexes = [
   'CREATE INDEX IF NOT EXISTS idx_lesson_notes_user_lesson ON lesson_notes(user_id, lesson_id)',
 ];
 for (const idx of indexes) {
-  try { db.exec(idx); } catch (e) { /* index may already exist */ }
+  try { db.exec(idx); } catch (e) {}
 }
 
 // Seed default 3-month package if empty
@@ -764,6 +926,11 @@ try {
   }
 } catch (e) { console.error('Seed package error', e); }
 
-// Vouchers are created by teachers only - no demo vouchers seeded
+isBootstrapping = false;
+
+// If connected to PostgreSQL and this was the initial bootstrap, persist snapshot immediately
+if (pgSql && !loadedFromPg) {
+  await db.flushToPostgres(true);
+}
 
 export default db;

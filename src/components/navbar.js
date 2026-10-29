@@ -1,6 +1,7 @@
 import { getUser, isTeacher, logout } from '../utils/auth.js';
 import { getInitials, esc } from '../utils/helpers.js';
 import { api } from '../utils/api.js';
+import { openChemistryLabModal } from './chemistryLabModal.js';
 import zraLogoFace from '../assets/zra-logo-face.png';
 import zraLogoText from '../assets/zra-logo-text.png';
 
@@ -15,11 +16,14 @@ export function renderNavbar(currentPage) {
       <span class="material-symbols-rounded">home</span> الرئيسية التعليمية
     </a>
     <a class="nav-item ${currentPage === 'courses' ? 'active' : ''}" href="#/courses">
-      <span class="material-symbols-rounded">school</span> الكورسات
+      <span class="material-symbols-rounded">school</span> الكورسات والمحاضرات
     </a>
     <a class="nav-item ${currentPage === 'exams' ? 'active' : ''}" href="#/exams">
       <span class="material-symbols-rounded">assignment</span> الامتحانات والتقييمات
     </a>
+    <button type="button" class="nav-item" id="navOpenChemLab" style="width:100%;text-align:right;background:transparent;">
+      <span class="material-symbols-rounded" style="color:#10b981;">science</span> المختبر الكيميائي التفاعلي
+    </button>
     <a class="nav-item ${currentPage === 'my-results' ? 'active' : ''}" href="#/my-results">
       <span class="material-symbols-rounded">fact_check</span> نتائجي وتصحيحاتي
     </a>
@@ -78,22 +82,72 @@ export function renderNavbar(currentPage) {
     <a class="nav-item ${currentPage === 'courses' ? 'active' : ''}" href="#/courses">
       <span class="material-symbols-rounded">visibility</span> تصفح الكورسات كطالب
     </a>
+    <button type="button" class="nav-item" id="navOpenChemLab" style="width:100%;text-align:right;background:transparent;">
+      <span class="material-symbols-rounded" style="color:#10b981;">science</span> المختبر الكيميائي التفاعلي
+    </button>
     <a class="nav-item ${currentPage === 'leaderboard' ? 'active' : ''}" href="#/leaderboard">
       <span class="material-symbols-rounded">emoji_events</span> لوحة المتصدرين
     </a>
-    <a class="nav-item ${currentPage === 'store-locator' ? 'active' : ''}" href="#/store-locator">
-      <span class="material-symbols-rounded">storefront</span> دليل المكتبات (معاينة الطالب)
-    </a>
   `;
+
+  const mobileBottomBar = teacher
+    ? `
+      <nav class="mobile-bottom-nav" aria-label="التنقل السريع">
+        <a href="#/admin" class="mobile-bottom-tab ${currentPage === 'admin' ? 'active' : ''}">
+          <span class="material-symbols-rounded">dashboard</span>
+          <span>الإدارة</span>
+        </a>
+        <a href="#/admin/courses" class="mobile-bottom-tab ${currentPage === 'admin-courses' ? 'active' : ''}">
+          <span class="material-symbols-rounded">book</span>
+          <span>الكورسات</span>
+        </a>
+        <a href="#/admin/exams" class="mobile-bottom-tab ${currentPage === 'admin-exams' ? 'active' : ''}">
+          <span class="material-symbols-rounded">assignment</span>
+          <span>الامتحانات</span>
+        </a>
+        <a href="#/admin/students" class="mobile-bottom-tab ${currentPage === 'admin-students' ? 'active' : ''}">
+          <span class="material-symbols-rounded">group</span>
+          <span>الطلاب</span>
+        </a>
+        <button type="button" class="mobile-bottom-tab" id="mobileBottomMoreBtn">
+          <span class="material-symbols-rounded">menu</span>
+          <span>القائمة</span>
+        </button>
+      </nav>
+    `
+    : `
+      <nav class="mobile-bottom-nav" aria-label="التنقل السريع">
+        <a href="#/dashboard" class="mobile-bottom-tab ${currentPage === 'dashboard' ? 'active' : ''}">
+          <span class="material-symbols-rounded">home</span>
+          <span>الرئيسية</span>
+        </a>
+        <a href="#/courses" class="mobile-bottom-tab ${currentPage === 'courses' ? 'active' : ''}">
+          <span class="material-symbols-rounded">school</span>
+          <span>الكورسات</span>
+        </a>
+        <a href="#/exams" class="mobile-bottom-tab ${currentPage === 'exams' ? 'active' : ''}">
+          <span class="material-symbols-rounded">assignment</span>
+          <span>الامتحانات</span>
+        </a>
+        <a href="#/wallet" class="mobile-bottom-tab ${currentPage === 'wallet' ? 'active' : ''}">
+          <span class="material-symbols-rounded">account_balance_wallet</span>
+          <span>المحفظة</span>
+        </a>
+        <button type="button" class="mobile-bottom-tab" id="mobileBottomMoreBtn">
+          <span class="material-symbols-rounded">menu</span>
+          <span>القائمة</span>
+        </button>
+      </nav>
+    `;
 
   return `
     <div class="sidebar-overlay" id="sidebarOverlay"></div>
     <div class="mobile-header" id="mobileHeader">
-      <button class="mobile-menu-btn" id="mobileMenuBtn" aria-label="Open menu"><span class="material-symbols-rounded">menu</span></button>
-      <div class="sidebar-logo" style="display: flex; align-items: center; gap: 6px;">
+      <button class="mobile-menu-btn" id="mobileMenuBtn" aria-label="فتح القائمة"><span class="material-symbols-rounded">menu</span></button>
+      <a href="#/${teacher ? 'admin' : 'dashboard'}" class="sidebar-logo" style="display: flex; align-items: center; gap: 6px; text-decoration:none;">
         <img src="${zraLogoFace}" alt="Z.R.A" class="logo-face-img" style="height: 32px;" />
         <img src="${zraLogoText}" alt="Z.R.A" class="logo-text-img" style="height: 22px;" />
-      </div>
+      </a>
       <button class="mobile-menu-btn" id="mobileDarkToggle" title="الوضع الليلي">
         <span class="material-symbols-rounded">${isDark ? 'light_mode' : 'dark_mode'}</span>
       </button>
@@ -104,10 +158,10 @@ export function renderNavbar(currentPage) {
         <button class="sidebar-close-btn" id="sidebarCloseBtn" aria-label="إغلاق القائمة">
           <span class="material-symbols-rounded">close</span>
         </button>
-        <div class="sidebar-logo" style="display: flex; align-items: center; justify-content: center; gap: 8px;">
+        <a href="#/${teacher ? 'admin' : 'dashboard'}" class="sidebar-logo" style="display: flex; align-items: center; justify-content: center; gap: 8px; text-decoration:none;">
           <img src="${zraLogoFace}" alt="Z.R.A" class="logo-face-img" style="height: 36px;" />
           <img src="${zraLogoText}" alt="Z.R.A" class="logo-text-img" style="height: 26px;" />
-        </div>
+        </a>
         <div class="sidebar-subtitle">د. زياد رمزي عياد</div>
       </div>
       
@@ -115,8 +169,8 @@ export function renderNavbar(currentPage) {
         ${teacher ? teacherNav : studentNav}
       </nav>
       
-      <!-- Dark Mode Toggle Button (Styled inline as item) -->
-      <div class="dark-mode-toggle" id="darkModeToggle" style="padding:4px 10px; margin:4px 10px; cursor:pointer;">
+      <!-- Dark Mode Toggle Button -->
+      <div class="dark-mode-toggle" id="darkModeToggle" style="padding:4px 10px; margin:4px 0; cursor:pointer;">
         <div class="nav-item" style="margin:0;">
           <span class="material-symbols-rounded" id="sidebarDarkIcon">${isDark ? 'light_mode' : 'dark_mode'}</span>
           <span id="sidebarDarkText">${isDark ? 'الوضع النهاري' : 'الوضع الليلي'}</span>
@@ -136,6 +190,8 @@ export function renderNavbar(currentPage) {
         </div>
       ` : ''}
     </aside>
+
+    ${mobileBottomBar}
   `;
 }
 
@@ -143,10 +199,17 @@ let navbarKeyHandler = null;
 
 export function initNavbar() {
   const btn = document.getElementById('mobileMenuBtn');
+  const bottomMoreBtn = document.getElementById('mobileBottomMoreBtn');
   const sidebar = document.getElementById('sidebar');
   const overlay = document.getElementById('sidebarOverlay');
   const closeBtn = document.getElementById('sidebarCloseBtn');
   const logoutBtn = document.getElementById('logoutBtn');
+  const chemLabBtn = document.getElementById('navOpenChemLab');
+
+  function toggleMobileSidebar() {
+    if (sidebar) sidebar.classList.toggle('open');
+    if (overlay) overlay.classList.toggle('active');
+  }
 
   function closeMobileSidebar() {
     if (sidebar) sidebar.classList.remove('open');
@@ -154,15 +217,23 @@ export function initNavbar() {
   }
 
   if (btn && sidebar && overlay) {
-    btn.addEventListener('click', () => {
-      sidebar.classList.toggle('open');
-      overlay.classList.toggle('active');
-    });
+    btn.addEventListener('click', toggleMobileSidebar);
     overlay.addEventListener('click', closeMobileSidebar);
+  }
+
+  if (bottomMoreBtn && sidebar && overlay) {
+    bottomMoreBtn.addEventListener('click', toggleMobileSidebar);
   }
 
   if (closeBtn) {
     closeBtn.addEventListener('click', closeMobileSidebar);
+  }
+
+  if (chemLabBtn) {
+    chemLabBtn.addEventListener('click', () => {
+      closeMobileSidebar();
+      openChemistryLabModal();
+    });
   }
 
   // Close sidebar on link click on mobile/tablet (<= 1024px)
@@ -192,11 +263,11 @@ export function initNavbar() {
     });
   }
 
-  // Dark mode toggle in-place (no re-renders!)
+  // Dark mode toggle in-place
   function toggleDark() {
     const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
     const newDark = !isDark;
-    
+
     if (newDark) {
       document.documentElement.setAttribute('data-theme', 'dark');
       localStorage.setItem('darkMode', 'true');
@@ -205,7 +276,6 @@ export function initNavbar() {
       localStorage.setItem('darkMode', 'false');
     }
 
-    // Dynamic UI Updates without reloads
     const mobileDarkToggle = document.getElementById('mobileDarkToggle');
     const sidebarDarkIcon = document.getElementById('sidebarDarkIcon');
     const sidebarDarkText = document.getElementById('sidebarDarkText');
@@ -223,11 +293,10 @@ export function initNavbar() {
 
   const darkToggle = document.getElementById('darkModeToggle');
   if (darkToggle) darkToggle.addEventListener('click', toggleDark);
-  
+
   const mobileDarkToggle = document.getElementById('mobileDarkToggle');
   if (mobileDarkToggle) mobileDarkToggle.addEventListener('click', toggleDark);
 
-  // Fetch unread notifications count
   loadNotifBadge();
 }
 
@@ -242,5 +311,5 @@ async function loadNotifBadge() {
     } else {
       badge.style.display = 'none';
     }
-  } catch (e) { /* silent catch for non-logged or offline instances */ }
+  } catch (e) {}
 }

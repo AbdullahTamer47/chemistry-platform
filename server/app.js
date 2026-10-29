@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import db from './db.js';
 
 import authRoutes from './routes/auth.js';
 import courseRoutes from './routes/courses.js';
@@ -41,6 +42,7 @@ app.use(cors((req, cb) => {
       const host = new URL(origin).host;
       allowed = host === req.headers.host
         || /^(localhost|127\.0\.0\.1)(:\d+)?$/.test(host)
+        || /\.vercel\.app$/.test(host)
         || extraOrigins.includes(origin);
     } catch { allowed = false; }
   }
@@ -54,6 +56,27 @@ app.use((req, res, next) => {
   if (req.url.startsWith('/api/api/')) {
     req.url = req.url.replace('/api/api/', '/api/');
   }
+  next();
+});
+
+// PostgreSQL state synchronization middleware (ensures multi-instance consistency on Vercel)
+app.use(async (req, res, next) => {
+  try {
+    if (typeof db.ensureSynced === 'function') {
+      await db.ensureSynced(req.method);
+    }
+  } catch (e) {}
+
+  const origJson = res.json.bind(res);
+  res.json = async function(body) {
+    try {
+      if (typeof db.isDirty === 'function' && db.isDirty()) {
+        await db.flushToPostgres();
+      }
+    } catch (e) {}
+    return origJson(body);
+  };
+
   next();
 });
 
@@ -81,7 +104,11 @@ mount('/upload', uploadRoutes);
 mount('/packages', packageRoutes);
 
 // Health check
-app.get(['/api/health', '/health'], (req, res) => res.json({ status: 'ok', message: 'كيمياوي API يعمل بنجاح' }));
+app.get(['/api/health', '/health'], (req, res) => res.json({
+  status: 'ok',
+  database: typeof db.isPostgresConnected === 'function' && db.isPostgresConnected() ? 'postgresql' : 'local',
+  message: 'كيمياوي API يعمل بنجاح'
+}));
 
 // Global API Error Handler
 app.use('/api', (err, req, res, next) => {

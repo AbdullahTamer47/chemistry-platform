@@ -1,7 +1,7 @@
 import { api } from '../utils/api.js';
 import { setAuth } from '../utils/auth.js';
 import { showToast } from '../components/toast.js';
-import { gradesList } from '../utils/helpers.js';
+import { gradesList, esc } from '../utils/helpers.js';
 import drZiadImg from '../assets/dr-ziad.png';
 import zraLogoFace from '../assets/zra-logo-face.png';
 import zraLogoText from '../assets/zra-logo-text.png';
@@ -11,6 +11,25 @@ function normalizeDigits(str) {
   return String(str)
     .replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d))
     .replace(/\s|-/g, '');
+}
+
+function showInlineAuthAlert(boxId, message, type = 'error') {
+  const box = document.getElementById(boxId);
+  if (!box) return;
+  if (!message) {
+    box.style.display = 'none';
+    box.innerHTML = '';
+    return;
+  }
+  const isError = type === 'error';
+  const isSuccess = type === 'success';
+  const bg = isSuccess ? 'rgba(16, 185, 129, 0.12)' : isError ? 'rgba(239, 68, 68, 0.1)' : 'rgba(245, 158, 11, 0.12)';
+  const border = isSuccess ? '#10b981' : isError ? '#ef4444' : '#f59e0b';
+  const color = isSuccess ? '#047857' : isError ? '#dc2626' : '#b45309';
+  const icon = isSuccess ? 'check_circle' : isError ? 'error' : 'warning';
+  box.style.display = 'flex';
+  box.style.cssText = `display:flex;align-items:center;gap:10px;padding:12px 14px;border-radius:12px;background:${bg};border:1.5px solid ${border};color:${color};font-size:0.88rem;font-weight:700;margin-bottom:16px;line-height:1.5;`;
+  box.innerHTML = `<span class="material-symbols-rounded" style="font-size:1.3rem;flex-shrink:0;">${icon}</span><span>${esc(message)}</span>`;
 }
 
 export function renderLogin() {
@@ -31,26 +50,28 @@ export function renderLogin() {
             <img src="${zraLogoFace}" alt="Z.R.A" class="logo-face-img" style="height: 44px;" />
             <img src="${zraLogoText}" alt="Z.R.A" class="logo-text-img" style="height: 32px;" />
           </div>
-          <h1 class="auth-form-title">أهلاً بك مجدداً! جاهز للمذاكرة؟</h1>
-          <p class="auth-form-subtitle">سجّل دخولك للوصول إلى دروسك، امتحاناتك وواجباتك التفاعلية</p>
+          <h1 class="auth-form-title">أهلاً بك مجدداً! جاهز للمذاكرة؟ 👋</h1>
+          <p class="auth-form-subtitle">سجّل دخولك للوصول إلى محاضراتك، امتحاناتك والمختبر التفاعلي</p>
         </div>
 
-        <form id="loginForm">
+        <div id="loginAlertBox" style="display:none;"></div>
+
+        <form id="loginForm" novalidate>
           <div class="sakr-input-group">
-            <label class="sakr-input-label">رقم الهاتف</label>
+            <label class="sakr-input-label" for="loginPhone">رقم الهاتف المسجل</label>
             <div class="sakr-input-wrap">
               <span class="material-symbols-rounded input-icon">phone_iphone</span>
-              <input type="tel" class="sakr-input-field" id="loginPhone" placeholder="01xxxxxxxxx" required dir="ltr">
+              <input type="tel" inputmode="numeric" autocomplete="tel" class="sakr-input-field" id="loginPhone" placeholder="010xxxxxxxx" required dir="ltr">
             </div>
           </div>
 
           <div class="sakr-input-group" style="margin-bottom: 22px;">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 7px;">
-              <label class="sakr-input-label" style="margin-bottom:0;">كلمة المرور</label>
+              <label class="sakr-input-label" for="loginPassword" style="margin-bottom:0;">كلمة المرور</label>
             </div>
             <div class="sakr-input-wrap">
               <span class="material-symbols-rounded input-icon">lock</span>
-              <input type="password" class="sakr-input-field has-toggle" id="loginPassword" placeholder="••••••••" required>
+              <input type="password" autocomplete="current-password" class="sakr-input-field has-toggle" id="loginPassword" placeholder="أدخل كلمة المرور" required>
               <button type="button" id="toggleLoginPassword" class="sakr-toggle-pw" title="إظهار/إخفاء كلمة المرور">
                 <span class="material-symbols-rounded" style="font-size: 1.25rem;">visibility</span>
               </button>
@@ -58,16 +79,16 @@ export function renderLogin() {
           </div>
 
           <button type="submit" class="btn-sakr-submit" id="loginBtn">
-            <span class="material-symbols-rounded">login</span> تسجيل الدخول
+            <span class="material-symbols-rounded">login</span> تسجيل الدخول الآن
           </button>
         </form>
 
         <div class="auth-switch-box">
-          لا يوجد لديك حساب؟ <a href="#/register" class="auth-switch-link">أنشئ حسابك الآن !</a>
+          طالب جديد بالمنصة؟ <a href="#/register" class="auth-switch-link">أنشئ حساباً جديداً في ثوانٍ!</a>
         </div>
       </div>
 
-      <!-- Left Side: Interactive Visual Poster (Khaled Sakr Inspired, Platform Emerald Palette) -->
+      <!-- Left Side: Interactive Visual Poster -->
       <div class="auth-poster-col">
         <div class="auth-poster-badge-wrap">
           <span class="auth-poster-pill">
@@ -101,7 +122,6 @@ export function initLogin() {
   const form = document.getElementById('loginForm');
   if (!form) return;
 
-  // Toggle Password Visibility
   const toggleBtn = document.getElementById('toggleLoginPassword');
   const passwordInput = document.getElementById('loginPassword');
   if (toggleBtn && passwordInput) {
@@ -115,11 +135,25 @@ export function initLogin() {
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     const btn = document.getElementById('loginBtn');
-    if (btn.disabled) return; // prevent double-submit
+    if (!btn || btn.disabled) return;
 
-    // Read values synchronously BEFORE any async work
-    const phone = normalizeDigits(document.getElementById('loginPhone').value);
-    const password = document.getElementById('loginPassword').value;
+    showInlineAuthAlert('loginAlertBox', '');
+    const phone = normalizeDigits(document.getElementById('loginPhone')?.value || '');
+    const password = document.getElementById('loginPassword')?.value || '';
+
+    if (!phone || !password) {
+      const msg = 'يرجى إدخال رقم الهاتف وكلمة المرور';
+      showInlineAuthAlert('loginAlertBox', msg, 'warning');
+      showToast(msg, 'warning');
+      return;
+    }
+
+    if (!/^01[0125][0-9]{8}$/.test(phone)) {
+      const msg = 'رقم الهاتف يجب أن يتكون من 11 رقماً ويبدأ بـ 010 أو 011 أو 012 أو 015';
+      showInlineAuthAlert('loginAlertBox', msg, 'warning');
+      showToast(msg, 'warning');
+      return;
+    }
 
     btn.disabled = true;
     btn.innerHTML = '<span class="material-symbols-rounded spin-icon">sync</span> جاري تسجيل الدخول...';
@@ -134,16 +168,18 @@ export function initLogin() {
 
       const data = await api.login({ phone, password, device_id: deviceId, device_name: deviceName });
       setAuth(data.user, data.token);
+      showInlineAuthAlert('loginAlertBox', `مرحباً بك ${data.user.name}! جاري تحويلك للمنصة...`, 'success');
       showToast(`مرحباً بك ${data.user.name.split(' ')[0]}!`, 'success');
       const isT = data.user.role === 'teacher' || data.user.role === 'admin';
       window.location.hash = isT ? '#/admin' : '#/dashboard';
     } catch (err) {
-      showToast(err.message, 'error');
+      const errMsg = err.message || 'تعذر تسجيل الدخول، تأكد من رقم الهاتف وكلمة المرور';
+      showInlineAuthAlert('loginAlertBox', errMsg, 'error');
+      showToast(errMsg, 'error');
     } finally {
-      // Always re-enable the button — even on network errors or timeouts
       if (btn) {
         btn.disabled = false;
-        btn.innerHTML = '<span class="material-symbols-rounded">login</span> تسجيل الدخول';
+        btn.innerHTML = '<span class="material-symbols-rounded">login</span> تسجيل الدخول الآن';
       }
     }
   });
@@ -167,53 +203,55 @@ export function renderRegister() {
             <img src="${zraLogoFace}" alt="Z.R.A" class="logo-face-img" style="height: 44px;" />
             <img src="${zraLogoText}" alt="Z.R.A" class="logo-text-img" style="height: 32px;" />
           </div>
-          <h1 class="auth-form-title">طلب إنشاء حساب جديد :</h1>
-          <p class="auth-form-subtitle">ادخل بياناتك بدقة لتفعيل حسابك ومتابعة دراستك فوراً</p>
+          <h1 class="auth-form-title">إنشاء حساب طالب جديد 🚀</h1>
+          <p class="auth-form-subtitle">سجّل بياناتك الآن لتفعيل حسابك والوصول للكورسات المجانية والمدفوعة فوراً</p>
         </div>
 
-        <form id="registerForm">
+        <div id="regAlertBox" style="display:none;"></div>
+
+        <form id="registerForm" novalidate>
           <div class="sakr-input-group">
-            <label class="sakr-input-label">الاسم بالكامل</label>
+            <label class="sakr-input-label" for="regName">الاسم بالكامل</label>
             <div class="sakr-input-wrap">
               <span class="material-symbols-rounded input-icon">person</span>
-              <input type="text" class="sakr-input-field" id="regName" placeholder="الاسم ثلاثي أو رباعي" required>
+              <input type="text" autocomplete="name" class="sakr-input-field" id="regName" placeholder="اكتب اسمك الثلاثي باللغة العربية" required>
             </div>
           </div>
           
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px;">
+          <div class="auth-phone-grid">
             <div class="sakr-input-group">
-              <label class="sakr-input-label">رقم الهاتف</label>
+              <label class="sakr-input-label" for="regPhone">رقم هاتف الطالب <span style="color:var(--danger);">*</span></label>
               <div class="sakr-input-wrap">
                 <span class="material-symbols-rounded input-icon">phone_iphone</span>
-                <input type="tel" class="sakr-input-field" id="regPhone" placeholder="01xxxxxxxxx" required dir="ltr">
+                <input type="tel" inputmode="numeric" autocomplete="tel" class="sakr-input-field" id="regPhone" placeholder="010xxxxxxxx" required dir="ltr">
               </div>
             </div>
             
             <div class="sakr-input-group">
-              <label class="sakr-input-label">رقم ولي الأمر</label>
+              <label class="sakr-input-label" for="regParentPhone">رقم ولي الأمر <span style="font-size:0.74rem;color:var(--text-muted);font-weight:500;">(اختياري)</span></label>
               <div class="sakr-input-wrap">
                 <span class="material-symbols-rounded input-icon">family_restroom</span>
-                <input type="tel" class="sakr-input-field" id="regParentPhone" placeholder="01xxxxxxxxx" required dir="ltr">
+                <input type="tel" inputmode="numeric" class="sakr-input-field" id="regParentPhone" placeholder="01xxxxxxxxx" dir="ltr">
               </div>
             </div>
           </div>
 
           <div class="sakr-input-group">
-            <label class="sakr-input-label">المرحلة الدراسية</label>
+            <label class="sakr-input-label" for="regGrade">المرحلة الدراسية</label>
             <div class="sakr-input-wrap">
               <span class="material-symbols-rounded input-icon">school</span>
               <select class="sakr-input-field" id="regGrade" required style="cursor: pointer;">
-                <option value="">اختر المرحلة الدراسية</option>
-                ${gradesList.map(g => `<option value="${g}">${g}</option>`).join('')}
+                <option value="ثالثة ثانوي" selected>ثالثة ثانوي (الصف الثالث الثانوي)</option>
+                ${gradesList.filter(g => g !== 'ثالثة ثانوي').map(g => `<option value="${g}">${g}</option>`).join('')}
               </select>
             </div>
           </div>
 
           <div class="sakr-input-group" style="margin-bottom: 22px;">
-            <label class="sakr-input-label">كلمة المرور</label>
+            <label class="sakr-input-label" for="regPassword">كلمة المرور <span style="font-size:0.74rem;color:var(--text-muted);font-weight:500;">(6 أحرف أو أرقام على الأقل)</span></label>
             <div class="sakr-input-wrap">
               <span class="material-symbols-rounded input-icon">lock</span>
-              <input type="password" class="sakr-input-field has-toggle" id="regPassword" placeholder="8 أحرف على الأقل" required minlength="8">
+              <input type="password" autocomplete="new-password" class="sakr-input-field has-toggle" id="regPassword" placeholder="اكتب كلمة مرور سهلة التذكر (6+)" required minlength="6">
               <button type="button" id="toggleRegPassword" class="sakr-toggle-pw" title="إظهار/إخفاء كلمة المرور">
                 <span class="material-symbols-rounded" style="font-size: 1.25rem;">visibility</span>
               </button>
@@ -221,16 +259,16 @@ export function renderRegister() {
           </div>
 
           <button type="submit" class="btn-sakr-submit" id="regBtn">
-            <span class="material-symbols-rounded">person_add</span> إنشاء حسابي الآن
+            <span class="material-symbols-rounded">person_add</span> إنشاء حسابي والدخول للمنصة
           </button>
         </form>
 
         <div class="auth-switch-box">
-          لديك حساب بالفعل؟ <a href="#/login" class="auth-switch-link">ادخل إلى حسابك الآن !</a>
+          لديك حساب بالفعل؟ <a href="#/login" class="auth-switch-link">تسجيل الدخول من هنا !</a>
         </div>
       </div>
 
-      <!-- Left Side: Interactive Visual Poster (Khaled Sakr Inspired, Platform Emerald Palette) -->
+      <!-- Left Side: Interactive Visual Poster -->
       <div class="auth-poster-col">
         <div class="auth-poster-badge-wrap">
           <span class="auth-poster-pill">
@@ -246,7 +284,7 @@ export function renderRegister() {
             <img src="${drZiadImg}" alt="د. زياد رمزي عياد" class="auth-teacher-img" onerror="this.src='data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><circle cx=%2250%22 cy=%2250%22 r=%2250%22 fill=%22%2316a34a%22/></svg>'" />
           </div>
           <h2 class="auth-poster-title">خطوتك الأولى نحو التميز والتفوق</h2>
-          <p class="auth-poster-desc">احصل على تجربة تعليمية متكاملة تتضمن فيديوهات بجودة عالية، تقارير دورية لولي الأمر، ومتابعة فردية مستمرة.</p>
+          <p class="auth-poster-desc">احصل على تجربة تعليمية متكاملة تتضمن فيديوهات بجودة عالية، مختبر كيميائي افتراضي، ومتابعة فردية مستمرة.</p>
         </div>
 
         <div class="auth-poster-footer">
@@ -264,7 +302,6 @@ export function initRegister() {
   const form = document.getElementById('registerForm');
   if (!form) return;
 
-  // Toggle Password Visibility
   const toggleBtn = document.getElementById('toggleRegPassword');
   const passwordInput = document.getElementById('regPassword');
   if (toggleBtn && passwordInput) {
@@ -278,55 +315,67 @@ export function initRegister() {
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     const btn = document.getElementById('regBtn');
-    if (btn.disabled) return; // prevent double-submit
+    if (!btn || btn.disabled) return;
 
-    // Normalize and validate phone numbers — read synchronously before async
-    const parentPhone = normalizeDigits(document.getElementById('regParentPhone').value);
-    const studentPhone = normalizeDigits(document.getElementById('regPhone').value);
-    const grade = document.getElementById('regGrade').value;
-    const name = document.getElementById('regName').value.trim();
-    const password = passwordInput.value;
+    showInlineAuthAlert('regAlertBox', '');
+    const parentPhone = normalizeDigits(document.getElementById('regParentPhone')?.value || '');
+    const studentPhone = normalizeDigits(document.getElementById('regPhone')?.value || '');
+    const grade = document.getElementById('regGrade')?.value || 'ثالثة ثانوي';
+    const name = (document.getElementById('regName')?.value || '').trim();
+    const password = passwordInput?.value || '';
 
-    if (!name) {
-      showToast('يرجى إدخال الاسم بالكامل', 'warning');
+    if (!name || name.length < 2) {
+      const msg = 'يرجى إدخال اسمك الثلاثي بالكامل';
+      showInlineAuthAlert('regAlertBox', msg, 'warning');
+      showToast(msg, 'warning');
       return;
     }
 
-    if (!studentPhone.startsWith('01') || studentPhone.length !== 11) {
-      showToast('يرجى إدخال رقم هاتف محمول مصري صحيح مكون من 11 رقماً يبدأ بـ 01', 'warning');
+    if (!/^01[0125][0-9]{8}$/.test(studentPhone)) {
+      const msg = 'يرجى إدخال رقم هاتف مصري صحيح مكون من 11 رقماً يبدأ بـ 010 أو 011 أو 012 أو 015';
+      showInlineAuthAlert('regAlertBox', msg, 'warning');
+      showToast(msg, 'warning');
       return;
     }
 
-    if (parentPhone && (!parentPhone.startsWith('01') || parentPhone.length !== 11)) {
-      showToast('يرجى إدخال رقم ولي أمر مصري صحيح مكون من 11 رقماً يبدأ بـ 01', 'warning');
+    if (parentPhone && !/^01[0125][0-9]{8}$/.test(parentPhone)) {
+      const msg = 'رقم هاتف ولي الأمر غير صحيح (يجب أن يتكون من 11 رقماً يبدأ بـ 01 أو اتركه فارغاً)';
+      showInlineAuthAlert('regAlertBox', msg, 'warning');
+      showToast(msg, 'warning');
       return;
     }
 
     if (parentPhone && parentPhone === studentPhone) {
-      showToast('رقم هاتف الطالب لا يمكن أن يكون هو نفسه رقم ولي الأمر', 'error');
+      const msg = 'يرجى إدخال رقم ولي أمر مختلف عن رقمك الشخصي، أو اترك خانة ولي الأمر فارغة';
+      showInlineAuthAlert('regAlertBox', msg, 'warning');
+      showToast(msg, 'warning');
       return;
     }
 
-    if (!grade) {
-      showToast('يرجى اختيار المرحلة الدراسية', 'warning');
+    if (!password || password.length < 6) {
+      const msg = 'كلمة المرور يجب أن تتكون من 6 أحرف أو أرقام على الأقل';
+      showInlineAuthAlert('regAlertBox', msg, 'warning');
+      showToast(msg, 'warning');
       return;
     }
 
     btn.disabled = true;
-    btn.innerHTML = '<span class="material-symbols-rounded spin-icon">sync</span> جاري إنشاء الحساب...';
+    btn.innerHTML = '<span class="material-symbols-rounded spin-icon">sync</span> جاري إنشاء حسابك وتجهيز المنصة...';
 
     try {
       const data = await api.register({ name, phone: studentPhone, password, grade, parent_phone: parentPhone });
       setAuth(data.user, data.token);
-      showToast('تم إنشاء حسابك بنجاح! مرحباً بك', 'success');
+      showInlineAuthAlert('regAlertBox', 'تم إنشاء حسابك بنجاح! جاري تحويلك للوحة التحكم...', 'success');
+      showToast('تم إنشاء حسابك بنجاح! مرحباً بك في كيمياوي 🧪', 'success');
       window.location.hash = '#/dashboard';
     } catch (err) {
-      showToast(err.message, 'error');
+      const errMsg = err.message || 'حدث خطأ أثناء إنشاء الحساب، حاول مرة أخرى';
+      showInlineAuthAlert('regAlertBox', errMsg, 'error');
+      showToast(errMsg, 'error');
     } finally {
-      // Always re-enable the button — even on network errors or timeouts
       if (btn) {
         btn.disabled = false;
-        btn.innerHTML = '<span class="material-symbols-rounded">person_add</span> إنشاء حسابي الآن';
+        btn.innerHTML = '<span class="material-symbols-rounded">person_add</span> إنشاء حسابي والدخول للمنصة';
       }
     }
   });
