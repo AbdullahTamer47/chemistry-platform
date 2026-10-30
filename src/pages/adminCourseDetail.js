@@ -3,6 +3,7 @@ import { api } from '../utils/api.js';
 import { showToast } from '../components/toast.js';
 import { showModal, confirmModal } from '../components/modal.js';
 import { esc } from '../utils/helpers.js';
+import { renderChemMarkdown } from '../utils/chemMarkdown.js';
 
 export function renderAdminCourseDetail() {
   return `<div class="app-layout">
@@ -47,6 +48,10 @@ export async function initAdminCourseDetail(id) {
             <div style="display:flex;align-items:center;justify-content:space-between;padding:12px;background:var(--bg-main);border-radius:8px">
               <span style="display:flex;align-items:center;gap:6px"><span class="material-symbols-rounded" style="color:var(--info);font-size:1.2rem">forum</span> منتدى النقاش وسؤال المعلم للطلاب:</span>
               <span class="badge ${course.allow_student_replies ? 'badge-success' : 'badge-danger'}">${course.allow_student_replies ? 'مفعل للطلاب' : 'مغلق للطلاب'}</span>
+            </div>
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:12px;background:var(--bg-main);border-radius:8px">
+              <span style="display:flex;align-items:center;gap:6px"><span class="material-symbols-rounded" style="color:var(--success);font-size:1.2rem">science</span> المختبر وحاسبة المعادلات:</span>
+              <span class="badge ${Number(course.allow_chem_lab) === 1 ? 'badge-success' : 'badge-danger'}">${Number(course.allow_chem_lab) === 1 ? 'ظاهر للطلاب' : 'مخفي عن الطلاب'}</span>
             </div>
           </div>
         </div>
@@ -159,13 +164,20 @@ export async function initAdminCourseDetail(id) {
             <span>تفعيل منتدى النقاش وسؤال المعلم للطلاب في هذا الكورس</span>
           </label>
         </div>
+        <div class="form-group">
+          <label class="form-label" style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+            <input type="checkbox" id="ecLab" ${Number(course.allow_chem_lab) === 1 ? 'checked' : ''}>
+            <span>إظهار المختبر الكيميائي وحاسبة المعادلات للطلاب في هذا الكورس</span>
+          </label>
+        </div>
         <button class="btn btn-primary btn-block" id="saveCourseSettingsBtn">حفظ الإعدادات</button>
       `);
       document.getElementById('saveCourseSettingsBtn').addEventListener('click', async () => {
         try {
           await api.updateCourse(course.id, { 
             sequential_access: document.getElementById('ecSequential').checked,
-            allow_student_replies: document.getElementById('ecReplies').checked
+            allow_student_replies: document.getElementById('ecReplies').checked,
+            allow_chem_lab: document.getElementById('ecLab').checked
           });
           showToast('تم تحديث الإعدادات بنجاح', 'success');
           document.querySelector('.modal-overlay')?.remove();
@@ -333,7 +345,7 @@ export async function initAdminCourseDetail(id) {
                     <strong style="font-size:0.9rem">${esc(d.user_name)} ${d.user_role === 'teacher' || d.user_role === 'admin' ? '<span class="material-symbols-rounded" style="color:var(--primary);font-size:1.1rem;vertical-align:middle">verified</span>' : ''}</strong>
                     <button class="btn btn-ghost delete-disc-btn" data-id="${d.id}" style="color:var(--error);padding:2px 6px"><span class="material-symbols-rounded">delete</span></button>
                   </div>
-                  <p style="font-size:0.95rem;margin-top:4px">${esc(d.content)}</p>
+                  <div style="font-size:0.95rem;margin-top:4px">${renderChemMarkdown(d.content)}</div>
                 </div>
               </div>
               
@@ -346,7 +358,7 @@ export async function initAdminCourseDetail(id) {
                         <strong style="font-size:0.8rem">${esc(r.user_name)} ${r.user_role === 'teacher' || r.user_role === 'admin' ? '<span class="material-symbols-rounded" style="color:var(--primary);font-size:1rem;vertical-align:middle">verified</span>' : ''}</strong>
                         <button class="btn btn-ghost delete-reply-btn" data-id="${r.id}" style="color:var(--error);padding:0"><span class="material-symbols-rounded">close</span></button>
                       </div>
-                      <p style="font-size:0.85rem">${esc(r.content)}</p>
+                      <div style="font-size:0.85rem">${renderChemMarkdown(r.content)}</div>
                     </div>
                   </div>
                 `).join('')}
@@ -360,25 +372,31 @@ export async function initAdminCourseDetail(id) {
           `).join('');
 
         document.querySelectorAll('.delete-disc-btn').forEach(btn => {
-          btn.addEventListener('click', async (e) => {
+          btn.addEventListener('click', async () => {
+            const discId = btn.dataset?.id;
+            if (!discId) return;
             const ok = await confirmModal('تأكيد حذف السؤال', 'هل أنت متأكد من حذف هذا السؤال من المنتدى؟');
             if(!ok) return;
-            try { await api.deleteDiscussion(e.currentTarget.dataset.id); loadDiscussions(); } catch(err){ showToast(err.message, 'error'); }
+            try { await api.deleteDiscussion(discId); loadDiscussions(); } catch(err){ showToast(err.message, 'error'); }
           });
         });
         document.querySelectorAll('.delete-reply-btn').forEach(btn => {
-          btn.addEventListener('click', async (e) => {
+          btn.addEventListener('click', async () => {
+            const replyId = btn.dataset?.id;
+            if (!replyId) return;
             const ok = await confirmModal('تأكيد حذف الرد', 'هل أنت متأكد من حذف هذا الرد؟');
             if(!ok) return;
-            try { await api.deleteReply(e.currentTarget.dataset.id); loadDiscussions(); } catch(err){ showToast(err.message, 'error'); }
+            try { await api.deleteReply(replyId); loadDiscussions(); } catch(err){ showToast(err.message, 'error'); }
           });
         });
         document.querySelectorAll('.adminReplyForm').forEach(form => {
           form.addEventListener('submit', async (e) => {
             e.preventDefault();
-            const input = e.target.querySelector('input');
+            const discId = form.dataset?.id;
+            const input = form.querySelector('input');
+            if (!discId || !input) return;
             try {
-              await api.postReply(e.target.dataset.id, { content: input.value });
+              await api.postReply(discId, { content: input.value });
               input.value = '';
               loadDiscussions();
             } catch(err) { showToast(err.message, 'error'); }

@@ -6,23 +6,10 @@ import { confirmModal } from '../components/modal.js';
 import { esc } from '../utils/helpers.js';
 import { renderPublicHeader, initPublicHeader } from '../components/publicHeader.js';
 import { openChemistryLabModal } from '../components/chemistryLabModal.js';
+import { getCourseCover } from './courses.js';
+import { renderChemMarkdown, renderChemToolbar, bindChemToolbars } from '../utils/chemMarkdown.js';
 
-import drZiadThumbs from '../assets/dr-ziad-pose-thumbs.jpg';
-import drZiadFlask from '../assets/dr-ziad-pose-flask.jpg';
-import drZiadPortrait from '../assets/dr-ziad-portrait.jpg';
 import drZiadFace from '../assets/zra-logo-face.png';
-import chemCurriculum from '../assets/chem-curriculum-3d.jpg';
-import chemExam from '../assets/chem-exam-mastery-3d.jpg';
-
-
-function getCourseCover(c) {
-  if (c.thumbnail && c.thumbnail.startsWith('/')) return c.thumbnail;
-  if (c.course_type === 'quarterly' || (c.title && c.title.includes('3 شهور'))) return chemCurriculum;
-  if (c.course_type === 'term' || (c.title && c.title.includes('ترم'))) return chemExam;
-  if (c.is_free || c.price === 0 || (c.title && c.title.includes('مجاني'))) return drZiadPortrait;
-  if (c.title && c.title.includes('انتقالية')) return drZiadFlask;
-  return drZiadThumbs;
-}
 
 export function renderCourseDetail(id) {
   const logged = isLoggedIn();
@@ -145,7 +132,7 @@ export async function initCourseDetail(id) {
               </div>
 
               <h1 class="course-bassthalk-header-title">${esc(course.title)}</h1>
-              <p class="course-bassthalk-header-desc">${esc(course.description || 'شرح شامل وتفصيلي لمنهج الكيمياء للثانوية العامة مع د. زياد رمزي عياد، يتضمن المحاضرات والتدريبات العملية وامتحانات تقييمية مستمرة ومذكرات PDF.')}</p>
+              <div class="course-bassthalk-header-desc">${renderChemMarkdown(course.description || 'شرح شامل وتفصيلي لمنهج الكيمياء للثانوية العامة مع د. زياد رمزي عياد، يتضمن المحاضرات والتدريبات العملية وامتحانات تقييمية مستمرة ومذكرات PDF.')}</div>
 
               ${enrolled && totalItems > 0 ? `
                 <div class="course-bassthalk-progress-box">
@@ -214,14 +201,16 @@ export async function initCourseDetail(id) {
               <span class="material-symbols-rounded">live_tv</span> الحصص اللايف (${course.live_sessions.length})
             </button>
           ` : ''}
-          ${(course.allow_student_replies || isTeacher()) ? `
+          ${Number(course.allow_student_replies) === 1 ? `
             <button class="course-bassthalk-tab-btn" data-tab="forum">
               <span class="material-symbols-rounded">forum</span> منتدى النقاش وسؤال المعلم
             </button>
           ` : ''}
-          <a href="/lab" class="btn btn-sm" style="background:linear-gradient(135deg, #059669 0%, #10b981 100%); color:#fff; font-weight:800; border-radius:12px; margin-right:auto; gap:6px; box-shadow:0 4px 12px rgba(16, 185, 129, 0.25); text-decoration:none;">
-            <span class="material-symbols-rounded">science</span> المختبر وحاسبة المعادلات
-          </a>
+          ${Number(course.allow_chem_lab) === 1 ? `
+            <a href="/lab" class="btn btn-sm course-lab-tab-link" style="background:linear-gradient(135deg, #059669 0%, #10b981 100%); color:#fff; font-weight:800; border-radius:12px; gap:6px; box-shadow:0 4px 12px rgba(16, 185, 129, 0.25); text-decoration:none;">
+              <span class="material-symbols-rounded">science</span> المختبر وحاسبة المعادلات
+            </a>
+          ` : ''}
         </div>
 
         <!-- Main Layout Grid -->
@@ -423,7 +412,7 @@ export async function initCourseDetail(id) {
 
                         <div>
                           ${enrolled && !exam.is_locked ? `
-                            <a href="#/exams/${exam.id}/take" class="btn btn-sm btn-primary" style="gap:6px;">
+                            <a href="/exams/${exam.id}/take" class="btn btn-sm btn-primary" style="gap:6px;">
                               <span class="material-symbols-rounded">edit_note</span> دخول الامتحان الآن
                             </a>
                           ` : exam.is_locked ? `
@@ -487,15 +476,16 @@ export async function initCourseDetail(id) {
 
             <!-- TAB 4: DISCUSSION FORUM -->
             <div id="tab-pane-forum" class="course-tab-pane" style="display:none;">
-              ${enrolled || isTeacher() ? `
+              ${Number(course.allow_student_replies) === 1 ? (enrolled || isTeacher() ? `
                 <div class="card">
                   <h3 class="card-title" style="margin-bottom: 8px;"><span class="material-symbols-rounded" style="color:var(--primary)">forum</span> منتدى النقاش وسؤال المعلم</h3>
-                  <p style="font-size:0.84rem; color:var(--text-secondary); margin-bottom:18px;">
-                    اطرح أي سؤال أو نقطة غير واضحة وسيقوم د. زياد رمزي عياد وفريق المساعدين بالرد العلمي الفوري عليك.
+                  <p style="font-size:0.84rem; color:var(--text-secondary); margin-bottom:14px;">
+                    اطرح أي سؤال أو معادلة كيميائية وسيقوم د. زياد رمزي عياد بالرد العلمي الفوري عليك (يدعم كتابة الصيغ الكيميائية مثل <span dir="ltr">H2SO4</span> و <span dir="ltr">Fe^3+</span> والمعادلات مباشرة).
                   </p>
                   
-                  <form id="discussionForm" style="display: flex; gap: 10px; margin-bottom: 24px;">
-                    <input type="text" id="discussionInput" class="form-input" placeholder="هل لديك استفسار أو سؤال حول الكورس؟ اكتبه هنا..." required>
+                  ${renderChemToolbar('discussionInput', { compact: true })}
+                  <form id="discussionForm" style="display: flex; gap: 10px; margin-bottom: 24px; flex-wrap: wrap;">
+                    <input type="text" id="discussionInput" class="form-input" placeholder="اكتب سؤالك أو المعادلة الكيميائية هنا..." required style="flex:1; min-width:200px;">
                     <button type="submit" class="btn btn-primary" style="white-space:nowrap;"><span class="material-symbols-rounded">send</span> نشر السؤال</button>
                   </form>
                   
@@ -512,7 +502,7 @@ export async function initCourseDetail(id) {
                   </p>
                   <button class="btn btn-primary enroll-prompt-btn">تفعيل الاشتراك بالكود</button>
                 </div>
-              `}
+              `) : ''}
             </div>
           </div>
 
@@ -530,7 +520,7 @@ export async function initCourseDetail(id) {
                 خبرة تتجاوز 15 عاماً في تدريس كيمياء الثانوية العامة ومدارس اللغات، وإعداد أوائل الجمهورية بأساليب الفهم والربط الذهني.
               </p>
               <div style="display:flex; gap:6px; justify-content:center;">
-                <a href="#/about" class="btn btn-ghost btn-sm" style="font-size:0.75rem;">السيرة الذاتية الكاملة</a>
+                <a href="/about" class="btn btn-ghost btn-sm" style="font-size:0.75rem;">السيرة الذاتية الكاملة</a>
               </div>
             </div>
 
@@ -572,7 +562,7 @@ export async function initCourseDetail(id) {
                         <span class="material-symbols-rounded">account_balance_wallet</span> تأكيد الشراء من المحفظة (${course.price} ج)
                       </button>
                     ` : `
-                      <a href="#/wallet" class="btn btn-outline" style="width:100%; justify-content:center; margin-bottom:10px; font-weight:800; gap:6px;">
+                      <a href="/wallet" class="btn btn-outline" style="width:100%; justify-content:center; margin-bottom:10px; font-weight:800; gap:6px;">
                         <span class="material-symbols-rounded">payments</span> شحن المحفظة لشراء الكورس
                       </a>
                     `}
@@ -580,20 +570,20 @@ export async function initCourseDetail(id) {
                 </div>
 
                 <div style="position:relative; text-align:center; margin:16px 0; border-top:1px dashed var(--border-light);">
-                  <span style="position:relative; top:-10px; background:var(--bg-card); padding:0 10px; font-size:0.75rem; color:var(--text-muted); font-weight:700;">أو التفعيل بكود السنتر</span>
+                  <span style="position:relative; top:-10px; background:var(--bg-card); padding:0 10px; font-size:0.75rem; color:var(--text-muted); font-weight:700;">أو التفعيل بكود فتح الكورس / شحن المحفظة</span>
                 </div>
 
                 <div class="input-group" style="margin-bottom:10px;">
                   <span class="material-symbols-rounded input-icon">key</span>
-                  <input type="text" class="form-input" id="activationCode" placeholder="أدخل كود السنتر / الشحن" style="padding-right:44px; font-weight:700;" dir="ltr">
+                  <input type="text" class="form-input" id="activationCode" placeholder="أدخل كود الكورس أو كود الرصيد" style="padding-right:44px; font-weight:700;" dir="ltr">
                 </div>
                 
                 <button class="btn btn-secondary" id="activateBtn" style="width:100%; justify-content:center; margin-bottom:10px; font-weight:700;">
-                  <span class="material-symbols-rounded">bolt</span> تفعيل الاشتراك بالكود
+                  <span class="material-symbols-rounded">bolt</span> تفعيل الكود الآن
                 </button>
 
                 <p style="font-size:0.72rem; color:var(--text-muted); text-align:center; margin:0;">
-                  ليس لديك كود؟ يمكنك الحصول عليه من مساعد المنصة أو منافذ البيع.
+                  يقبل أكواد فتح الكورس المباشر وأكواد شحن رصيد المحفظة.
                 </p>
               ` : `
                 <div style="text-align:center;">
@@ -601,10 +591,10 @@ export async function initCourseDetail(id) {
                   <p style="font-size:0.78rem; color:var(--text-secondary); margin-bottom:16px;">
                     أنشئ حسابك المجاني أو سجل الدخول لتفعيل الاشتراك ومتابعة منهج الكيمياء.
                   </p>
-                  <a href="#/register" class="btn btn-primary" style="width:100%; justify-content:center; margin-bottom:8px;">
+                  <a href="/register" class="btn btn-primary" style="width:100%; justify-content:center; margin-bottom:8px;">
                     <span class="material-symbols-rounded">person_add</span> إنشاء حساب جديد
                   </a>
-                  <a href="#/login" class="btn btn-outline" style="width:100%; justify-content:center;">
+                  <a href="/login" class="btn btn-outline" style="width:100%; justify-content:center;">
                     تسجيل الدخول
                   </a>
                 </div>
@@ -722,7 +712,7 @@ export async function initCourseDetail(id) {
     document.querySelectorAll('.enroll-prompt-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         if (!logged) {
-          window.location.hash = '#/register';
+          window.navigateTo ? window.navigateTo('/register') : (window.location.href = '/register');
           return;
         }
         const codeInput = document.getElementById('activationCode');
@@ -734,8 +724,11 @@ export async function initCourseDetail(id) {
       });
     });
 
+    // Bind quick chemical toolbar if present
+    bindChemToolbars(document.getElementById('courseContent') || document);
+
     // 5. Discussion Forum system
-    if (enrolled || isTeacher()) {
+    if (Number(course.allow_student_replies) === 1 && (enrolled || isTeacher())) {
       const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
       
       const loadDiscussions = async () => {
@@ -769,7 +762,7 @@ export async function initCourseDetail(id) {
                       }
                     </div>
                     ${(isTeacher() || currentUser.id === d.user_id) 
-                      ? `<button class="btn btn-ghost delete-disc-btn" data-id="${d.id}" style="color:var(--error); padding:4px;" title="حذف السؤال"><span class="material-symbols-rounded" style="font-size:1.15rem;">delete</span></button>` 
+                      ? `<button type="button" class="btn btn-ghost delete-disc-btn" data-id="${d.id}" style="color:var(--error); padding:4px;" title="حذف السؤال"><span class="material-symbols-rounded" style="font-size:1.15rem;">delete</span></button>` 
                       : ''
                     }
                   </div>
@@ -778,7 +771,7 @@ export async function initCourseDetail(id) {
               </div>
               
               <div class="discussion-body">
-                ${esc(d.content)}
+                ${renderChemMarkdown(d.content)}
               </div>
               
               <!-- Replies block -->
@@ -786,17 +779,17 @@ export async function initCourseDetail(id) {
                 ${(d.replies || []).map(r => `
                   <div class="reply-item">
                     <div class="reply-avatar" style="background:var(--gold-50); color:var(--accent); font-weight:800; border:1px solid var(--gold-200);">
-                      ${esc(r.user_name.charAt(0))}
+                      ${esc((r.user_name || 'م').charAt(0))}
                     </div>
                     <div class="reply-content">
                       <div style="display:flex; align-items:center; justify-content:space-between;">
                         <strong style="font-size:0.78rem; font-weight:700; color:var(--text-primary);">${esc(r.user_name)}</strong>
                         ${(isTeacher() || currentUser.id === r.user_id) 
-                          ? `<button class="btn btn-ghost delete-reply-btn" data-id="${r.id}" style="color:var(--error); padding:2px;" title="حذف الرد"><span class="material-symbols-rounded" style="font-size:1rem;">close</span></button>` 
+                          ? `<button type="button" class="btn btn-ghost delete-reply-btn" data-id="${r.id}" style="color:var(--error); padding:2px;" title="حذف الرد"><span class="material-symbols-rounded" style="font-size:1rem;">close</span></button>` 
                           : ''
                         }
                       </div>
-                      <p class="reply-text">${esc(r.content)}</p>
+                      <div class="reply-text">${renderChemMarkdown(r.content)}</div>
                     </div>
                   </div>
                 `).join('')}
@@ -804,7 +797,7 @@ export async function initCourseDetail(id) {
                 ${(isTeacher() || course.allow_student_replies) 
                   ? `
                   <form class="replyForm" data-id="${d.id}" style="display:flex; gap:8px; margin-top:8px;">
-                    <input type="text" class="form-input" placeholder="أضف رداً علمياً..." required style="padding:6px 12px; font-size:0.8rem;">
+                    <input type="text" class="form-input" placeholder="أضف رداً علمياً أو معادلة..." required style="padding:6px 12px; font-size:0.8rem;">
                     <button type="submit" class="btn btn-secondary btn-sm" style="padding: 0 14px;">رد</button>
                   </form>
                   ` 
@@ -814,13 +807,15 @@ export async function initCourseDetail(id) {
             </div>
           `).join('');
 
-          // Events binding
+          // Events binding (capture dataset.id BEFORE any await!)
           document.querySelectorAll('.delete-disc-btn').forEach(btn => {
-            btn.addEventListener('click', async (e) => {
+            btn.addEventListener('click', async () => {
+              const discId = btn.dataset?.id;
+              if (!discId) return;
               const ok = await confirmModal('تأكيد الحذف', 'هل أنت متأكد من حذف هذا السؤال نهائياً؟');
               if (!ok) return;
               try {
-                await api.deleteDiscussion(e.currentTarget.dataset.id);
+                await api.deleteDiscussion(discId);
                 showToast('تم حذف السؤال', 'success');
                 loadDiscussions();
               } catch (err) { showToast(err.message, 'error'); }
@@ -828,11 +823,13 @@ export async function initCourseDetail(id) {
           });
 
           document.querySelectorAll('.delete-reply-btn').forEach(btn => {
-            btn.addEventListener('click', async (e) => {
+            btn.addEventListener('click', async () => {
+              const replyId = btn.dataset?.id;
+              if (!replyId) return;
               const ok = await confirmModal('تأكيد الحذف', 'هل أنت متأكد من حذف هذا الرد؟');
               if (!ok) return;
               try {
-                await api.deleteReply(e.currentTarget.dataset.id);
+                await api.deleteReply(replyId);
                 showToast('تم حذف الرد', 'success');
                 loadDiscussions();
               } catch (err) { showToast(err.message, 'error'); }
@@ -842,9 +839,11 @@ export async function initCourseDetail(id) {
           document.querySelectorAll('.replyForm').forEach(form => {
             form.addEventListener('submit', async (e) => {
               e.preventDefault();
-              const input = e.target.querySelector('input');
+              const discId = form.dataset?.id;
+              const input = form.querySelector('input');
+              if (!discId || !input) return;
               try {
-                await api.postReply(e.target.dataset.id, { content: input.value });
+                await api.postReply(discId, { content: input.value });
                 input.value = '';
                 loadDiscussions();
               } catch (err) { showToast(err.message, 'error'); }
@@ -865,6 +864,7 @@ export async function initCourseDetail(id) {
       discForm?.addEventListener('submit', async (e) => {
         e.preventDefault();
         const input = document.getElementById('discussionInput');
+        if (!input) return;
         try {
           await api.postDiscussion({ course_id: id, content: input.value });
           input.value = '';
@@ -912,24 +912,24 @@ export async function initCourseDetail(id) {
       }
     });
 
-    // 8. Activation code submit handler
+    // 8. Activation code submit handler (supports both Course Unlock Codes & Wallet Balance Codes)
     const activateBtn = document.getElementById('activateBtn');
     activateBtn?.addEventListener('click', async () => {
       const inputEl = document.getElementById('activationCode');
-      const code = inputEl.value.trim();
-      if (!code) return showToast('فضلاً أدخل كود التفعيل أولاً', 'warning');
+      const code = inputEl?.value?.trim();
+      if (!code) return showToast('فضلاً أدخل الكود أولاً', 'warning');
       
       activateBtn.disabled = true;
       activateBtn.innerHTML = '<span class="material-symbols-rounded spin-icon">sync</span> جاري التفعيل...';
       
       try {
-        await api.activateCode(code);
-        showToast('تهانينا! تم تفعيل اشتراكك في الكورس بنجاح', 'success');
+        const res = await api.activateCode(code);
+        showToast(res.message || 'تم تفعيل الكود بنجاح', 'success');
         setTimeout(() => window.location.reload(), 1000);
       } catch (err) {
         showToast(err.message, 'error');
         activateBtn.disabled = false;
-        activateBtn.innerHTML = '<span class="material-symbols-rounded">offline_bolt</span> تفعيل الاشتراك';
+        activateBtn.innerHTML = '<span class="material-symbols-rounded">bolt</span> تفعيل الكود الآن';
       }
     });
 

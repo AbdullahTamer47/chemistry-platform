@@ -1120,7 +1120,7 @@ router.get('/:id/details', authMiddleware, teacherMiddleware, (req, res) => {
     const exam = db.prepare('SELECT * FROM exams WHERE id = ?').get(req.params.id);
     if (!exam) return res.status(404).json({ error: 'الامتحان غير موجود' });
 
-    let questions = db.prepare('SELECT id, type, text, image_url, options, points, order_num, correct_answer, explanation, explanation_image FROM questions WHERE exam_id = ? ORDER BY order_num').all(exam.id);
+    let questions = db.prepare('SELECT id, type, text, image_url, options, points, order_num, correct_answer, explanation, explanation_image, bloom_level, concept_key FROM questions WHERE exam_id = ? ORDER BY order_num').all(exam.id);
 
     questions.forEach(q => { if (q.options) q.options = JSON.parse(q.options); });
     exam.questions = questions;
@@ -1183,10 +1183,10 @@ router.put('/:id', authMiddleware, teacherMiddleware, (req, res) => {
 // Add question to exam
 router.post('/:id/questions', authMiddleware, teacherMiddleware, (req, res) => {
   try {
-    const { type, text, image_url, options, correct_answer, explanation, explanation_image, points } = req.body;
+    const { type, text, image_url, options, correct_answer, explanation, explanation_image, points, bloom_level, concept_key } = req.body;
     const maxOrder = db.prepare('SELECT MAX(order_num) as m FROM questions WHERE exam_id = ?').get(req.params.id);
-    const result = db.prepare('INSERT INTO questions (exam_id, type, text, image_url, options, correct_answer, explanation, explanation_image, points, order_num) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').run(
-      req.params.id, type, text, image_url || null, options ? JSON.stringify(options) : null, typeof correct_answer === 'string' ? correct_answer : JSON.stringify(correct_answer), explanation || null, explanation_image || null, points || 1, (maxOrder?.m || 0) + 1
+    const result = db.prepare('INSERT INTO questions (exam_id, type, text, image_url, options, correct_answer, explanation, explanation_image, points, order_num, bloom_level, concept_key) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').run(
+      req.params.id, type, text, image_url || null, options ? JSON.stringify(options) : null, typeof correct_answer === 'string' ? correct_answer : JSON.stringify(correct_answer), explanation || null, explanation_image || null, points || 1, (maxOrder?.m || 0) + 1, bloom_level || 'فهم وتطبيق', concept_key || null
     );
     res.status(201).json(db.prepare('SELECT * FROM questions WHERE id = ?').get(result.lastInsertRowid));
   } catch (err) { console.error(err); res.status(500).json({ error: 'حدث خطأ' }); }
@@ -1195,12 +1195,42 @@ router.post('/:id/questions', authMiddleware, teacherMiddleware, (req, res) => {
 // Update question
 router.put('/questions/:questionId', authMiddleware, teacherMiddleware, (req, res) => {
   try {
-    const { type, text, image_url, options, correct_answer, explanation, explanation_image, points, order_num } = req.body;
-    db.prepare('UPDATE questions SET type=COALESCE(?,type), text=COALESCE(?,text), image_url=COALESCE(?,image_url), options=COALESCE(?,options), correct_answer=COALESCE(?,correct_answer), explanation=COALESCE(?,explanation), explanation_image=COALESCE(?,explanation_image), points=COALESCE(?,points), order_num=COALESCE(?,order_num) WHERE id=?').run(
-      type, text, image_url !== undefined ? image_url : null, options ? JSON.stringify(options) : null, correct_answer ? (typeof correct_answer === 'string' ? correct_answer : JSON.stringify(correct_answer)) : null, explanation !== undefined ? explanation : null, explanation_image !== undefined ? explanation_image : null, points, order_num, req.params.questionId
+    const existing = db.prepare('SELECT * FROM questions WHERE id = ?').get(req.params.questionId);
+    if (!existing) return res.status(404).json({ error: 'السؤال غير موجود' });
+    const { type, text, image_url, options, correct_answer, explanation, explanation_image, points, order_num, bloom_level, concept_key } = req.body;
+    db.prepare(`
+      UPDATE questions SET
+        type = ?,
+        text = ?,
+        image_url = ?,
+        options = ?,
+        correct_answer = ?,
+        explanation = ?,
+        explanation_image = ?,
+        points = ?,
+        order_num = ?,
+        bloom_level = ?,
+        concept_key = ?
+      WHERE id = ?
+    `).run(
+      type !== undefined ? type : existing.type,
+      text !== undefined ? text : existing.text,
+      image_url !== undefined ? (image_url || null) : existing.image_url,
+      options !== undefined ? (options ? JSON.stringify(options) : null) : existing.options,
+      correct_answer !== undefined ? (typeof correct_answer === 'string' ? correct_answer : JSON.stringify(correct_answer)) : existing.correct_answer,
+      explanation !== undefined ? (explanation || null) : existing.explanation,
+      explanation_image !== undefined ? (explanation_image || null) : existing.explanation_image,
+      points !== undefined ? Number(points) : existing.points,
+      order_num !== undefined ? Number(order_num) : existing.order_num,
+      bloom_level !== undefined ? (bloom_level || 'فهم وتطبيق') : (existing.bloom_level || 'فهم وتطبيق'),
+      concept_key !== undefined ? (concept_key || null) : existing.concept_key,
+      req.params.questionId
     );
     res.json(db.prepare('SELECT * FROM questions WHERE id = ?').get(req.params.questionId));
-  } catch (err) { res.status(500).json({ error: 'حدث خطأ' }); }
+  } catch (err) {
+    console.error('Update question error:', err);
+    res.status(500).json({ error: 'حدث خطأ' });
+  }
 });
 
 // Delete question

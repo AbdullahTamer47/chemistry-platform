@@ -310,11 +310,74 @@ router.post('/fawry/generate', authMiddleware, (req, res) => {
 });
 
 
-// Student: Recharge wallet using 14-digit prepaid scratch card / voucher
+// Student: Recharge wallet or unlock course using activation code / voucher
 router.post('/wallet/charge-voucher', authMiddleware, (req, res) => {
   try {
     const code = String(req.body.voucher_code || '').trim().toUpperCase();
-    if (!code) return res.status(400).json({ error: 'يرجى إدخال كود كارت الشحن' });
+    if (!code) return res.status(400).json({ error: 'يرجى إدخال كود الشحن أو التفعيل' });
+
+    // Check unified activation_codes first
+    const ac = db.prepare('SELECT * FROM activation_codes WHERE code = ?').get(code);
+    if (ac) {
+      if (!ac.is_active || (ac.max_uses !== -1 && ac.used_count >= ac.max_uses)) {
+        return res.status(400).json({ error: 'هذا الكود تم استخدامه مسبقاً' });
+      }
+      if (ac.expires_at && new Date(ac.expires_at) < new Date()) {
+        return res.status(400).json({ error: 'عذراً، هذا الكود منتهي الصلاحية' });
+      }
+      const alreadyUsed = db.prepare('SELECT id FROM code_usage WHERE code_id = ? AND user_id = ?').get(ac.id, req.user.id);
+      if (alreadyUsed) {
+        return res.status(400).json({ error: 'لقد قمت باستخدام هذا الكود من قبل' });
+      }
+
+      if (ac.code_purpose === 'course' && ac.course_id) {
+        const existingEnr = db.prepare('SELECT id FROM enrollments WHERE user_id = ? AND course_id = ?').get(req.user.id, ac.course_id);
+        if (existingEnr) return res.status(400).json({ error: 'أنت مشترك بالفعل في هذا الكورس' });
+        const txCourse = db.transaction(() => {
+          const upd = db.prepare('UPDATE activation_codes SET used_count = used_count + 1 WHERE id = ? AND is_active = 1 AND (max_uses = -1 OR used_count < max_uses)').run(ac.id);
+          if (!upd || upd.changes === 0) throw new Error('تم استخدام هذا الكود بالكامل');
+          db.prepare('INSERT INTO enrollments (user_id, course_id, code_id) VALUES (?, ?, ?)').run(req.user.id, ac.course_id, ac.id);
+          db.prepare('UPDATE activation_codes SET is_active = 0 WHERE id = ? AND max_uses != -1 AND used_count >= max_uses').run(ac.id);
+          db.prepare('INSERT INTO code_usage (code_id, user_id) VALUES (?, ?)').run(ac.id, req.user.id);
+        });
+        txCourse();
+        const course = db.prepare('SELECT title FROM courses WHERE id = ?').get(ac.course_id);
+        const curBal = db.prepare('SELECT balance FROM student_wallets WHERE user_id = ?').get(req.user.id)?.balance || 0;
+        return res.json({
+          message: `تم فتح وتفعيل كورس "${course?.title || ''}" مباشرة بنجاح!`,
+          code_purpose: 'course',
+          course_id: ac.course_id,
+          new_balance: curBal
+        });
+      }
+
+      const amount = Number(ac.wallet_amount) || 0;
+      if (amount > 0) {
+        const txWal = db.transaction(() => {
+          const upd = db.prepare('UPDATE activation_codes SET used_count = used_count + 1 WHERE id = ? AND is_active = 1 AND (max_uses = -1 OR used_count < max_uses)').run(ac.id);
+          if (!upd || upd.changes === 0) throw new Error('تم استخدام هذا الكود بالكامل');
+          db.prepare('UPDATE activation_codes SET is_active = 0 WHERE id = ? AND max_uses != -1 AND used_count >= max_uses').run(ac.id);
+          db.prepare('INSERT INTO code_usage (code_id, user_id) VALUES (?, ?)').run(ac.id, req.user.id);
+          db.prepare('UPDATE wallet_vouchers SET is_used = 1, used_by = ?, used_at = CURRENT_TIMESTAMP WHERE code = ?').run(req.user.id, code);
+          db.prepare(`
+            INSERT INTO student_wallets (user_id, balance) VALUES (?, ?)
+            ON CONFLICT(user_id) DO UPDATE SET balance = balance + excluded.balance, updated_at = CURRENT_TIMESTAMP
+          `).run(req.user.id, amount);
+          db.prepare("INSERT INTO wallet_transactions (user_id, amount, type, description, reference_code) VALUES (?, ?, 'credit', ?, ?)")
+            .run(req.user.id, amount, `شحن رصيد المحفظة بالكود (${code})`, code);
+          db.prepare("INSERT INTO notifications (user_id, title, message, type) VALUES (?, ?, ?, 'success')")
+            .run(req.user.id, 'تم شحن المحفظة بنجاح', `تم شحن رصيد قدره ${amount} ج.م في محفظتك باستخدام الكود (${code}).`);
+        });
+        txWal();
+        const newBalance = db.prepare('SELECT balance FROM student_wallets WHERE user_id = ?').get(req.user.id)?.balance || amount;
+        return res.json({
+          message: `تم شحن الكود بنجاح وإضافة ${amount} ج.م إلى رصيد محفظتك!`,
+          code_purpose: 'wallet',
+          amount_added: amount,
+          new_balance: newBalance
+        });
+      }
+    }
 
     const voucher = db.prepare('SELECT * FROM wallet_vouchers WHERE code = ?').get(code);
     if (!voucher) return res.status(404).json({ error: 'كود كارت الشحن غير صحيح أو غير مسجل' });
@@ -341,7 +404,7 @@ router.post('/wallet/charge-voucher', authMiddleware, (req, res) => {
       db.prepare(`
         INSERT INTO wallet_transactions (user_id, amount, type, description, reference_code)
         VALUES (?, ?, 'credit', ?, ?)
-      `).run(req.user.id, voucher.amount, `شحن كارت سنتر / مذكرات (كود: ${voucher.code})`, voucher.code);
+      `).run(req.user.id, voucher.amount, `شحن كارت سنتر / محفظة (كود: ${voucher.code})`, voucher.code);
 
       // 4. Send notification
       db.prepare(`
@@ -349,8 +412,8 @@ router.post('/wallet/charge-voucher', authMiddleware, (req, res) => {
         VALUES (?, ?, ?, 'success')
       `).run(
         req.user.id,
-        'تم شحن كارت السنتر بنجاح',
-        `تم شحن رصيد قدره ${voucher.amount} ج.م في محفظتك باستخدام كارت السنتر المعتمد.`
+        'تم شحن المحفظة بنجاح',
+        `تم شحن رصيد قدره ${voucher.amount} ج.م في محفظتك باستخدام الكود المعتمد.`
       );
     });
 
@@ -360,12 +423,13 @@ router.post('/wallet/charge-voucher', authMiddleware, (req, res) => {
 
     res.json({
       message: `تم شحن الكارت بنجاح وإضافة ${voucher.amount} ج.م إلى رصيدك!`,
+      code_purpose: 'wallet',
       amount_added: voucher.amount,
       new_balance: newBalance
     });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'حدث خطأ في شحن الكارت' });
+    res.status(500).json({ error: err.message || 'حدث خطأ في شحن الكارت' });
   }
 });
 

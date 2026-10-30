@@ -268,29 +268,44 @@ router.get('/my/enrolled', authMiddleware, (req, res) => {
 // Create course (teacher only)
 router.post('/', authMiddleware, teacherMiddleware, (req, res) => {
   try {
-    const { title, description, grade, price, is_free, thumbnail, allow_student_replies, sequential_access, course_type, duration_days, original_price, badge_text } = req.body;
-    const result = db.prepare(
-      'INSERT INTO courses (title, description, grade, price, is_free, thumbnail, teacher_id, allow_student_replies, sequential_access, course_type, duration_days, original_price, badge_text) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-    ).run(
+    const {
       title,
       description,
       grade,
-      price || 0,
-      is_free ? 1 : 0,
+      price,
+      is_free,
       thumbnail,
+      allow_student_replies,
+      sequential_access,
+      allow_chem_lab,
+      course_type,
+      duration_days,
+      original_price,
+      badge_text
+    } = req.body;
+    const result = db.prepare(
+      'INSERT INTO courses (title, description, grade, price, is_free, thumbnail, teacher_id, allow_student_replies, sequential_access, allow_chem_lab, course_type, duration_days, original_price, badge_text) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+    ).run(
+      title || 'كورس جديد',
+      description || '',
+      grade || 'ثالثة ثانوي',
+      Number(price) || 0,
+      is_free || Number(price) === 0 ? 1 : 0,
+      thumbnail || null,
       req.user.id,
       allow_student_replies ? 1 : 0,
       sequential_access ? 1 : 0,
+      allow_chem_lab ? 1 : 0,
       course_type || 'monthly',
       duration_days || (course_type === 'quarterly' ? 90 : course_type === 'term' ? 120 : course_type === 'annual' ? 365 : 30),
-      original_price || 0,
+      Number(original_price) || 0,
       badge_text || null
     );
 
     const course = db.prepare('SELECT * FROM courses WHERE id = ?').get(result.lastInsertRowid);
     res.status(201).json(course);
   } catch (err) {
-    console.error(err);
+    console.error('Create course error:', err);
     res.status(500).json({ error: 'حدث خطأ في إنشاء الكورس' });
   }
 });
@@ -298,28 +313,77 @@ router.post('/', authMiddleware, teacherMiddleware, (req, res) => {
 // Update course
 router.put('/:id', authMiddleware, teacherMiddleware, (req, res) => {
   try {
-    const { title, description, grade, price, is_free, thumbnail, allow_student_replies, sequential_access, course_type, duration_days, original_price, badge_text } = req.body;
-    db.prepare(
-      'UPDATE courses SET title=COALESCE(?,title), description=COALESCE(?,description), grade=COALESCE(?,grade), price=COALESCE(?,price), is_free=COALESCE(?,is_free), thumbnail=COALESCE(?,thumbnail), allow_student_replies=COALESCE(?,allow_student_replies), sequential_access=COALESCE(?,sequential_access), course_type=COALESCE(?,course_type), duration_days=COALESCE(?,duration_days), original_price=COALESCE(?,original_price), badge_text=COALESCE(?,badge_text), updated_at=CURRENT_TIMESTAMP WHERE id=?'
-    ).run(
+    const existing = db.prepare('SELECT * FROM courses WHERE id = ?').get(req.params.id);
+    if (!existing) return res.status(404).json({ error: 'الكورس غير موجود' });
+
+    const {
       title,
       description,
       grade,
       price,
-      is_free !== undefined ? (is_free ? 1 : 0) : null,
+      is_free,
       thumbnail,
-      allow_student_replies !== undefined ? (allow_student_replies ? 1 : 0) : null,
-      sequential_access !== undefined ? (sequential_access ? 1 : 0) : null,
-      course_type || null,
-      duration_days || null,
-      original_price || null,
-      badge_text || null,
+      allow_student_replies,
+      sequential_access,
+      allow_chem_lab,
+      course_type,
+      duration_days,
+      original_price,
+      badge_text
+    } = req.body;
+
+    const nextTitle = title !== undefined ? title : existing.title;
+    const nextDesc = description !== undefined ? description : existing.description;
+    const nextGrade = grade !== undefined ? grade : existing.grade;
+    const nextPrice = price !== undefined ? Number(price) : existing.price;
+    const nextIsFree = is_free !== undefined ? (is_free ? 1 : 0) : (price !== undefined ? (Number(price) === 0 ? 1 : 0) : existing.is_free);
+    const nextThumb = thumbnail !== undefined ? (thumbnail || null) : existing.thumbnail;
+    const nextReplies = allow_student_replies !== undefined ? (allow_student_replies ? 1 : 0) : existing.allow_student_replies;
+    const nextSeq = sequential_access !== undefined ? (sequential_access ? 1 : 0) : existing.sequential_access;
+    const nextLab = allow_chem_lab !== undefined ? (allow_chem_lab ? 1 : 0) : (existing.allow_chem_lab || 0);
+    const nextType = course_type !== undefined ? course_type : existing.course_type;
+    const nextDur = duration_days !== undefined ? Number(duration_days) : existing.duration_days;
+    const nextOrigPrice = original_price !== undefined ? Number(original_price) : existing.original_price;
+    const nextBadge = badge_text !== undefined ? (badge_text || null) : existing.badge_text;
+
+    db.prepare(
+      `UPDATE courses SET
+        title = ?,
+        description = ?,
+        grade = ?,
+        price = ?,
+        is_free = ?,
+        thumbnail = ?,
+        allow_student_replies = ?,
+        sequential_access = ?,
+        allow_chem_lab = ?,
+        course_type = ?,
+        duration_days = ?,
+        original_price = ?,
+        badge_text = ?,
+        updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?`
+    ).run(
+      nextTitle,
+      nextDesc,
+      nextGrade,
+      nextPrice,
+      nextIsFree,
+      nextThumb,
+      nextReplies,
+      nextSeq,
+      nextLab,
+      nextType,
+      nextDur,
+      nextOrigPrice,
+      nextBadge,
       req.params.id
     );
 
     const course = db.prepare('SELECT * FROM courses WHERE id = ?').get(req.params.id);
     res.json(course);
   } catch (err) {
+    console.error('Update course error:', err);
     res.status(500).json({ error: 'حدث خطأ في تحديث الكورس' });
   }
 });

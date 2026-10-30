@@ -4,6 +4,7 @@ import { getUser, isTeacher } from '../utils/auth.js';
 import { showToast } from '../components/toast.js';
 import { confirmModal } from '../components/modal.js';
 import { esc, sanitize, safeUrl, formatTime, getShortStudentName } from '../utils/helpers.js';
+import { renderChemMarkdown } from '../utils/chemMarkdown.js';
 
 export function renderLesson(id) {
   return `
@@ -32,7 +33,7 @@ export async function initLesson(id) {
     const shortName = getShortStudentName(user.name);
     const prereqExam = lesson.prerequisite_exam || null;
     const prereqLocked = Boolean(lesson.prerequisite_locked && !isTeacher());
-    const allowForum = lesson.allow_student_replies !== 0 || isTeacher();
+    const allowForum = Number(lesson.allow_student_replies) === 1;
 
     document.getElementById('lessonContent').innerHTML = `
       <div style="margin-bottom: 20px;">
@@ -167,7 +168,7 @@ export async function initLesson(id) {
         ? `
         <div class="card" style="margin-bottom: 24px;">
           <h3 class="card-title" style="margin-bottom: 10px;"><span class="material-symbols-rounded">description</span> مذكرات وتفاصيل الحصة</h3>
-          <p style="color:var(--text-secondary); font-size:0.88rem; line-height:1.75;">${esc(lesson.description)}</p>
+          <div style="color:var(--text-secondary); font-size:0.88rem; line-height:1.75;">${renderChemMarkdown(lesson.description)}</div>
         </div>
         ` 
         : ''
@@ -498,7 +499,7 @@ export async function initLesson(id) {
               </div>
               
               <div class="discussion-body">
-                ${sanitize(d.content)}
+                ${renderChemMarkdown(d.content)}
               </div>
               
               <div class="discussion-replies">
@@ -515,7 +516,7 @@ export async function initLesson(id) {
                           : ''
                         }
                       </div>
-                      <p class="reply-text">${sanitize(r.content)}</p>
+                      <div class="reply-text">${renderChemMarkdown(r.content)}</div>
                     </div>
                   </div>
                 `).join('')}
@@ -533,7 +534,7 @@ export async function initLesson(id) {
               const ok = await confirmModal('تأكيد الحذف', 'هل أنت متأكد من حذف هذا السؤال؟');
               if (!ok) return;
               try {
-                await api.deleteDiscussion(e.currentTarget.dataset.id);
+                await api.deleteDiscussion(btn.dataset.id);
                 showToast('تم حذف السؤال', 'success');
                 loadLessonDiscussions();
               } catch (err) { showToast(err.message, 'error'); }
@@ -544,7 +545,7 @@ export async function initLesson(id) {
               const ok = await confirmModal('تأكيد الحذف', 'هل أنت متأكد من حذف هذا الرد؟');
               if (!ok) return;
               try {
-                await api.deleteReply(e.currentTarget.dataset.id);
+                await api.deleteReply(btn.dataset.id);
                 showToast('تم حذف الرد', 'success');
                 loadLessonDiscussions();
               } catch (err) { showToast(err.message, 'error'); }
@@ -555,7 +556,7 @@ export async function initLesson(id) {
               e.preventDefault();
               const input = e.target.querySelector('input');
               try {
-                await api.postReply(e.target.dataset.id, { content: input.value });
+                await api.postReply(form.dataset.id, { content: input.value });
                 input.value = '';
                 loadLessonDiscussions();
               } catch (err) { showToast(err.message, 'error'); }

@@ -80,8 +80,23 @@ app.use(async (req, res, next) => {
   next();
 });
 
-// Static uploads
+// Static uploads + DB-backed persistent uploads for serverless environments
 app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads')));
+app.use('/uploads', express.static('/tmp/uploads'));
+app.get(['/uploads/:filename', '/api/uploads/:filename'], (req, res) => {
+  try {
+    const safeName = path.basename(req.params.filename || '');
+    if (!safeName) return res.status(404).end();
+    const row = db.prepare('SELECT mimetype, data FROM uploaded_files WHERE filename = ?').get(safeName);
+    if (!row || !row.data) return res.status(404).end();
+    const buf = Buffer.from(row.data, 'base64');
+    res.setHeader('Content-Type', row.mimetype || 'application/octet-stream');
+    res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+    res.send(buf);
+  } catch (e) {
+    res.status(404).end();
+  }
+});
 
 // Mount helper: mounts route under both /api/... and /... for universal compatibility
 const mount = (routePath, router) => {

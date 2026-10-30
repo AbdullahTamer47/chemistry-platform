@@ -5,20 +5,18 @@ import { showToast } from '../components/toast.js';
 import { showModal } from '../components/modal.js';
 import { renderPublicHeader, initPublicHeader } from '../components/publicHeader.js';
 import { esc, formatFullArabicDate, getShortGradeBadge, gradesList } from '../utils/helpers.js';
+import { renderChemMarkdown } from '../utils/chemMarkdown.js';
 
-import drZiadThumbs from '../assets/dr-ziad-pose-thumbs.jpg';
-import drZiadFlask from '../assets/dr-ziad-pose-flask.jpg';
-import drZiadPortrait from '../assets/dr-ziad-portrait.jpg';
 import chemCurriculum from '../assets/chem-curriculum-3d.jpg';
 import chemExam from '../assets/chem-exam-mastery-3d.jpg';
 
 export function getCourseCover(c) {
-  if (c.thumbnail && (c.thumbnail.startsWith('/') || c.thumbnail.startsWith('http'))) return c.thumbnail;
-  if (c.course_type === 'quarterly') return chemCurriculum;
-  if (c.course_type === 'term') return chemExam;
-  if (c.is_free || c.price === 0) return drZiadPortrait;
-  if (c.title && c.title.includes('انتقالية')) return drZiadFlask;
-  return drZiadThumbs;
+  const thumb = c?.thumbnail ? String(c.thumbnail).trim() : '';
+  if (thumb && (thumb.startsWith('data:image/') || thumb.startsWith('/') || thumb.startsWith('http://') || thumb.startsWith('https://'))) {
+    return thumb;
+  }
+  if (c?.course_type === 'term') return chemExam;
+  return chemCurriculum;
 }
 
 export function renderCourseCardBassthalk(c, { isRecommended = false } = {}) {
@@ -53,7 +51,7 @@ export function renderCourseCardBassthalk(c, { isRecommended = false } = {}) {
         <div class="course-card-mid-row">
           <div class="course-card-mid-right">
             <div class="course-card-price-text">${esc(priceLabel)}</div>
-            <p class="course-card-desc-snippet">${esc(descText)}</p>
+            <div class="course-card-desc-snippet">${renderChemMarkdown(descText)}</div>
             <a href="/courses/${c.id}" class="course-card-more-link">عرض باقي التفاصيل</a>
           </div>
 

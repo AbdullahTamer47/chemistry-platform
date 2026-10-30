@@ -10,7 +10,7 @@
     },
     {
       "source": "/uploads/(.*)",
-      "destination": "/uploads/$1"
+      "destination": "/api/index.js"
     },
     {
       "source": "/(.*)",

@@ -4,6 +4,7 @@ import { showToast } from '../components/toast.js';
 import { showModal, confirmModal } from '../components/modal.js';
 import { formatDate, gradesList, createPaginatedList } from '../utils/helpers.js';
 import { exportToCSV } from '../utils/export.js';
+import { openImageCropperModal, compressImageFile } from '../utils/imageProcessor.js';
 
 export function renderAdmin() {
   return `<div class="app-layout">
@@ -242,16 +243,34 @@ export async function initAdminCourses() {
   const bindCourseThumbUpload = (fileInputId, urlInputId) => {
     const fileInput = document.getElementById(fileInputId);
     const urlInput = document.getElementById(urlInputId);
-    fileInput?.addEventListener('change', (e) => {
-      const file = e.target.files[0];
+    if (!fileInput || !urlInput) return;
+    let preview = document.getElementById(`${urlInputId}Preview`);
+    if (!preview) {
+      preview = document.createElement('img');
+      preview.id = `${urlInputId}Preview`;
+      preview.alt = 'معاينة صورة الكورس';
+      preview.style.cssText = 'display:none;width:100%;aspect-ratio:16/10;object-fit:cover;border-radius:12px;margin-top:10px;border:1px solid var(--border-light);';
+      urlInput.closest('.form-group')?.appendChild(preview);
+    }
+    const showPreview = (src) => {
+      if (src) { preview.src = src; preview.style.display = 'block'; } else { preview.style.display = 'none'; }
+    };
+    showPreview(urlInput.value.trim());
+    urlInput.addEventListener('input', () => showPreview(urlInput.value.trim()));
+    fileInput.addEventListener('change', async (e) => {
+      const file = e.target.files?.[0];
       if (!file) return;
-      if (file.size > 3 * 1024 * 1024) return showToast('حجم الصورة يجب ألا يتجاوز 3 ميجا', 'warning');
-      const reader = new FileReader();
-      reader.onload = () => {
-        if (urlInput) urlInput.value = reader.result;
-        showToast('تم تجهيز صورة الكورس بنجاح', 'success');
-      };
-      reader.readAsDataURL(file);
+      if (!/^image\//.test(file.type)) return showToast('يرجى اختيار ملف صورة صالح', 'warning');
+      try {
+        const cropped = await openImageCropperModal(file, { targetWidth: 960, targetHeight: 600 });
+        fileInput.value = '';
+        if (!cropped) return;
+        urlInput.value = cropped;
+        showPreview(cropped);
+        showToast('تم تجهيز صورة الكورس بنجاح، اضغط حفظ لتطبيقها', 'success');
+      } catch (err) {
+        showToast(err.message || 'تعذر معالجة الصورة', 'error');
+      }
     });
   };
 
@@ -316,6 +335,12 @@ export async function initAdminCourses() {
               <span>تفعيل منتدى النقاش وسؤال المعلم للطلاب في هذا الكورس</span>
             </label>
           </div>
+          <div class="form-group">
+            <label class="form-label" style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+              <input type="checkbox" id="ecLab" ${Number(c.allow_chem_lab) === 1 ? 'checked' : ''}>
+              <span>إظهار المختبر الكيميائي وحاسبة المعادلات للطلاب</span>
+            </label>
+          </div>
           <button class="btn btn-primary btn-block" id="updateCourseBtn"><span class="material-symbols-rounded">check</span> تحديث الكورس</button>
         `);
         bindCourseThumbUpload('ecThumbFile', 'ecThumb');
@@ -340,7 +365,8 @@ export async function initAdminCourses() {
               badge_text,
               is_free: price === 0, 
               sequential_access, 
-              allow_student_replies 
+              allow_student_replies,
+              allow_chem_lab: document.getElementById('ecLab').checked
             });
             showToast('تم التحديث بنجاح', 'success');
             document.querySelector('.modal-overlay')?.remove();
@@ -460,6 +486,12 @@ export async function initAdminCourses() {
           <span>تفعيل منتدى النقاش وسؤال المعلم للطلاب في هذا الكورس</span>
         </label>
       </div>
+      <div class="form-group">
+        <label class="form-label" style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+          <input type="checkbox" id="mcLab">
+          <span>إظهار المختبر الكيميائي وحاسبة المعادلات للطلاب</span>
+        </label>
+      </div>
       <button class="btn btn-primary btn-block" id="saveCourseBtn"><span class="material-symbols-rounded">check</span> حفظ الكورس</button>
     `);
     bindCourseThumbUpload('mcThumbFile', 'mcThumb');
@@ -485,7 +517,8 @@ export async function initAdminCourses() {
           badge_text,
           is_free: price === 0, 
           sequential_access, 
-          allow_student_replies 
+          allow_student_replies,
+          allow_chem_lab: document.getElementById('mcLab').checked
         });
         showToast('تم إضافة الكورس بنجاح', 'success');
         document.querySelector('.modal-overlay')?.remove();
@@ -563,8 +596,8 @@ export async function initAdminCodes() {
           const badge = c.is_active && !isExpired ? '<span class="badge badge-success">فعال</span>' : '<span class="badge badge-danger">مغلق</span>';
           return `<tr>
             <td><span class="code-text">${escA(c.code)}</span></td>
-            <td>${escA(c.course_title || '-')}</td>
-            <td>${c.type === 'universal' ? '<span class="badge badge-info">عام</span>' : '<span class="badge badge-warning">فردي</span>'}</td>
+            <td>${c.code_purpose === 'wallet' ? `<span class="badge badge-warning">رصيد ${c.wallet_amount} ج</span>` : escA(c.course_title || '-')}</td>
+            <td>${c.code_purpose === 'wallet' ? '<span class="badge badge-warning">شحن محفظة</span>' : '<span class="badge badge-info">فتح كورس</span>'}</td>
             <td><span style="direction:ltr;display:inline-block">${uses}</span></td>
             <td>${expiry}</td>
             <td>${badge}</td>
@@ -581,38 +614,46 @@ export async function initAdminCodes() {
 
   document.getElementById('genCodesBtn').addEventListener('click', () => {
     showModal('إنشاء أكواد تفعيل', `
-      <div class="form-group"><label class="form-label">الكورس</label><select class="form-select" id="gcCourse">${courses.map(c => `<option value="${c.id}">${escA(c.title)}</option>`).join('')}</select></div>
-      <div class="form-group"><label class="form-label">النوع</label><select class="form-select" id="gcType"><option value="universal">عام (لأي طالب)</option><option value="individual">فردي (لطالب محدد)</option></select></div>
+      <div class="form-group">
+        <label class="form-label">نوع الكود</label>
+        <div class="code-purpose-switch" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+          <label class="card" style="padding:12px;cursor:pointer;display:flex;gap:8px;align-items:flex-start;margin:0;">
+            <input type="radio" name="gcPurpose" value="course" checked>
+            <span><strong style="display:flex;align-items:center;gap:4px;"><span class="material-symbols-rounded" style="font-size:1.1rem;color:var(--primary)">lock_open</span> فتح كورس محدد</strong><small style="color:var(--text-muted)">يفتح الكورس للطالب مباشرة بدون المحفظة</small></span>
+          </label>
+          <label class="card" style="padding:12px;cursor:pointer;display:flex;gap:8px;align-items:flex-start;margin:0;">
+            <input type="radio" name="gcPurpose" value="wallet">
+            <span><strong style="display:flex;align-items:center;gap:4px;"><span class="material-symbols-rounded" style="font-size:1.1rem;color:var(--accent)">account_balance_wallet</span> شحن رصيد</strong><small style="color:var(--text-muted)">يضيف قيمة مالية لمحفظة الطالب</small></span>
+          </label>
+        </div>
+      </div>
+      <div class="form-group" id="gcCourseGroup"><label class="form-label">الكورس</label><select class="form-select" id="gcCourse">${courses.map(c => `<option value="${c.id}">${escA(c.title)}</option>`).join('')}</select></div>
+      <div class="form-group" id="gcAmountGroup" style="display:none"><label class="form-label">قيمة الرصيد لكل كود (ج.م)</label><input type="number" class="form-input" id="gcAmount" value="100" min="1"></div>
+      <div class="form-group"><label class="form-label">عدد الأكواد</label><input type="number" class="form-input" id="gcCount" value="10" min="1" max="100"></div>
       <div class="form-group"><label class="form-label">تاريخ الانتهاء (اختياري)</label><input type="date" class="form-input" id="gcExpiry"></div>
-      <div class="form-group"><label class="form-label">عدد الأكواد (للفردي)</label><input type="number" class="form-input" id="gcCount" value="10" min="1" max="100"></div>
-      <div class="form-group" id="maxUsesGroup" style="display:none"><label class="form-label">عدد الاستخدامات لكل كود (للفردي)</label><input type="number" class="form-input" id="gcMax" value="1" min="1"></div>
       <button class="btn btn-primary btn-block" id="genBtn"><span class="material-symbols-rounded">key</span> إنشاء</button>
     `);
-    
-    const typeSel = document.getElementById('gcType');
-    const countInp = document.getElementById('gcCount');
-    const maxGrp = document.getElementById('maxUsesGroup');
-    typeSel.addEventListener('change', () => {
-      if (typeSel.value === 'universal') {
-        countInp.value = 1; countInp.disabled = true; maxGrp.style.display = 'none';
-      } else {
-        countInp.value = 10; countInp.disabled = false; maxGrp.style.display = 'block';
-      }
-    });
+
+    document.querySelectorAll('input[name="gcPurpose"]').forEach(r => r.addEventListener('change', () => {
+      const isWallet = document.querySelector('input[name="gcPurpose"]:checked')?.value === 'wallet';
+      document.getElementById('gcCourseGroup').style.display = isWallet ? 'none' : 'block';
+      document.getElementById('gcAmountGroup').style.display = isWallet ? 'block' : 'none';
+    }));
     
     document.getElementById('genBtn').addEventListener('click', async () => {
       try {
-        const type = document.getElementById('gcType').value;
-        const max_uses = type === 'universal' ? -1 : parseInt(document.getElementById('gcMax').value);
+        const code_purpose = document.querySelector('input[name="gcPurpose"]:checked')?.value || 'course';
+        if (code_purpose === 'course' && !courses.length) throw new Error('أنشئ كورساً أولاً');
         let expires_at = document.getElementById('gcExpiry').value;
-        if (expires_at) expires_at = new Date(expires_at).toISOString();
-        else expires_at = null;
+        expires_at = expires_at ? new Date(expires_at).toISOString() : null;
         
         const res = await api.generateCodes({ 
-          course_id: parseInt(document.getElementById('gcCourse').value), 
-          type, 
-          count: parseInt(document.getElementById('gcCount').value), 
-          max_uses,
+          code_purpose,
+          course_id: code_purpose === 'course' ? parseInt(document.getElementById('gcCourse').value) : null,
+          wallet_amount: code_purpose === 'wallet' ? Number(document.getElementById('gcAmount').value) : 0,
+          type: 'individual',
+          count: parseInt(document.getElementById('gcCount').value) || 1,
+          max_uses: 1,
           expires_at
         });
         showToast(res.message, 'success');

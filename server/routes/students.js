@@ -162,17 +162,56 @@ router.put('/notifications/:id/read', authMiddleware, (req, res) => {
 
 router.post('/notifications/send', authMiddleware, teacherMiddleware, (req, res) => {
   try {
-    const { title, message, type, user_id, course_id } = req.body;
-    if (user_id) {
-      db.prepare('INSERT INTO notifications (user_id, title, message, type) VALUES (?, ?, ?, ?)').run(user_id, title, message, type || 'info');
-    } else if (course_id) {
-      const students = db.prepare("SELECT user_id FROM enrollments WHERE course_id = ?").all(course_id);
-      students.forEach(s => db.prepare('INSERT INTO notifications (user_id, title, message, type) VALUES (?, ?, ?, ?)').run(s.user_id, title, message, type || 'info'));
-    } else {
-      db.prepare('INSERT INTO notifications (user_id, title, message, type) VALUES (NULL, ?, ?, ?)').run(title, message, type || 'info');
+    const { title, message, type, user_id, user_ids, grade, course_id, target_mode } = req.body;
+    if (!title || !message) {
+      return res.status(400).json({ error: 'يرجى كتابة عنوان ونص الإشعار' });
     }
-    res.json({ message: 'تم إرسال الإشعار' });
-  } catch (err) { res.status(500).json({ error: 'حدث خطأ' }); }
+    const notifType = type || 'info';
+    const ins = db.prepare('INSERT INTO notifications (user_id, title, message, type) VALUES (?, ?, ?, ?)');
+
+    let recipientCount = 0;
+    const tx = db.transaction(() => {
+      if (Array.isArray(user_ids) && user_ids.length > 0) {
+        const uniqueIds = [...new Set(user_ids.map(Number).filter(Boolean))];
+        uniqueIds.forEach(uid => {
+          ins.run(uid, title, message, notifType);
+          recipientCount++;
+        });
+      } else if (user_id) {
+        ins.run(Number(user_id), title, message, notifType);
+        recipientCount = 1;
+      } else if (course_id) {
+        let q = 'SELECT user_id FROM enrollments WHERE course_id = ?';
+        const p = [Number(course_id)];
+        if (grade && grade !== 'all') {
+          q = 'SELECT e.user_id FROM enrollments e JOIN users u ON e.user_id = u.id WHERE e.course_id = ? AND u.grade = ?';
+          p.push(grade);
+        }
+        const students = db.prepare(q).all(...p);
+        students.forEach(s => {
+          ins.run(s.user_id, title, message, notifType);
+          recipientCount++;
+        });
+      } else if (grade && grade !== 'all') {
+        const students = db.prepare("SELECT id FROM users WHERE role = 'student' AND grade = ?").all(grade);
+        students.forEach(s => {
+          ins.run(s.id, title, message, notifType);
+          recipientCount++;
+        });
+      } else {
+        if (target_mode === 'private') {
+          throw new Error('يرجى تحديد طالب واحد على الأقل لإرسال الإشعار الخاص');
+        }
+        ins.run(null, title, message, notifType);
+        recipientCount = db.prepare("SELECT COUNT(*) as c FROM users WHERE role = 'student'").get()?.c || 0;
+      }
+    });
+    tx();
+
+    res.json({ message: `تم إرسال الإشعار بنجاح (${recipientCount} طالب)`, count: recipientCount });
+  } catch (err) {
+    res.status(400).json({ error: err.message || 'حدث خطأ أثناء إرسال الإشعار' });
+  }
 });
 
 // Student: Comprehensive visual analytics (Curriculum Donut + Score Progression Chart)
@@ -328,7 +367,7 @@ router.get('/', authMiddleware, teacherMiddleware, (req, res) => {
   } catch (err) { res.status(500).json({ error: 'حدث خطأ' }); }
 });
 
-// Teacher: Get manual WhatsApp Progress Report for a student
+// Teacher: Get WhatsApp & Platform Progress Report & Communication links for a student and parent
 router.get('/:id/whatsapp-report', authMiddleware, teacherMiddleware, (req, res) => {
   try {
     const student = db.prepare('SELECT id, name, phone, grade, parent_phone, parent_phone_secondary FROM users WHERE id = ? AND role = ?').get(req.params.id, 'student');
@@ -339,20 +378,33 @@ router.get('/:id/whatsapp-report', authMiddleware, teacherMiddleware, (req, res)
       FROM exam_attempts WHERE user_id = ? AND completed_at IS NOT NULL
     `).get(student.id);
 
+    const lessonsWatched = db.prepare(`
+      SELECT COUNT(*) as completed_lessons
+      FROM lesson_progress WHERE user_id = ? AND completed = 1
+    `).get(student.id)?.completed_lessons || 0;
+
     const activeCourses = db.prepare(`
       SELECT c.title FROM courses c JOIN enrollments e ON c.id = e.course_id WHERE e.user_id = ?
     `).all(student.id).map(c => c.title).join('، ');
 
-    const msg = `تقرير متابعة الطالب/ة: ${student.name} (${student.grade})\n` +
+    const parentReportMsg = `تقرير متابعة الطالب/ة: ${student.name} (${student.grade})\n` +
       `-----------------------------------\n` +
+      `عدد المحاضرات المكتملة: ${lessonsWatched}\n` +
       `عدد الاختبارات المنجزة: ${stats.exams_taken || 0}\n` +
       `متوسط الدرجات الكلي: ${stats.avg_score || 0}%\n` +
       `الكورسات المفعلة: ${activeCourses || 'لا يوجد كورسات مفعلة حالياً'}\n` +
       `-----------------------------------\n` +
       `نتمنى له المزيد من التوفيق والنجاح! منصة د. زياد رمزي عياد للكيمياء.`;
 
-    let whatsapp_parent_url = null;
-    let whatsapp_parent_secondary_url = null;
+    const studentReportMsg = `مرحباً بك يا ${student.name} (${student.grade})\n` +
+      `إليك ملخص أدائك الأكاديمي على منصة د. زياد رمزي عياد للكيمياء:\n` +
+      `-----------------------------------\n` +
+      `عدد المحاضرات المكتملة: ${lessonsWatched}\n` +
+      `عدد الاختبارات المنجزة: ${stats.exams_taken || 0}\n` +
+      `متوسط درجاتك الكلي: ${stats.avg_score || 0}%\n` +
+      `الكورسات المشترك بها: ${activeCourses || 'لا يوجد كورسات مفعلة حالياً'}\n` +
+      `-----------------------------------\n` +
+      `استمر في الاجتهاد والتفوق!`;
 
     const formatWa = (ph) => {
       const digits = String(ph || '').replace(/\D/g, '');
@@ -361,20 +413,33 @@ router.get('/:id/whatsapp-report', authMiddleware, teacherMiddleware, (req, res)
       return `20${digits.replace(/^0+/, '')}`;
     };
 
-    if (student.parent_phone) {
-      const text = encodeURIComponent(`السلام عليكم ورحمة الله، ولي أمر الطالب/ة ${student.name}.\n\n${msg}`);
-      whatsapp_parent_url = `https://wa.me/${formatWa(student.parent_phone)}?text=${text}`;
-    }
+    const studentWaPhone = formatWa(student.phone);
+    const parentWaPhone = formatWa(student.parent_phone);
+
+    const whatsapp_parent_url = parentWaPhone
+      ? `https://wa.me/${parentWaPhone}?text=${encodeURIComponent(`السلام عليكم ورحمة الله، ولي أمر الطالب/ة ${student.name}.\n\n${parentReportMsg}`)}`
+      : null;
+
+    const whatsapp_student_report_url = studentWaPhone
+      ? `https://wa.me/${studentWaPhone}?text=${encodeURIComponent(studentReportMsg)}`
+      : null;
 
     res.json({
       student_id: student.id,
       student_name: student.name,
-      report_text: msg,
-      whatsapp_parent_url
+      student_phone: student.phone,
+      parent_phone: student.parent_phone || '',
+      grade: student.grade || '',
+      report_text: parentReportMsg,
+      student_report_text: studentReportMsg,
+      whatsapp_parent_url,
+      whatsapp_student_report_url,
+      whatsapp_parent_base_url: parentWaPhone ? `https://wa.me/${parentWaPhone}` : null,
+      whatsapp_student_base_url: studentWaPhone ? `https://wa.me/${studentWaPhone}` : null
     });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'حدث خطأ في إنشاء تقرير الواتساب' });
+    res.status(500).json({ error: 'حدث خطأ في إنشاء التقرير' });
   }
 });
 

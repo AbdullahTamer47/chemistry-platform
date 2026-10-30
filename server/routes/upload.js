@@ -4,6 +4,7 @@ import path from 'path';
 import crypto from 'crypto';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
+import db from '../db.js';
 import { authMiddleware, rateLimit } from '../middleware/auth.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -90,9 +91,23 @@ router.post('/', authMiddleware, rateLimit(20, 60_000), (req, res) => {
       return res.status(400).json({ error: 'محتوى الملف غير صالح أو لا يطابق الصيغة المعلنة' });
     }
 
+    let dataUrl = null;
+    try {
+      const rawBuf = fs.readFileSync(req.file.path);
+      const b64 = rawBuf.toString('base64');
+      db.prepare('INSERT OR REPLACE INTO uploaded_files (filename, mimetype, data, size) VALUES (?, ?, ?, ?)')
+        .run(req.file.filename, req.file.mimetype, b64, req.file.size);
+      if (req.file.mimetype.startsWith('image/') && req.file.size <= 2 * 1024 * 1024) {
+        dataUrl = `data:${req.file.mimetype};base64,${b64}`;
+      }
+    } catch (e) {
+      console.warn('Upload DB persist warning:', e.message);
+    }
+
     const fileUrl = `/uploads/${req.file.filename}`;
     res.json({
       url: fileUrl,
+      data_url: dataUrl,
       filename: req.file.filename,
       originalname: req.file.originalname,
       size: req.file.size,

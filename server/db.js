@@ -200,11 +200,20 @@ if (!db) {
     }
   };
 
+  const sanitizeSqlParams = (params) => {
+    const raw = (params.length === 1 && Array.isArray(params[0])) ? params[0] : params;
+    return raw.map(v => {
+      if (v === undefined) return null;
+      if (typeof v === 'boolean') return v ? 1 : 0;
+      return v;
+    });
+  };
+
   db = {
     prepare(sql) {
       return {
         all(...params) {
-          const args = (params.length === 1 && Array.isArray(params[0])) ? params[0] : params;
+          const args = sanitizeSqlParams(params);
           const stmt = rawDbRef.prepare(sql);
           try {
             if (args.length > 0) stmt.bind(args);
@@ -218,7 +227,7 @@ if (!db) {
           }
         },
         get(...params) {
-          const args = (params.length === 1 && Array.isArray(params[0])) ? params[0] : params;
+          const args = sanitizeSqlParams(params);
           const stmt = rawDbRef.prepare(sql);
           try {
             if (args.length > 0) stmt.bind(args);
@@ -231,7 +240,7 @@ if (!db) {
           }
         },
         run(...params) {
-          const args = (params.length === 1 && Array.isArray(params[0])) ? params[0] : params;
+          const args = sanitizeSqlParams(params);
           if (args.length > 0) {
             rawDbRef.run(sql, args);
           } else {
@@ -689,6 +698,14 @@ db.exec(`
     details TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
+
+  CREATE TABLE IF NOT EXISTS uploaded_files (
+    filename TEXT PRIMARY KEY,
+    mimetype TEXT NOT NULL,
+    data TEXT NOT NULL,
+    size INTEGER DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
 `);
 
 function addColumnIfMissing(table, column, def) {
@@ -704,6 +721,7 @@ addColumnIfMissing('exam_attempts', 'question_ids', 'TEXT');
 addColumnIfMissing('exam_attempts', 'pedagogical_feedback', 'TEXT');
 addColumnIfMissing('questions', 'concept_key', 'TEXT');
 addColumnIfMissing('questions', 'explanation_image', 'TEXT');
+addColumnIfMissing('questions', 'bloom_level', "TEXT DEFAULT 'فهم وتطبيق'");
 addColumnIfMissing('exam_attempts', 'essay_grades', 'TEXT');
 addColumnIfMissing('exam_attempts', 'teacher_feedback', 'TEXT');
 addColumnIfMissing('exam_attempts', 'is_graded', 'INTEGER DEFAULT 1');
@@ -727,6 +745,9 @@ addColumnIfMissing('courses', 'duration_days', 'INTEGER DEFAULT 30');
 addColumnIfMissing('courses', 'original_price', 'REAL DEFAULT 0');
 addColumnIfMissing('courses', 'badge_text', 'TEXT');
 addColumnIfMissing('courses', 'updated_at', 'DATETIME');
+addColumnIfMissing('courses', 'allow_chem_lab', 'INTEGER DEFAULT 0');
+addColumnIfMissing('activation_codes', 'code_purpose', "TEXT DEFAULT 'course'");
+addColumnIfMissing('activation_codes', 'wallet_amount', 'REAL DEFAULT 0');
 
 // Seed default settings if empty
 const seedSetting = (key, defaultVal) => {
