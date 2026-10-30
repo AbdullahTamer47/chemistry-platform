@@ -1,3 +1,4 @@
+import { compressImageFile } from '../utils/imageProcessor.js';
 import { renderNavbar, initNavbar } from '../components/navbar.js';
 import { api } from '../utils/api.js';
 import { showToast } from '../components/toast.js';
@@ -452,9 +453,9 @@ export async function initWallet() {
     if (!file) { nameEl.textContent = 'اضغط لاختيار صورة الإيصال (PNG / JPG حتى 3 ميجا)'; return; }
     if (!/^image\/(png|jpeg|webp)$/.test(file.type)) { showToast('الصورة يجب أن تكون PNG أو JPG أو WebP', 'warning'); e.target.value = ''; return; }
     if (file.size > 3 * 1024 * 1024) { showToast('حجم الصورة أكبر من 3 ميجا', 'warning'); e.target.value = ''; return; }
-    const reader = new FileReader();
-    reader.onload = () => { receiptData = reader.result; nameEl.textContent = `تم إرفاق: ${file.name}`; };
-    reader.readAsDataURL(file);
+    compressImageFile(file, { maxWidth: 1400, maxHeight: 1400, quality: 0.8 })
+      .then(data => { receiptData = data; nameEl.textContent = `تم إرفاق: ${file.name}`; })
+      .catch(() => { showToast('تعذر قراءة صورة الإيصال', 'error'); e.target.value = ''; });
   });
 
   async function refreshCourses() {

@@ -824,25 +824,42 @@ export async function initAdminStudents() {
       document.querySelectorAll('.wa-st-btn').forEach(btn => {
         btn.addEventListener('click', async () => {
           const s = students.find(x => x.id == btn.dataset.id);
+          if (!s) return;
           try {
             const rep = await api.getStudentWhatsAppReport(s.id);
-            showModal(`تقرير ولي الأمر (واتساب) — ${escA(s.name)}`, `
+            const waLink = (base, text) => base ? `${base}?text=${encodeURIComponent(text)}` : '';
+            showModal(`التواصل مع ${escA(s.name)}`, `
               <div style="text-align:right;">
-                <p style="font-size:0.85rem; color:var(--text-secondary); margin-bottom:12px;">نص التقرير الجاهز للإرسال لولي الأمر:</p>
-                <div style="background:var(--bg-secondary); border:1px solid var(--border-light); border-radius:8px; padding:12px; font-size:0.85rem; line-height:1.6; white-space:pre-wrap; margin-bottom:16px;">${escA(rep.report_text)}</div>
-                <div>
-                  ${rep.whatsapp_parent_url ? `
-                    <a href="${rep.whatsapp_parent_url}" target="_blank" class="btn btn-primary btn-block" style="background:#25D366; border-color:#25D366; gap:8px;">
-                      <span class="material-symbols-rounded">chat</span> إرسال التقرير لولي الأمر عبر واتساب
-                    </a>
-                  ` : '<p style="font-size:0.8rem; color:var(--error);">لم يتم تسجيل رقم هاتف ولي الأمر</p>'}
+                <div class="form-group">
+                  <label class="form-label">رسالة مخصصة (للطالب أو ولي الأمر)</label>
+                  <textarea class="form-input" id="waCustomMsg" rows="3" placeholder="اكتب رسالتك هنا..."></textarea>
                 </div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+                  <button type="button" class="btn btn-secondary" id="waMsgStudent" style="gap:6px;justify-content:center;"><span class="material-symbols-rounded">sms</span> رسالة للطالب</button>
+                  <button type="button" class="btn btn-secondary" id="waRepStudent" style="gap:6px;justify-content:center;"><span class="material-symbols-rounded">assessment</span> تقرير للطالب</button>
+                  <button type="button" class="btn btn-secondary" id="waMsgParent" style="gap:6px;justify-content:center;"><span class="material-symbols-rounded">family_restroom</span> رسالة لولي الأمر</button>
+                  <button type="button" class="btn btn-primary" id="waRepParent" style="gap:6px;justify-content:center;background:#25D366;border-color:#25D366;"><span class="material-symbols-rounded">summarize</span> تقرير لولي الأمر</button>
+                </div>
+                <details style="margin-top:14px;"><summary style="cursor:pointer;font-size:0.82rem;color:var(--text-secondary)">معاينة نص التقرير</summary>
+                  <div style="background:var(--bg-secondary);border:1px solid var(--border-light);border-radius:8px;padding:12px;font-size:0.82rem;line-height:1.6;white-space:pre-wrap;margin-top:8px;">${escA(rep.report_text)}</div>
+                </details>
               </div>
             `);
+            const open = (url, missing) => url ? window.open(url, '_blank', 'noopener') : showToast(missing, 'error');
+            const custom = () => (document.getElementById('waCustomMsg')?.value || '').trim();
+            document.getElementById('waMsgStudent')?.addEventListener('click', () => {
+              const t = custom(); if (!t) return showToast('اكتب الرسالة أولاً', 'warning');
+              open(waLink(rep.whatsapp_student_base_url, t), 'رقم الطالب غير مسجل');
+            });
+            document.getElementById('waRepStudent')?.addEventListener('click', () => open(rep.whatsapp_student_report_url, 'رقم الطالب غير مسجل'));
+            document.getElementById('waMsgParent')?.addEventListener('click', () => {
+              const t = custom(); if (!t) return showToast('اكتب الرسالة أولاً', 'warning');
+              open(waLink(rep.whatsapp_parent_base_url, t), 'رقم ولي الأمر غير مسجل');
+            });
+            document.getElementById('waRepParent')?.addEventListener('click', () => open(rep.whatsapp_parent_url, 'رقم ولي الأمر غير مسجل'));
           } catch(err) { showToast(err.message, 'error'); }
         });
       });
-
       document.querySelectorAll('.delete-st-btn').forEach(btn => {
         btn.addEventListener('click', async () => {
           const ok = await confirmModal('تأكيد حذف الطالب', 'هل أنت متأكد من حذف حساب الطالب نهائياً؟ سيتم حذف جميع اشتراكاته ودرجاته.');
@@ -868,7 +885,7 @@ export async function initAdminStudents() {
         return `<div class="mobile-swipe-hint"><span class="material-symbols-rounded">swipe</span> اسحب أفقياً لعرض باقي سجلات الطلاب</div><div class="table-wrapper"><table><thead><tr><th>الاسم</th><th>هاتف الطالب</th><th>هاتف ولي الأمر</th><th>المرحلة</th><th>الكورسات</th><th>المعدل</th><th>إجراءات</th></tr></thead><tbody>
           ${items.map(s => `<tr><td style="font-weight:600">${escA(s.name)}</td><td dir="ltr">${escA(s.phone)}</td><td dir="ltr">${escA(s.parent_phone || '-')}</td><td>${escA(s.grade || '-')}</td><td>${s.enrolled_courses}</td><td><span class="badge ${(s.avg_score || 0) >= 60 ? 'badge-success' : 'badge-danger'}">${s.avg_score || 0}%</span></td>
           <td><div style="display:flex;gap:4px">
-            <button class="btn btn-ghost btn-sm wa-st-btn" data-id="${s.id}" title="تقرير الواتساب لولي الأمر"><span class="material-symbols-rounded" style="color:#25D366">chat</span></button>
+            <button class="btn btn-ghost btn-sm wa-st-btn" data-id="${s.id}" title="رسائل وتقارير (طالب / ولي أمر)"><span class="material-symbols-rounded" style="color:#25D366">chat</span></button>
             <button class="btn btn-ghost btn-sm report-st-btn" data-id="${s.id}" title="تقرير الطالب"><span class="material-symbols-rounded" style="color:var(--info)">analytics</span></button>
             <button class="btn btn-ghost btn-sm edit-st-btn" data-id="${s.id}" title="تعديل"><span class="material-symbols-rounded">edit</span></button>
             <button class="btn btn-ghost btn-sm text-danger delete-st-btn" data-id="${s.id}" title="حذف" style="color:var(--error)"><span class="material-symbols-rounded">delete</span></button>
@@ -1233,10 +1250,29 @@ export async function initAdminLive() {
 export function renderAdminNotifications() {
   return `<div class="app-layout">${renderNavbar('admin-notifications')}<main class="main-content">
     <div class="page-header"><h1 class="page-title"><span class="material-symbols-rounded" style="color:var(--warning)">notifications</span> إرسال إشعارات</h1></div>
-    <div class="card" style="max-width:600px">
+    <div class="card" style="max-width:640px">
+      <div class="form-group">
+        <label class="form-label">نوع الإشعار</label>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+          <label class="card" style="padding:12px;cursor:pointer;display:flex;gap:8px;margin:0;"><input type="radio" name="notifMode" value="public" checked><span><strong>عام</strong><br><small style="color:var(--text-muted)">لكل طلاب مرحلة دراسية</small></span></label>
+          <label class="card" style="padding:12px;cursor:pointer;display:flex;gap:8px;margin:0;"><input type="radio" name="notifMode" value="private"><span><strong>خاص</strong><br><small style="color:var(--text-muted)">لطالب أو عدة طلاب محددين</small></span></label>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">المرحلة الدراسية</label>
+        <select class="form-select" id="notifGrade">
+          <option value="all">كل المراحل</option>
+          ${gradesList.map(g => `<option value="${g}">${g}</option>`).join('')}
+        </select>
+      </div>
+      <div class="form-group" id="notifStudentsGroup" style="display:none">
+        <label class="form-label">اختر الطلاب</label>
+        <input type="text" class="form-input" id="notifStudentSearch" placeholder="ابحث بالاسم أو الهاتف..." style="margin-bottom:8px">
+        <div id="notifStudentsList" style="max-height:220px;overflow-y:auto;border:1px solid var(--border-light);border-radius:10px;padding:6px"></div>
+        <small style="color:var(--text-muted)" id="notifSelectedCount">لم يتم اختيار أي طالب</small>
+      </div>
       <div class="form-group"><label class="form-label">العنوان</label><input type="text" class="form-input" id="notifTitle"></div>
       <div class="form-group"><label class="form-label">الرسالة</label><textarea class="form-input" id="notifMsg" rows="3"></textarea></div>
-      <div class="form-group"><label class="form-label">إرسال إلى</label><select class="form-select" id="notifTarget"><option value="all">كل الطلاب</option></select></div>
       <button class="btn btn-primary" id="sendNotifBtn"><span class="material-symbols-rounded">send</span> إرسال</button>
     </div>
   </main></div>`;
@@ -1244,27 +1280,67 @@ export function renderAdminNotifications() {
 
 export async function initAdminNotifications() {
   initNavbar();
-  try {
-    const courses = await api.getCourses();
-    const targetSelect = document.getElementById('notifTarget');
-    courses.forEach(c => {
-      targetSelect.innerHTML += `<option value="${c.id}">${escA(c.title)}</option>`;
-    });
-  } catch (err) {
-    console.error(err);
-  }
+  const selected = new Set();
+  let students = [];
+  const listEl = document.getElementById('notifStudentsList');
+  const countEl = document.getElementById('notifSelectedCount');
+  const getMode = () => document.querySelector('input[name="notifMode"]:checked')?.value || 'public';
+
+  const renderStudents = () => {
+    const q = (document.getElementById('notifStudentSearch').value || '').trim().toLowerCase();
+    const filtered = students.filter(s => !q || s.name.toLowerCase().includes(q) || (s.phone || '').includes(q));
+    listEl.innerHTML = filtered.length ? filtered.map(s => `
+      <label style="display:flex;align-items:center;gap:8px;padding:6px 8px;cursor:pointer;">
+        <input type="checkbox" class="notif-st-check" value="${s.id}" ${selected.has(s.id) ? 'checked' : ''}>
+        <span>${escA(s.name)}</span><small dir="ltr" style="color:var(--text-muted);margin-right:auto">${escA(s.phone || '')}</small>
+      </label>`).join('') : '<div style="padding:12px;text-align:center;color:var(--text-muted)">لا يوجد طلاب</div>';
+    listEl.querySelectorAll('.notif-st-check').forEach(cb => cb.addEventListener('change', () => {
+      const id = Number(cb.value);
+      if (cb.checked) selected.add(id); else selected.delete(id);
+      countEl.textContent = selected.size ? `تم اختيار ${selected.size} طالب` : 'لم يتم اختيار أي طالب';
+    }));
+  };
+
+  const loadStudents = async () => {
+    const grade = document.getElementById('notifGrade').value;
+    try {
+      students = await api.getStudents(grade !== 'all' ? { grade } : {});
+    } catch (e) { students = []; }
+    selected.clear();
+    countEl.textContent = 'لم يتم اختيار أي طالب';
+    renderStudents();
+  };
+
+  const syncMode = () => {
+    const priv = getMode() === 'private';
+    document.getElementById('notifStudentsGroup').style.display = priv ? 'block' : 'none';
+    if (priv) loadStudents();
+  };
+
+  document.querySelectorAll('input[name="notifMode"]').forEach(r => r.addEventListener('change', syncMode));
+  document.getElementById('notifGrade').addEventListener('change', () => { if (getMode() === 'private') loadStudents(); });
+  document.getElementById('notifStudentSearch').addEventListener('input', renderStudents);
 
   document.getElementById('sendNotifBtn').addEventListener('click', async () => {
-    const target = document.getElementById('notifTarget').value;
+    const mode = getMode();
+    const grade = document.getElementById('notifGrade').value;
+    const title = document.getElementById('notifTitle').value.trim();
+    const message = document.getElementById('notifMsg').value.trim();
+    if (!title || !message) return showToast('اكتب عنوان ونص الإشعار', 'warning');
+    const body = { title, message, target_mode: mode };
+    if (mode === 'private') {
+      if (!selected.size) return showToast('اختر طالباً واحداً على الأقل', 'warning');
+      body.user_ids = [...selected];
+    } else if (grade !== 'all') {
+      body.grade = grade;
+    }
     try {
-      await api.sendNotification({ 
-        title: document.getElementById('notifTitle').value, 
-        message: document.getElementById('notifMsg').value, 
-        course_id: target !== 'all' ? parseInt(target) : undefined 
-      });
-      showToast('تم إرسال الإشعار بنجاح', 'success');
+      const res = await api.sendNotification(body);
+      showToast(res.message || 'تم إرسال الإشعار بنجاح', 'success');
       document.getElementById('notifTitle').value = '';
       document.getElementById('notifMsg').value = '';
+      selected.clear();
+      if (mode === 'private') renderStudents();
     } catch (err) { showToast(err.message, 'error'); }
   });
 }

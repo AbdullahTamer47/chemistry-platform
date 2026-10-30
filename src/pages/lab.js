@@ -269,7 +269,7 @@ export function initLab() {
         </div>
         <h4 style="margin:0; font-size:0.98rem; font-weight:800; color:var(--text-primary);">${esc(r.title)}</h4>
         <div dir="ltr" style="background:#0f172a; color:#34d399; padding:12px 14px; border-radius:10px; font-family:monospace; font-size:1rem; font-weight:800; text-align:center; letter-spacing:0.5px;">
-          ${esc(r.balanced)}
+          ${renderChemEquation(r.balanced)}
         </div>
         <div style="font-size:0.82rem; color:var(--text-secondary); display:flex; flex-direction:column; gap:4px;">
           <div><strong style="color:var(--primary);">المشاهدة والناتج:</strong> ${esc(r.colorChange)}</div>
@@ -299,7 +299,7 @@ export function initLab() {
       <div style="background:var(--bg-secondary); border:1.5px solid var(--primary); border-radius:16px; padding:20px;">
         <div style="font-size:0.82rem; color:var(--text-muted); font-weight:700; margin-bottom:6px;">المعادلة الموزونة بأبسط معاملات صحيحة:</div>
         <div dir="ltr" style="background:#0f172a; color:#34d399; padding:16px; border-radius:12px; font-family:monospace; font-size:1.25rem; font-weight:900; text-align:center; margin-bottom:16px;">
-          ${esc(res.balanced)}
+          ${renderChemEquation(res.balanced)}
         </div>
         <div style="font-size:0.84rem; font-weight:800; margin-bottom:8px; color:var(--text-primary);">جدول التحقق من تساوي عدد الذرات في الطرفين:</div>
         <div style="display:flex; gap:10px; flex-wrap:wrap;">
