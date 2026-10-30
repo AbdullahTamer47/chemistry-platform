@@ -570,12 +570,12 @@ export async function initCourseDetail(id) {
                 </div>
 
                 <div style="position:relative; text-align:center; margin:16px 0; border-top:1px dashed var(--border-light);">
-                  <span style="position:relative; top:-10px; background:var(--bg-card); padding:0 10px; font-size:0.75rem; color:var(--text-muted); font-weight:700;">أو التفعيل بكود فتح الكورس / شحن المحفظة</span>
+                  <span style="position:relative; top:-10px; background:var(--bg-card); padding:0 10px; font-size:0.75rem; color:var(--text-muted); font-weight:700;">أو التفعيل بكود فتح الكورس</span>
                 </div>
 
                 <div class="input-group" style="margin-bottom:10px;">
                   <span class="material-symbols-rounded input-icon">key</span>
-                  <input type="text" class="form-input" id="activationCode" placeholder="أدخل كود الكورس أو كود الرصيد" style="padding-right:44px; font-weight:700;" dir="ltr">
+                  <input type="text" class="form-input" id="activationCode" placeholder="أدخل كود فتح الكورس" style="padding-right:44px; font-weight:700;" dir="ltr">
                 </div>
                 
                 <button class="btn btn-secondary" id="activateBtn" style="width:100%; justify-content:center; margin-bottom:10px; font-weight:700;">
@@ -583,7 +583,7 @@ export async function initCourseDetail(id) {
                 </button>
 
                 <p style="font-size:0.72rem; color:var(--text-muted); text-align:center; margin:0;">
-                  يقبل أكواد فتح الكورس المباشر وأكواد شحن رصيد المحفظة.
+                  أكواد شحن الرصيد لا تعمل هنا، فعّلها من صفحة المحفظة.
                 </p>
               ` : `
                 <div style="text-align:center;">

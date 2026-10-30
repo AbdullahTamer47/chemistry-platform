@@ -331,6 +331,9 @@ router.post('/wallet/charge-voucher', authMiddleware, (req, res) => {
       }
 
       if (ac.code_purpose === 'course' && ac.course_id) {
+        return res.status(400).json({ error: 'هذا كود فتح كورس وليس كود شحن رصيد، فعّله من صفحة الكورس نفسه' });
+      }
+      if (false) {
         const existingEnr = db.prepare('SELECT id FROM enrollments WHERE user_id = ? AND course_id = ?').get(req.user.id, ac.course_id);
         if (existingEnr) return res.status(400).json({ error: 'أنت مشترك بالفعل في هذا الكورس' });
         const txCourse = db.transaction(() => {

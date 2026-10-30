@@ -102,6 +102,15 @@ router.post('/activate', authMiddleware, activateLimiter, (req, res) => {
 
     const ac = db.prepare('SELECT * FROM activation_codes WHERE code = ? AND is_active = 1').get(cleanCode);
 
+    // Wallet balance codes must NEVER unlock a course: they can only be redeemed from the wallet page.
+    const isWalletCode = (ac && (ac.code_purpose === 'wallet' || Number(ac.wallet_amount) > 0))
+      || (!ac && db.prepare('SELECT id FROM wallet_vouchers WHERE code = ?').get(cleanCode));
+    if (isWalletCode) {
+      return res.status(400).json({ error: 'هذا كود شحن رصيد، يتم تفعيله من صفحة المحفظة فقط وليس لفتح الكورسات' });
+    }
+    if (!ac) {
+      return res.status(404).json({ error: 'الكود غير صالح أو تم استخدامه بالكامل' });
+    }
     // Fallback check in wallet_vouchers if generated via legacy voucher endpoint
     if (!ac) {
       const voucher = db.prepare('SELECT * FROM wallet_vouchers WHERE code = ? AND is_used = 0').get(cleanCode);

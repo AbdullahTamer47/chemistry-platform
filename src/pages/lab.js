@@ -1,6 +1,7 @@
 import { renderNavbar, initNavbar } from '../components/navbar.js';
 import { renderPublicHeader, initPublicHeader } from '../components/publicHeader.js';
 import { isLoggedIn } from '../utils/auth.js';
+import { renderChemEquation } from '../utils/chemMarkdown.js';
 import { esc } from '../utils/helpers.js';
 import {
   calculateMolarMass,
