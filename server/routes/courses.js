@@ -75,10 +75,13 @@ router.get('/:id', optionalAuth, (req, res) => {
       });
     }
 
-    // video_url is only ever handed out via the signed video-token endpoint (teachers see it for editing)
+    // video_url and raw pdf_url are only handed out via signed token endpoints (teachers see them for editing)
     const lessons = db.prepare('SELECT * FROM lessons WHERE course_id = ?').all(course.id)
       .map(l => {
-        const base = isTeacher(req.user) ? l : { ...l, video_url: undefined };
+        const hasPdf = Boolean(l.pdf_url);
+        const base = isTeacher(req.user)
+          ? { ...l, has_pdf: hasPdf }
+          : { ...l, has_pdf: hasPdf, video_url: undefined, pdf_url: undefined };
         if (l.prerequisite_exam_id) {
           const pExam = examById.get(l.prerequisite_exam_id) || db.prepare('SELECT id, title, passing_score FROM exams WHERE id = ?').get(l.prerequisite_exam_id);
           if (pExam) {

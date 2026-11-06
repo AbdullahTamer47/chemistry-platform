@@ -2,10 +2,11 @@ import { renderNavbar, initNavbar } from '../components/navbar.js';
 import { api } from '../utils/api.js';
 import { isLoggedIn, isTeacher } from '../utils/auth.js';
 import { showToast } from '../components/toast.js';
-import { confirmModal } from '../components/modal.js';
+import { showModal, confirmModal } from '../components/modal.js';
 import { esc } from '../utils/helpers.js';
 import { renderPublicHeader, initPublicHeader } from '../components/publicHeader.js';
 import { openChemistryLabModal } from '../components/chemistryLabModal.js';
+import { openProtectedPdfModal } from '../components/pdfShieldViewer.js';
 import { getCourseCover } from './courses.js';
 import { renderChemMarkdown, renderChemToolbar, bindChemToolbars } from '../utils/chemMarkdown.js';
 
@@ -77,24 +78,34 @@ export async function initCourseDetail(id) {
     const progressPercent = totalItems > 0 ? Math.round((completedItems / totalItems) * 100) : 0;
     const coverImg = getCourseCover(course);
 
-    // Extract exams and PDF materials
+    // Extract exams and PDF materials & determine "أنت هنا" (You Are Here) chapter/item
     const allExams = [];
     const allPdfs = [];
+    let currentChapterId = null;
+    let currentItemKey = null;
+
     (course.chapters || []).forEach(ch => {
       (ch.items || []).forEach(item => {
         if (item.item_type === 'exam') {
           allExams.push({ ...item, chapter_title: ch.title });
         }
-        if (item.pdf_url) {
+        if (item.has_pdf || item.pdf_url) {
           allPdfs.push({
             id: item.id,
             title: item.title,
-            chapter_title: ch.title,
-            pdf_url: item.pdf_url
+            chapter_title: ch.title
           });
+        }
+        if (currentItemKey === null && !item.is_completed) {
+          currentChapterId = ch.id;
+          currentItemKey = `${item.item_type}_${item.id}`;
         }
       });
     });
+
+    if (currentChapterId === null && course.chapters?.length > 0) {
+      currentChapterId = course.chapters[0].id;
+    }
 
     document.getElementById('courseContent').innerHTML = `
       <div class="course-bassthalk-container">
@@ -216,24 +227,37 @@ export async function initCourseDetail(id) {
             <!-- TAB 1: CURRICULUM -->
             <div id="tab-pane-curriculum" class="course-tab-pane">
               ${course.chapters && course.chapters.length > 0 
-                ? course.chapters.map((ch, idx) => `
-                  <div class="unit-box-bassthalk" data-unit-id="${ch.id}">
-                    <div class="unit-header-bassthalk">
+                ? course.chapters.map((ch, idx) => {
+                  const chTotal = ch.items?.length || 0;
+                  const chCompleted = (ch.items || []).filter(i => i.is_completed).length;
+                  const isYouAreHereChapter = Number(ch.id) === Number(currentChapterId);
+                  return `
+                  <div class="unit-box-bassthalk ${isYouAreHereChapter ? 'unit-box-you-are-here' : ''}" data-unit-id="${ch.id}">
+                    <div class="unit-header-bassthalk ${isYouAreHereChapter ? 'active-you-are-here' : ''}">
                       <div class="unit-header-title">
-                        <span class="material-symbols-rounded" style="color:var(--primary); font-size:1.35rem;">folder</span>
-                        <span>${esc(ch.title)}</span>
+                        <span class="material-symbols-rounded" style="color:${isYouAreHereChapter ? '#fff' : 'var(--primary)'}; font-size:1.35rem;">folder</span>
+                        <div>
+                          <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                            <span>${esc(ch.title)}</span>
+                            <span style="width:8px; height:8px; border-radius:50%; background:${isYouAreHereChapter ? '#34d399' : 'transparent'}; display:${isYouAreHereChapter ? 'inline-block' : 'none'};"></span>
+                          </div>
+                          <div style="font-size:0.74rem; font-weight:600; opacity:0.85; margin-top:2px;">
+                            ${chTotal} محتوى منهجي • منجز (${chCompleted}/${chTotal})
+                          </div>
+                        </div>
                       </div>
                       <div style="display:flex; align-items:center; gap:10px;">
-                        <span class="unit-header-badge">${ch.items?.length || 0} حصة ومحتوى</span>
-                        <span class="material-symbols-rounded unit-toggle-arrow" style="color:var(--text-muted); transition:transform 0.25s;">expand_more</span>
+                        ${isYouAreHereChapter ? `<span class="you-are-here-pill">أنت هنا</span>` : `<span class="unit-header-badge" dir="ltr">(${chCompleted}/${chTotal})</span>`}
+                        <span class="material-symbols-rounded unit-toggle-arrow" style="color:${isYouAreHereChapter ? '#fff' : 'var(--text-muted)'}; transition:transform 0.25s; transform:${isYouAreHereChapter ? 'rotate(0deg)' : 'rotate(180deg)'};">expand_more</span>
                       </div>
                     </div>
 
-                    <div class="unit-body-bassthalk" style="${idx === 0 ? '' : 'display:none;'}">
+                    <div class="unit-body-bassthalk" style="${isYouAreHereChapter ? '' : 'display:none;'}">
                       ${(ch.items || []).map((item, itemIdx) => {
                         const isExam = item.item_type === 'exam';
                         const isLocked = item.is_locked;
                         const isDone = item.is_completed;
+                        const isCurrentStop = `${item.item_type}_${item.id}` === currentItemKey;
                         const hasPrereqExam = !isExam && item.prerequisite_exam_id;
                         const prereqPassed = !hasPrereqExam || item.prerequisite_passed;
                         const link = enrolled && !isLocked 
@@ -241,7 +265,7 @@ export async function initCourseDetail(id) {
                           : '';
 
                         return `
-                          <div class="lecture-card-bassthalk clickable-lecture-row ${isLocked ? 'locked-row' : ''}" 
+                          <div class="lecture-card-bassthalk clickable-lecture-row ${isLocked ? 'locked-row' : ''} ${isCurrentStop ? 'lecture-row-you-are-here' : ''}" 
                                data-link="${link}" 
                                data-locked="${isLocked ? '1' : '0'}" 
                                data-enrolled="${enrolled ? '1' : '0'}"
@@ -255,8 +279,9 @@ export async function initCourseDetail(id) {
                               </div>
                               
                               <div style="min-width:0;">
-                                <div class="lecture-title-text">
-                                  ${isExam ? `امتحان تقييمي: ${esc(item.title)}` : `محاضرة ${itemIdx + 1}: ${esc(item.title)}`}
+                                <div class="lecture-title-text" style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                                  <span>${isExam ? `التطبيق التفاعلي / الامتحان: ${esc(item.title)}` : `الشرح (${itemIdx + 1}): ${esc(item.title)}`}</span>
+                                  ${isCurrentStop ? `<span class="badge" style="background:#059669; color:#fff; font-size:0.68rem; font-weight:900; padding:2px 8px;">أنت هنا الآن</span>` : ''}
                                 </div>
                                 
                                 <div class="lecture-tags-row">
@@ -265,9 +290,9 @@ export async function initCourseDetail(id) {
                                     ${isExam ? `${item.duration_minutes || 30} دقيقة` : `${item.duration || 45} دقيقة`}
                                   </span>
                                   
-                                  ${item.pdf_url ? `
+                                  ${(item.has_pdf || item.pdf_url) ? `
                                     <span style="display:inline-flex; align-items:center; gap:4px; color:var(--primary); font-weight:700;">
-                                      <span class="material-symbols-rounded" style="font-size:0.95rem;">description</span> مذكرة PDF
+                                      <span class="material-symbols-rounded" style="font-size:0.95rem;">shield_lock</span> مذكرة PDF محمية
                                     </span>
                                   ` : ''}
 
@@ -284,10 +309,15 @@ export async function initCourseDetail(id) {
                               </div>
                             </div>
 
-                            <div class="lecture-action-col">
+                            <div class="lecture-action-col" style="display:flex; gap:6px; align-items:center;">
+                              ${enrolled && !isLocked && (item.has_pdf || item.pdf_url) ? `
+                                <button type="button" class="btn btn-sm btn-outline open-protected-pdf-btn" data-lid="${item.id}" data-title="${esc(item.title)}" style="padding:6px 10px; font-size:0.76rem; gap:4px;" title="فتح مذكرة المحاضرة المحمية">
+                                  <span class="material-symbols-rounded" style="font-size:1rem;">picture_as_pdf</span> المذكرة
+                                </button>
+                              ` : ''}
                               ${enrolled && !isLocked 
                                 ? `<a href="${link}" class="btn btn-sm btn-primary" style="padding:7px 14px; font-size:0.82rem; gap:4px;">
-                                    ${isExam ? 'دخول الامتحان' : (isDone ? 'إعادة المشاهدة' : 'بدء الحصة')}
+                                    ${isExam ? 'دخول الامتحان' : (isDone ? 'إعادة المشاهدة' : 'عرض الشرح')}
                                     <span class="material-symbols-rounded" style="font-size:1.05rem;">${isExam ? 'arrow_back' : 'play_arrow'}</span>
                                    </a>`
                                 : isLocked 
@@ -304,7 +334,8 @@ export async function initCourseDetail(id) {
                       }).join('')}
                     </div>
                   </div>
-                `).join('') 
+                `;
+                }).join('') 
                 : `
                   <div class="empty-state">
                     <span class="material-symbols-rounded">folder_open</span>
@@ -321,21 +352,21 @@ export async function initCourseDetail(id) {
                 <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:14px; flex-wrap:wrap; gap:10px;">
                   <div>
                     <h3 style="font-size:1.15rem; font-weight:900; margin:0 0 4px; color:var(--text-primary); display:flex; align-items:center; gap:8px;">
-                      <span class="material-symbols-rounded" style="color:var(--primary);">description</span> بنك مذكرات وتلخيصات الكورس
+                      <span class="material-symbols-rounded" style="color:var(--primary);">shield_lock</span> بنك مذكرات وتلخيصات الكورس المحمية
                     </h3>
                     <p style="font-size:0.84rem; color:var(--text-secondary); margin:0;">
-                      مذكرات الشرح الكاملة، كراسات الواجبات، وجداول التلخيص الملونة بصيغة PDF عالية الجودة جاهزة للطباعة.
+                      مذكرات الشرح الكاملة وكراسات الواجبات متاحة للقراءة داخل العارض المشفر المحمي ببيانات الطالب.
                     </p>
                   </div>
-                  <span class="badge badge-success" style="font-weight:800;">تحميل مجاني للمشتركين</span>
+                  <span class="badge badge-success" style="font-weight:800;">عارض مشفر للمشتركين</span>
                 </div>
 
                 ${allPdfs.length > 0 ? `
                   <div style="display:flex; flex-direction:column; gap:10px;">
-                    ${allPdfs.map((pdf, idx) => `
+                    ${allPdfs.map((pdf) => `
                       <div style="display:flex; align-items:center; justify-content:space-between; padding:14px 18px; background:var(--bg-secondary); border-radius:14px; border:1px solid var(--border-light); flex-wrap:wrap; gap:12px;">
                         <div style="display:flex; align-items:center; gap:12px;">
-                          <div style="width:40px; height:40px; border-radius:10px; background:rgba(239, 68, 68, 0.1); color:#ef4444; display:flex; align-items:center; justify-content:center;">
+                          <div style="width:40px; height:40px; border-radius:10px; background:rgba(16, 185, 129, 0.12); color:var(--primary); display:flex; align-items:center; justify-content:center;">
                             <span class="material-symbols-rounded">picture_as_pdf</span>
                           </div>
                           <div>
@@ -343,19 +374,19 @@ export async function initCourseDetail(id) {
                               ${esc(pdf.title)} (مذكرة المحاضرة)
                             </div>
                             <div style="font-size:0.75rem; color:var(--text-secondary);">
-                              ${esc(pdf.chapter_title)} • بصيغة PDF عالية الجودة
+                              ${esc(pdf.chapter_title)} • محمي بنظام كيمياوي ضد التسريب
                             </div>
                           </div>
                         </div>
 
                         <div>
                           ${enrolled ? `
-                            <a href="${pdf.pdf_url}" target="_blank" download class="btn btn-sm btn-primary" style="gap:6px;">
-                              <span class="material-symbols-rounded">download</span> تحميل المذكرة
-                            </a>
+                            <button type="button" class="btn btn-sm btn-primary open-protected-pdf-btn" data-lid="${pdf.id}" data-title="${esc(pdf.title)}" style="gap:6px;">
+                              <span class="material-symbols-rounded">visibility</span> فتح المذكرة المحمية
+                            </button>
                           ` : `
                             <button class="btn btn-sm btn-secondary enroll-prompt-btn" style="gap:6px;">
-                              <span class="material-symbols-rounded">lock</span> اشترك للتحميل
+                              <span class="material-symbols-rounded">lock</span> اشترك لفتح المذكرة
                             </button>
                           `}
                         </div>
@@ -367,7 +398,7 @@ export async function initCourseDetail(id) {
                     <span class="material-symbols-rounded" style="font-size:2.4rem; color:var(--primary); margin-bottom:8px;">picture_as_pdf</span>
                     <h4 style="font-weight:800; font-size:1rem; margin-bottom:6px;">المذكرات والملخصات ملحقة مع كل محاضرة</h4>
                     <p style="font-size:0.84rem; color:var(--text-secondary); max-width:550px; margin:0 auto;">
-                      يتم إرفاق مذكرة الشرح وتدريبات الواجب الخاصة بكل درس داخل صفحة الفيديو، ويمكنك تحميلها بضغطة زر فور دخول الحصة.
+                      يتم إرفاق مذكرة الشرح وتدريبات الواجب الخاصة بكل درس داخل صفحة المحاضرة داخل العارض المشفر المحمي.
                     </p>
                   </div>
                 `}
@@ -679,11 +710,106 @@ export async function initCourseDetail(id) {
       });
     });
 
+    // 2.5 Protected PDF Viewer buttons
+    document.querySelectorAll('.open-protected-pdf-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const lid = btn.dataset.lid;
+        const title = btn.dataset.title || 'مذكرة المحاضرة';
+        if (lid) openProtectedPdfModal(lid, title);
+      });
+    });
+
+    // Unified 1-Step Course Subscription Modal (Part A2)
+    const openCourseSubscribeModal = () => {
+      if (!logged) {
+        window.navigateTo ? window.navigateTo('/register') : (window.location.href = '/register');
+        return;
+      }
+      showModal(`الاشتراك السريع في: ${esc(course.title)}`, `
+        <div style="text-align:right; display:flex; flex-direction:column; gap:14px;">
+          <div style="background:var(--bg-secondary); border:1px solid var(--border-light); border-radius:12px; padding:12px 16px; display:flex; justify-content:space-between; align-items:center;">
+            <div>
+              <div style="font-size:0.78rem; color:var(--text-secondary);">سعر الاشتراك في الكورس</div>
+              <strong style="font-size:1.1rem; color:var(--primary);">${course.is_free ? 'مجاني' : `${course.price} جنيه`}</strong>
+            </div>
+            <div style="text-align:left;">
+              <div style="font-size:0.78rem; color:var(--text-secondary);">رصيد محفظتك الحالي</div>
+              <strong style="font-size:1.05rem; color:${userBalance >= course.price ? '#16a34a' : '#dc2626'};">${userBalance} جنيه</strong>
+            </div>
+          </div>
+
+          <!-- Option 1: Activation Code -->
+          <div style="border:1.5px solid var(--border-light); border-radius:12px; padding:14px;">
+            <label class="form-label" style="font-weight:800; display:flex; align-items:center; gap:6px; margin-bottom:8px;">
+              <span class="material-symbols-rounded" style="color:var(--primary);">key</span>
+              1. التفعيل الفوري بكود الكورس
+            </label>
+            <div style="display:flex; gap:8px;">
+              <input type="text" class="form-input" id="modalActivationCode" placeholder="أدخل كود فتح الكورس هنا..." dir="ltr" style="flex:1; font-weight:700;">
+              <button type="button" class="btn btn-primary" id="modalActivateBtn" style="white-space:nowrap; gap:4px;">
+                <span class="material-symbols-rounded">bolt</span> تفعيل
+              </button>
+            </div>
+          </div>
+
+          <!-- Option 2: Instant Wallet Purchase -->
+          <div style="border:1.5px solid var(--border-light); border-radius:12px; padding:14px;">
+            <div style="font-weight:800; display:flex; align-items:center; gap:6px; margin-bottom:8px; font-size:0.9rem;">
+              <span class="material-symbols-rounded" style="color:var(--accent);">account_balance_wallet</span>
+              2. الشراء الفوري من رصيد المحفظة
+            </div>
+            ${userBalance >= course.price ? `
+              <button type="button" class="btn btn-primary btn-block" id="modalWalletPayBtn" style="justify-content:center; gap:6px; font-weight:800;">
+                <span class="material-symbols-rounded">verified</span> خصم ${course.price} ج وتفعيل الكورس فوراً
+              </button>
+            ` : `
+              <p style="font-size:0.78rem; color:var(--text-secondary); margin:0 0 10px;">رصيدك الحالي غير كافٍ لشراء الكورس مباشرة. يمكنك شحن المحفظة عبر فودافون كاش أو إنستاباي أو كود شحن.</p>
+              <a href="/wallet" class="btn btn-outline btn-block" onclick="document.querySelector('.modal-overlay')?.remove()" style="justify-content:center; gap:6px; font-weight:800;">
+                <span class="material-symbols-rounded">payments</span> الانتقال لصفحة شحن المحفظة (فودافون كاش / إنستاباي)
+              </a>
+            `}
+          </div>
+        </div>
+      `);
+
+      document.getElementById('modalActivateBtn')?.addEventListener('click', async () => {
+        const code = document.getElementById('modalActivationCode')?.value.trim();
+        if (!code) return showToast('فضلاً أدخل الكود أولاً', 'warning');
+        const btn = document.getElementById('modalActivateBtn');
+        btn.disabled = true;
+        try {
+          const res = await api.activateCode(code);
+          showToast(res.message || 'تم تفعيل الكود بنجاح', 'success');
+          document.querySelector('.modal-overlay')?.remove();
+          setTimeout(() => window.location.reload(), 800);
+        } catch (err) {
+          showToast(err.message, 'error');
+          btn.disabled = false;
+        }
+      });
+
+      document.getElementById('modalWalletPayBtn')?.addEventListener('click', async () => {
+        const btn = document.getElementById('modalWalletPayBtn');
+        btn.disabled = true;
+        btn.innerHTML = '<span class="material-symbols-rounded spin-icon">sync</span> جاري التفعيل...';
+        try {
+          const res = await api.enrollCourse(id);
+          showToast(res.message || 'تم الاشتراك بنجاح', 'success');
+          document.querySelector('.modal-overlay')?.remove();
+          setTimeout(() => window.location.reload(), 800);
+        } catch (err) {
+          showToast(err.message, 'error');
+          btn.disabled = false;
+          btn.innerHTML = `<span class="material-symbols-rounded">verified</span> خصم ${course.price} ج وتفعيل الكورس فوراً`;
+        }
+      });
+    };
+
     // 3. Lesson / Exam row click handler
     document.querySelectorAll('.clickable-lecture-row').forEach(el => {
       el.addEventListener('click', (e) => {
-        // If clicked directly on the anchor inside, let it navigate
-        if (e.target.closest('a')) return;
+        if (e.target.closest('a') || e.target.closest('button')) return;
 
         const link = el.dataset.link;
         const isLocked = el.dataset.locked === '1';
@@ -692,12 +818,7 @@ export async function initCourseDetail(id) {
         if (link) {
           window.navigateTo ? window.navigateTo(link) : (window.location.href = link);
         } else if (!isEnr) {
-          showToast('يرجى تفعيل الاشتراك في الكورس أولاً لمشاهدة هذا الدرس', 'warning');
-          const codeInput = document.getElementById('activationCode');
-          if (codeInput) {
-            codeInput.focus();
-            codeInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          }
+          openCourseSubscribeModal();
         } else if (isLocked) {
           showToast('هذا المحتوى مغلق حالياً حتى تكمل المحتوى السابق وتجتاز امتحانه', 'info');
         }
@@ -706,17 +827,9 @@ export async function initCourseDetail(id) {
 
     // 4. Enroll prompt button click handler
     document.querySelectorAll('.enroll-prompt-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        if (!logged) {
-          window.navigateTo ? window.navigateTo('/register') : (window.location.href = '/register');
-          return;
-        }
-        const codeInput = document.getElementById('activationCode');
-        if (codeInput) {
-          codeInput.focus();
-          codeInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          showToast('أدخل كود التفعيل في الحقل المخصص لتفعيل اشتراكك', 'info');
-        }
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        openCourseSubscribeModal();
       });
     });
 

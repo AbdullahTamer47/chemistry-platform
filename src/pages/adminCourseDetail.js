@@ -311,7 +311,16 @@ export async function initAdminCourseDetail(id) {
             <input type="text" class="form-input" id="nlVdoId" dir="ltr" placeholder="مثال: 4f8a9b2c... أو https://iframe.mediadelivery.net/embed/...">
             <small style="display:block;margin-top:4px;font-size:0.74rem;color:var(--text-secondary);">عند استخدام VdoCipher أو Bunny DRM يتم تشفير البث بتقنية Widevine/FairPlay لمنع IDM وبرامج تصوير الشاشة نهائياً.</small>
           </div>
-          <div class="form-group"><label class="form-label">رابط مذكرة أو ملخص الدرس (PDF)</label><input type="url" class="form-input" id="nlPdf" placeholder="https://.../notes.pdf" dir="ltr"></div>
+          <div class="form-group">
+            <label class="form-label">مذكرة أو ملخص الدرس المحمي (رابط PDF أو رفع ملف مباشر)</label>
+            <div style="display:flex;gap:8px;align-items:center;">
+              <input type="text" class="form-input" id="nlPdf" placeholder="https://drive.google.com/... أو ارفع ملف PDF" dir="ltr" style="flex:1;">
+              <label class="btn btn-secondary btn-sm" style="cursor:pointer;white-space:nowrap;">
+                <span class="material-symbols-rounded">upload_file</span> رفع PDF
+                <input type="file" id="nlPdfFile" accept="application/pdf" style="display:none;">
+              </label>
+            </div>
+          </div>
           <div class="form-group"><label class="form-label">الوصف</label><textarea class="form-input" id="nlDesc" rows="2"></textarea></div>
           <div style="display:flex;gap:12px">
             <div class="form-group" style="flex:1"><label class="form-label">المدة (دقائق)</label><input type="number" class="form-input" id="nlDur" value="45"></div>
@@ -319,6 +328,19 @@ export async function initAdminCourseDetail(id) {
             <div class="form-group" style="flex:1"><label class="form-label">المشاهدات المسموحة</label><input type="number" class="form-input" id="nlMaxViews" value="8"></div>
           </div>
           ${renderPrereqExamSelectHtml(courseExams, null, 60, 'nl')}
+          <div style="background:rgba(16,185,129,0.06);border:1px solid rgba(16,185,129,0.25);border-radius:10px;padding:10px 14px;margin-bottom:14px;">
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:800;font-size:0.84rem;color:var(--primary);">
+              <input type="checkbox" id="nlCreateQuickQuiz">
+              <span>+ إنشاء واجب أو كويز تطبيقي سريع لهذه المحاضرة في نفس الخطوة</span>
+            </label>
+            <div id="nlQuickQuizFields" style="display:none;margin-top:10px;grid-template-columns:2fr 1fr;gap:10px;">
+              <input type="text" class="form-input" id="nlQuickQuizTitle" placeholder="عنوان الواجب / الكويز (مثال: واجب المحاضرة الأولى)">
+              <select class="form-select" id="nlQuickQuizType">
+                <option value="homework">واجب منزلي</option>
+                <option value="exam">امتحان محاضرة</option>
+              </select>
+            </div>
+          </div>
           <div class="form-group" style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="nlFree"><label for="nlFree">درس مجاني (متاح للجميع)</label></div>
           <button class="btn btn-primary btn-block" id="saveLessonBtn">حفظ الدرس</button>
         `);
@@ -327,12 +349,50 @@ export async function initAdminCourseDetail(id) {
         nlSourceSel?.addEventListener('change', () => {
           if (nlVdoGrp) nlVdoGrp.style.display = nlSourceSel.value === 'vdocipher' ? 'block' : 'none';
         });
+        document.getElementById('nlCreateQuickQuiz')?.addEventListener('change', (e) => {
+          const box = document.getElementById('nlQuickQuizFields');
+          if (box) box.style.display = e.target.checked ? 'grid' : 'none';
+        });
+        document.getElementById('nlPdfFile')?.addEventListener('change', async (e) => {
+          const file = e.target.files?.[0];
+          if (!file) return;
+          try {
+            showToast('جاري رفع ملف الـ PDF وتأمينه...', 'info');
+            const res = await api.uploadFile(file);
+            if (res?.url) {
+              document.getElementById('nlPdf').value = res.url;
+              showToast('تم إرفاق ملف الـ PDF بنجاح', 'success');
+            }
+          } catch (err) {
+            showToast(err.message || 'تعذر رفع ملف الـ PDF', 'error');
+          }
+        });
         document.getElementById('saveLessonBtn').addEventListener('click', async () => {
           try {
-            const prereqExamVal = document.getElementById('nlPrereqExam')?.value;
+            let prereqExamVal = document.getElementById('nlPrereqExam')?.value;
             const prereqScoreVal = parseInt(document.getElementById('nlPrereqScore')?.value) || 60;
             const vSource = document.getElementById('nlVideoSource')?.value || 'custom_shield';
             const vdoIdVal = document.getElementById('nlVdoId')?.value.trim() || null;
+            const lessonOrder = parseInt(document.getElementById('nlOrder').value) || 1;
+
+            if (document.getElementById('nlCreateQuickQuiz')?.checked) {
+              const qqTitle = document.getElementById('nlQuickQuizTitle')?.value.trim() || `تطبيق: ${document.getElementById('nlTitle').value}`;
+              const qqType = document.getElementById('nlQuickQuizType')?.value || 'homework';
+              const createdExam = await api.createExam({
+                course_id: parseInt(id),
+                chapter_id: parseInt(chId),
+                title: qqTitle,
+                exam_type: qqType,
+                duration_minutes: 20,
+                passing_score: prereqScoreVal,
+                order_num: lessonOrder + 1,
+                questions: []
+              });
+              if (createdExam?.id && !prereqExamVal && qqType === 'exam') {
+                prereqExamVal = String(createdExam.id);
+              }
+            }
+
             await api.createLesson({
               chapter_id: parseInt(chId), course_id: parseInt(id),
               title: document.getElementById('nlTitle').value, description: document.getElementById('nlDesc').value,
@@ -341,7 +401,7 @@ export async function initAdminCourseDetail(id) {
               vdocipher_id: vdoIdVal,
               pdf_url: document.getElementById('nlPdf').value.trim() || null,
               duration: parseInt(document.getElementById('nlDur').value),
-              order_num: parseInt(document.getElementById('nlOrder').value), max_views: parseInt(document.getElementById('nlMaxViews').value),
+              order_num: lessonOrder, max_views: parseInt(document.getElementById('nlMaxViews').value),
               is_free: document.getElementById('nlFree').checked,
               prerequisite_exam_id: prereqExamVal ? parseInt(prereqExamVal) : null,
               prerequisite_passing_score: prereqScoreVal
@@ -379,7 +439,16 @@ export async function initAdminCourseDetail(id) {
             <label class="form-label" style="font-size:0.8rem;color:var(--primary);font-weight:800;">معرّف فيديو VdoCipher ID (أو رابط Bunny DRM Embed)</label>
             <input type="text" class="form-input" id="elVdoId" value="${esc(lesson.vdocipher_id || '')}" dir="ltr" placeholder="مثال: 4f8a9b2c... أو https://iframe.mediadelivery.net/embed/...">
           </div>
-          <div class="form-group"><label class="form-label">رابط مذكرة أو ملخص الدرس (PDF)</label><input type="url" class="form-input" id="elPdf" value="${lesson.pdf_url || ''}" placeholder="https://.../notes.pdf" dir="ltr"></div>
+          <div class="form-group">
+            <label class="form-label">مذكرة أو ملخص الدرس المحمي (رابط PDF أو رفع ملف مباشر)</label>
+            <div style="display:flex;gap:8px;align-items:center;">
+              <input type="text" class="form-input" id="elPdf" value="${lesson.pdf_url || ''}" placeholder="https://drive.google.com/... أو ارفع ملف PDF" dir="ltr" style="flex:1;">
+              <label class="btn btn-secondary btn-sm" style="cursor:pointer;white-space:nowrap;">
+                <span class="material-symbols-rounded">upload_file</span> رفع PDF
+                <input type="file" id="elPdfFile" accept="application/pdf" style="display:none;">
+              </label>
+            </div>
+          </div>
           <div class="form-group"><label class="form-label">الوصف</label><textarea class="form-input" id="elDesc" rows="2">${esc(lesson.description || '')}</textarea></div>
           <div style="display:flex;gap:12px">
             <div class="form-group" style="flex:1"><label class="form-label">المدة (دقائق)</label><input type="number" class="form-input" id="elDur" value="${lesson.duration}"></div>
@@ -394,6 +463,20 @@ export async function initAdminCourseDetail(id) {
         const elVdoGrp = document.getElementById('elVdoGroup');
         elSourceSel?.addEventListener('change', () => {
           if (elVdoGrp) elVdoGrp.style.display = elSourceSel.value === 'vdocipher' ? 'block' : 'none';
+        });
+        document.getElementById('elPdfFile')?.addEventListener('change', async (e) => {
+          const file = e.target.files?.[0];
+          if (!file) return;
+          try {
+            showToast('جاري رفع ملف الـ PDF وتأمينه...', 'info');
+            const res = await api.uploadFile(file);
+            if (res?.url) {
+              document.getElementById('elPdf').value = res.url;
+              showToast('تم إرفاق ملف الـ PDF بنجاح', 'success');
+            }
+          } catch (err) {
+            showToast(err.message || 'تعذر رفع ملف الـ PDF', 'error');
+          }
         });
         document.getElementById('updateLessonBtn').addEventListener('click', async () => {
           try {

@@ -18,6 +18,7 @@ function resolveSecret() {
   }
 }
 const JWT_SECRET = resolveSecret();
+export const SECRET_KEY = JWT_SECRET;
 
 export function generateToken(user) {
   return jwt.sign(

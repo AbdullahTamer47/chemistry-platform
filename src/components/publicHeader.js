@@ -22,13 +22,20 @@ export function renderPublicHeader(activeNav = 'home') {
         }
       </div>
 
-      <!-- Center Navigation Links (Desktop) -->
+      <!-- Center Navigation Links + Top Bar Search (Desktop) -->
       <nav class="landing-nav">
         <a href="/" class="landing-nav-link ${activeNav === 'home' ? 'active' : ''}" data-nav="hero">الرئيسية</a>
         <a href="/courses" class="landing-nav-link ${activeNav === 'courses' ? 'active' : ''}">الكورسات</a>
         <a href="/parent-portal" class="landing-nav-link ${activeNav === 'parent-portal' ? 'active' : ''}">بوابة ولي الأمر</a>
         <a href="#faq" class="landing-nav-link ${activeNav === 'faq' ? 'active' : ''}" data-scroll="faq">الأسئلة الشائعة</a>
       </nav>
+
+      <!-- Top Header Search Pill -->
+      <form id="publicHeaderSearchForm" class="compact-search-bar header-top-search" role="search">
+        <span class="material-symbols-rounded">search</span>
+        <input type="text" id="publicHeaderSearchInput" placeholder="ابحث عن كورس، مرحلة دراسية، أو Chemistry..." aria-label="بحث الكورسات">
+        <button type="submit">بحث</button>
+      </form>
 
       <!-- Left Side: Logo & Theme Toggle (RTL End) -->
       <div class="landing-header-left">
@@ -54,6 +61,14 @@ export function renderPublicHeader(activeNav = 'home') {
         <button class="landing-drawer-close" id="landingDrawerClose" aria-label="إغلاق القائمة">
           <span class="material-symbols-rounded">close</span>
         </button>
+      </div>
+
+      <div style="padding: 12px 16px 4px;">
+        <form id="drawerHeaderSearchForm" class="compact-search-bar" style="max-width:100%;">
+          <span class="material-symbols-rounded">search</span>
+          <input type="text" id="drawerHeaderSearchInput" placeholder="ابحث عن كورس، مرحلة دراسية، أو Chemistry...">
+          <button type="submit">بحث</button>
+        </form>
       </div>
 
       <nav class="landing-drawer-nav">
@@ -197,4 +212,18 @@ export function initPublicHeader() {
       homeNavLink.classList.add('active');
     }
   });
+
+  const handleHeaderSearch = (inputId) => (e) => {
+    e.preventDefault();
+    const q = (document.getElementById(inputId)?.value || '').trim();
+    closeDrawer();
+    const target = q ? `/courses?q=${encodeURIComponent(q)}` : '/courses';
+    if (typeof window.navigateTo === 'function') {
+      window.navigateTo(target);
+    } else {
+      window.location.href = target;
+    }
+  };
+  document.getElementById('publicHeaderSearchForm')?.addEventListener('submit', handleHeaderSearch('publicHeaderSearchInput'));
+  document.getElementById('drawerHeaderSearchForm')?.addEventListener('submit', handleHeaderSearch('drawerHeaderSearchInput'));
 }

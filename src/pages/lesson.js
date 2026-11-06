@@ -5,6 +5,7 @@ import { showToast } from '../components/toast.js';
 import { confirmModal } from '../components/modal.js';
 import { esc, sanitize, safeUrl, formatTime, getShortStudentName } from '../utils/helpers.js';
 import { renderChemMarkdown } from '../utils/chemMarkdown.js';
+import { openProtectedPdfModal } from '../components/pdfShieldViewer.js';
 
 export function renderLesson(id) {
   return `
@@ -30,253 +31,353 @@ export async function initLesson(id) {
 
   try {
     const lesson = await api.getLesson(id);
+    const course = await api.getCourse(lesson.course_id).catch(() => null);
     const shortName = getShortStudentName(user.name);
     const prereqExam = lesson.prerequisite_exam || null;
     const prereqLocked = Boolean(lesson.prerequisite_locked && !isTeacher());
     const allowForum = Number(lesson.allow_student_replies) === 1;
+    const hasPdf = Boolean(lesson.has_pdf || lesson.pdf_url);
+    const chapters = course?.chapters || [];
+
+    const sidebarCurriculumHtml = chapters.length > 0 ? `
+      <aside class="lesson-curriculum-sidebar">
+        ${chapters.map((ch) => {
+          const items = ch.items || [];
+          const totalInCh = items.length;
+          const completedInCh = items.filter(it => it.is_completed).length;
+          const isCurrentChapter = Number(ch.id) === Number(lesson.chapter_id) || items.some(it => it.item_type === 'lesson' && Number(it.id) === Number(lesson.id));
+          const summaryText = items.map(it => it.title).slice(0, 2).join(' - ') || 'محتوى الفصل الدراسي';
+
+          return `
+            <div class="lesson-sidebar-unit-wrap" data-ch-id="${ch.id}">
+              <div class="lesson-sidebar-unit-card ${isCurrentChapter ? 'active-you-are-here' : ''}">
+                <div class="lesson-sidebar-unit-left">
+                  ${isCurrentChapter ? `
+                    <span class="you-are-here-pill">أنت هنا</span>
+                  ` : `
+                    <button type="button" class="lesson-sidebar-toggle-circle" aria-label="عرض الفصل">
+                      <span class="material-symbols-rounded">expand_less</span>
+                    </button>
+                    <span class="lesson-sidebar-progress-num" dir="ltr">(${completedInCh}/${totalInCh})</span>
+                  `}
+                </div>
+                <div class="lesson-sidebar-unit-right">
+                  <div class="lesson-sidebar-unit-title">
+                    ${isCurrentChapter ? '<span class="you-are-here-dot"></span>' : ''}
+                    <span>${esc(ch.title)}</span>
+                  </div>
+                  <div class="lesson-sidebar-unit-desc">
+                    ${esc(summaryText)} <span style="text-decoration:underline; font-weight:700;">...عرض باقي التفاصيل</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="lesson-sidebar-subitems" style="${isCurrentChapter ? 'display:flex;' : 'display:none;'}">
+                <!-- Current Lesson Sub-Sections (Bassthalk Green Bars) -->
+                ${isCurrentChapter ? `
+                  <a href="#videoBox" class="lesson-subbar-green active">
+                    <span style="display:inline-flex; align-items:center; gap:6px; font-size:0.78rem; color:#047857;">
+                      <span class="material-symbols-rounded" style="font-size:1.05rem;">expand_less</span> عرض
+                    </span>
+                    <span style="font-weight:900; color:#059669;">الشرح</span>
+                  </a>
+                  ${prereqExam ? `
+                    <a href="/exams/${prereqExam.id}/take" class="lesson-subbar-green">
+                      <span style="display:inline-flex; align-items:center; gap:6px; font-size:0.78rem; color:#047857;">
+                        <span class="material-symbols-rounded" style="font-size:1.05rem;">expand_less</span> عرض
+                      </span>
+                      <span style="font-weight:900; color:#059669;">التطبيق التفاعلي (${esc(prereqExam.title)})</span>
+                    </a>
+                  ` : ''}
+                  ${hasPdf ? `
+                    <button type="button" class="lesson-subbar-green open-lesson-pdf-trigger" style="width:100%; border:none; cursor:pointer; font-family:inherit;">
+                      <span style="display:inline-flex; align-items:center; gap:6px; font-size:0.78rem; color:#047857;">
+                        <span class="material-symbols-rounded" style="font-size:1.05rem;">visibility</span> عرض
+                      </span>
+                      <span style="font-weight:900; color:#059669;">ملف المحاضرة المحمي (PDF)</span>
+                    </button>
+                  ` : ''}
+                ` : ''}
+
+                ${items.map((it) => {
+                  const isThisLesson = it.item_type === 'lesson' && Number(it.id) === Number(lesson.id);
+                  const itemHref = it.item_type === 'exam' ? `/exams/${it.id}/take` : `/lessons/${it.id}`;
+                  return `
+                    <a href="${it.is_locked ? '#' : itemHref}" class="lesson-sidebar-item-link ${isThisLesson ? 'current-item' : ''} ${it.is_locked ? 'locked' : ''}" ${it.is_locked ? 'data-locked="1"' : ''}>
+                      <div style="display:flex; align-items:center; gap:6px;">
+                        <span class="material-symbols-rounded" style="font-size:1.05rem; color:${isThisLesson ? '#059669' : 'var(--text-muted)'};">
+                          ${it.is_locked ? 'lock' : (it.item_type === 'exam' ? 'quiz' : (it.is_completed ? 'check_circle' : 'play_circle'))}
+                        </span>
+                        <span style="font-size:0.82rem; font-weight:${isThisLesson ? '900' : '700'};">${esc(it.title)}</span>
+                      </div>
+                      ${isThisLesson ? '<span class="badge badge-success" style="font-size:0.65rem; padding:2px 6px;">أنت هنا</span>' : ''}
+                    </a>
+                  `;
+                }).join('')}
+              </div>
+            </div>
+          `;
+        }).join('')}
+      </aside>
+    ` : '';
 
     document.getElementById('lessonContent').innerHTML = `
-      <div style="margin-bottom: 20px;">
-        <a href="/courses/${lesson.course_id}" class="btn btn-ghost btn-sm" style="padding-right:0;">
-          <span class="material-symbols-rounded">arrow_forward</span> العودة للكورس
+      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; margin-bottom: 16px;">
+        <a href="/courses/${lesson.course_id}" class="btn btn-ghost btn-sm" style="padding-right:0; font-weight:800;">
+          <span class="material-symbols-rounded">arrow_forward</span> العودة لمنهج الكورس (${esc(lesson.course_title || 'الكورس')})
         </a>
+        <div style="display:flex; align-items:center; gap:8px;">
+          <span class="you-are-here-pill" style="background:#059669; border-color:#34d399; color:#fff;">أنت هنا: ${esc(lesson.chapter_title || 'الفصل الحالي')}</span>
+        </div>
       </div>
 
-      <div class="page-header" style="margin-bottom: 20px;">
-        <h1 class="page-title"><span class="material-symbols-rounded" style="color:var(--primary)">play_circle</span> ${esc(lesson.title)}</h1>
-        <p class="page-subtitle">${esc(lesson.chapter_title || 'شرح الدرس الحالي من الكورس المنهجي')}</p>
-      </div>
+      <div class="lesson-bassthalk-grid">
+        <!-- Main Video & Content Column -->
+        <div class="lesson-main-col">
+          <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; margin-bottom: 14px;">
+            <div>
+              <h1 class="page-title" style="font-size:1.25rem; margin-bottom:2px;"><span class="material-symbols-rounded" style="color:var(--primary)">play_circle</span> ${esc(lesson.title)}</h1>
+              <p class="page-subtitle" style="font-size:0.82rem; margin:0;">${esc(lesson.chapter_title || 'شرح الدرس الحالي من الكورس المنهجي')}</p>
+            </div>
+            <button type="button" class="btn btn-sm" id="bookmarkBtn" style="background:rgba(16,185,129,0.12); color:var(--primary); border:1px solid rgba(16,185,129,0.3); border-radius:99px; padding:7px 16px; gap:6px; font-weight:800;">
+              <span class="material-symbols-rounded" id="bookmarkIcon" style="color:${lesson.is_saved ? '#f59e0b' : 'var(--primary)'}; font-size:1.15rem;">
+                ${lesson.is_saved ? 'favorite' : 'favorite_border'}
+              </span>
+              <span id="bookmarkText">${lesson.is_saved ? 'تمت الإضافة للمفضلة' : 'إضافة إلى المفضلة'}</span>
+            </button>
+          </div>
 
-      ${prereqExam ? `
-        <div class="card" style="margin-bottom: 20px; border: 2px solid ${prereqExam.passed ? 'var(--success)' : 'var(--warning)'}; background: ${prereqExam.passed ? 'rgba(16,185,129,0.06)' : 'rgba(245,158,11,0.08)'};">
-          <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:14px;">
-            <div style="display:flex; align-items:center; gap:12px;">
-              <div style="width:46px; height:46px; border-radius:12px; background:${prereqExam.passed ? 'rgba(16,185,129,0.15)' : 'rgba(245,158,11,0.2)'}; color:${prereqExam.passed ? 'var(--success)' : '#d97706'}; display:flex; align-items:center; justify-content:center;">
-                <span class="material-symbols-rounded" style="font-size:1.6rem;">${prereqExam.passed ? 'task_alt' : 'quiz'}</span>
-              </div>
-              <div>
-                <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
-                  <h3 style="margin:0; font-size:1.02rem; font-weight:900; color:var(--text-primary);">امتحان المحاضرة: ${esc(prereqExam.title)}</h3>
-                  <span class="badge ${prereqExam.passed ? 'badge-success' : 'badge-warning'}" style="font-weight:800;">
-                    ${prereqExam.passed ? `تم الاجتياز (${prereqExam.best_score}%)` : `مطلوب درجة النجاح: ${prereqExam.required_score}%`}
-                  </span>
+          ${prereqExam ? `
+            <div class="card" style="margin-bottom: 18px; border: 2px solid ${prereqExam.passed ? 'var(--success)' : 'var(--warning)'}; background: ${prereqExam.passed ? 'rgba(16,185,129,0.06)' : 'rgba(245,158,11,0.08)'};">
+              <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:14px;">
+                <div style="display:flex; align-items:center; gap:12px;">
+                  <div style="width:46px; height:46px; border-radius:12px; background:${prereqExam.passed ? 'rgba(16,185,129,0.15)' : 'rgba(245,158,11,0.2)'}; color:${prereqExam.passed ? 'var(--success)' : '#d97706'}; display:flex; align-items:center; justify-content:center;">
+                    <span class="material-symbols-rounded" style="font-size:1.6rem;">${prereqExam.passed ? 'task_alt' : 'quiz'}</span>
+                  </div>
+                  <div>
+                    <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                      <h3 style="margin:0; font-size:1.02rem; font-weight:900; color:var(--text-primary);">امتحان المحاضرة: ${esc(prereqExam.title)}</h3>
+                      <span class="badge ${prereqExam.passed ? 'badge-success' : 'badge-warning'}" style="font-weight:800;">
+                        ${prereqExam.passed ? `تم الاجتياز (${prereqExam.best_score}%)` : `مطلوب درجة النجاح: ${prereqExam.required_score}%`}
+                      </span>
+                    </div>
+                    <p style="margin:4px 0 0; font-size:0.84rem; color:var(--text-secondary);">
+                      ${prereqExam.passed
+                        ? 'لقد اجتزت امتحان المحاضرة بنجاح وتم فتح الفيديو لك.'
+                        : `يجب حل امتحان المحاضرة أولاً والحصول على درجة لا تقل عن ${prereqExam.required_score}% لفتح مشاهدة الفيديو.${prereqExam.best_score !== null ? ` (أعلى درجة سابقة لك: ${prereqExam.best_score}%)` : ''}`
+                      }
+                    </p>
+                  </div>
                 </div>
-                <p style="margin:4px 0 0; font-size:0.84rem; color:var(--text-secondary);">
-                  ${prereqExam.passed
-                    ? 'لقد اجتزت امتحان المحاضرة بنجاح وتم فتح الفيديو لك.'
-                    : `يجب حل امتحان المحاضرة أولاً والحصول على درجة لا تقل عن ${prereqExam.required_score}% لفتح مشاهدة الفيديو.${prereqExam.best_score !== null ? ` (أعلى درجة سابقة لك: ${prereqExam.best_score}%)` : ''}`
-                  }
-                </p>
+                <a href="/exams/${prereqExam.id}/take" class="btn ${prereqExam.passed ? 'btn-outline' : 'btn-primary'} btn-sm" style="gap:6px; font-weight:800;">
+                  <span class="material-symbols-rounded">edit_document</span>
+                  ${prereqExam.passed ? 'مراجعة / إعادة الامتحان' : 'ابدأ حل امتحان المحاضرة الآن'}
+                </a>
               </div>
             </div>
-            <a href="/exams/${prereqExam.id}/take" class="btn ${prereqExam.passed ? 'btn-outline' : 'btn-primary'} btn-sm" style="gap:6px; font-weight:800;">
-              <span class="material-symbols-rounded">edit_document</span>
-              ${prereqExam.passed ? 'مراجعة / إعادة الامتحان' : 'ابدأ حل امتحان المحاضرة الآن'}
-            </a>
-          </div>
-        </div>
-      ` : ''}
+          ` : ''}
 
-      <!-- Secure Video Box or Prerequisite Gate -->
-      ${prereqLocked ? `
-        <div class="card" style="text-align:center; padding:56px 24px; margin-bottom:24px; border:2px dashed var(--warning); background:var(--bg-card);">
-          <div style="width:76px; height:76px; border-radius:50%; background:rgba(245,158,11,0.14); color:#d97706; display:flex; align-items:center; justify-content:center; margin:0 auto 16px;">
-            <span class="material-symbols-rounded" style="font-size:2.6rem;">lock</span>
-          </div>
-          <h2 style="font-size:1.35rem; font-weight:900; color:var(--text-primary); margin-bottom:10px;">حل امتحان المحاضرة أولاً لفتح الفيديو</h2>
-          <p style="color:var(--text-secondary); font-size:0.95rem; max-width:520px; margin:0 auto 22px; line-height:1.7;">
-            اشترط المعلم اجتياز امتحان <strong>"${esc(prereqExam?.title || 'امتحان المحاضرة')}"</strong> بدرجة لا تقل عن <strong>${prereqExam?.required_score || 60}%</strong> قبل الدخول لمشاهدة فيديو المحاضرة.
-          </p>
-          <a href="/exams/${prereqExam?.id}/take" class="btn btn-primary" style="gap:8px; padding:12px 28px; font-weight:800;">
-            <span class="material-symbols-rounded">quiz</span> حل امتحان المحاضرة الآن
-          </a>
-        </div>
-      ` : `
-        <div class="video-container kimyawy-custom-player" id="videoBox" oncontextmenu="return false;" style="user-select:none;-webkit-user-select:none;">
-          <div id="videoContainer" style="width:100%; height:100%; position:relative; overflow:hidden; background:#050e17;">
-            <div style="display:flex; align-items:center; justify-content:center; height:100%; color:white; flex-direction:column; gap:12px;">
-              <div class="spinner"></div>
-              <p style="font-size:0.85rem; opacity:0.8;">جاري تهيئة المشغل المشفر الآمن...</p>
-            </div>
-          </div>
-
-          <!-- Transparent Click & Gesture Shield (Blocks all direct iframe clicks, right-clicks, and IDM hooks) -->
-          <div id="playerClickShield" style="position:absolute; inset:0 0 54px 0; z-index:14; cursor:pointer; display:flex; align-items:center; justify-content:center;">
-            <!-- Opaque Pause Cover (Hides YouTube "More Videos" & Channel Info when paused/stopped) -->
-            <div id="playerPauseMask" style="position:absolute; inset:0; background:radial-gradient(circle at center, rgba(6,78,59,0.88) 0%, rgba(5,14,23,0.97) 100%); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:12px; color:#fff; transition:opacity 0.2s ease;">
-              <div style="width:74px; height:74px; border-radius:50%; background:var(--primary); color:#fff; display:flex; align-items:center; justify-content:center; box-shadow:0 0 0 10px rgba(16,185,129,0.2), 0 12px 30px rgba(0,0,0,0.5);">
-                <span class="material-symbols-rounded" id="centerPlayIcon" style="font-size:2.8rem;">play_arrow</span>
+          <!-- Secure Video Box or Prerequisite Gate -->
+          ${prereqLocked ? `
+            <div class="card" style="text-align:center; padding:56px 24px; margin-bottom:18px; border:2px dashed var(--warning); background:var(--bg-card);">
+              <div style="width:76px; height:76px; border-radius:50%; background:rgba(245,158,11,0.14); color:#d97706; display:flex; align-items:center; justify-content:center; margin:0 auto 16px;">
+                <span class="material-symbols-rounded" style="font-size:2.6rem;">lock</span>
               </div>
-              <div style="font-weight:800; font-size:0.95rem; letter-spacing:0.3px;">اضغط لتشغيل المحاضرة داخل المشغل المشفر</div>
-              <div style="font-size:0.75rem; color:#a7f3d0; display:flex; align-items:center; gap:5px;">
-                <span class="material-symbols-rounded" style="font-size:0.95rem;">verified_user</span>
-                محمي بنظام كيمياوي ضد التحميل والتسريب
-              </div>
-            </div>
-          </div>
-          
-          <!-- Anti-leak Moving Watermark (Instant jump, no animation, 2-part name + phone only, no ID) -->
-          <div id="watermark" class="video-watermark" style="transition: none !important; z-index:18; pointer-events:none;">
-            <span style="font-weight:800;">${esc(shortName)}</span>
-            <span style="opacity:0.6; margin: 0 6px;">•</span>
-            <span style="direction:ltr; display:inline-block;">${esc(user.phone || '')}</span>
-          </div>
-
-          <!-- Custom Kimyawy Encrypted Control Bar -->
-          <div id="kimyawyPlayerControls" dir="ltr" style="position:absolute; bottom:0; left:0; right:0; height:54px; background:linear-gradient(to top, rgba(5,14,23,0.98), rgba(5,14,23,0.86)); border-top:1px solid rgba(255,255,255,0.1); z-index:16; display:flex; align-items:center; gap:10px; padding:0 14px; color:#fff;">
-            <button type="button" id="kpPlayBtn" style="background:var(--primary); border:none; color:#fff; width:36px; height:36px; border-radius:8px; display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0;" title="تشغيل / إيقاف">
-              <span class="material-symbols-rounded" id="kpPlayIcon" style="font-size:1.4rem;">play_arrow</span>
-            </button>
-            <button type="button" id="kpRewindBtn" style="background:rgba(255,255,255,0.1); border:none; color:#fff; height:32px; padding:0 8px; border-radius:6px; display:flex; align-items:center; gap:2px; cursor:pointer; font-size:0.72rem; font-weight:700; flex-shrink:0;" title="رجوع 10 ثوانٍ">
-              <span class="material-symbols-rounded" style="font-size:1.05rem;">replay_10</span>
-            </button>
-            <button type="button" id="kpForwardBtn" style="background:rgba(255,255,255,0.1); border:none; color:#fff; height:32px; padding:0 8px; border-radius:6px; display:flex; align-items:center; gap:2px; cursor:pointer; font-size:0.72rem; font-weight:700; flex-shrink:0;" title="تقديم 10 ثوانٍ">
-              <span class="material-symbols-rounded" style="font-size:1.05rem;">forward_10</span>
-            </button>
-
-            <span id="kpTimeDisplay" style="font-family:monospace; font-size:0.78rem; color:#cbd5e1; white-space:nowrap; min-width:86px; text-align:center;">00:00 / 00:00</span>
-
-            <input type="range" id="kpProgressRange" min="0" max="1000" value="0" style="flex:1; accent-color:#10b981; height:5px; cursor:pointer;">
-
-            <select id="kpSpeedSelect" style="background:rgba(255,255,255,0.12); color:#fff; border:1px solid rgba(255,255,255,0.2); border-radius:6px; padding:4px 6px; font-size:0.75rem; font-weight:700; cursor:pointer;" title="سرعة التشغيل">
-              <option value="0.75" style="color:#000;">0.75x</option>
-              <option value="1" selected style="color:#000;">1x</option>
-              <option value="1.25" style="color:#000;">1.25x</option>
-              <option value="1.5" style="color:#000;">1.5x</option>
-              <option value="2" style="color:#000;">2x</option>
-            </select>
-
-            <button type="button" id="kpMuteBtn" style="background:transparent; border:none; color:#fff; width:32px; height:32px; display:flex; align-items:center; justify-content:center; cursor:pointer;" title="الصوت">
-              <span class="material-symbols-rounded" id="kpMuteIcon" style="font-size:1.25rem;">volume_up</span>
-            </button>
-
-            <button type="button" id="customFullscreenBtn" style="background:rgba(255,255,255,0.12); border:none; color:#fff; width:34px; height:34px; border-radius:8px; display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0;" title="ملء الشاشة">
-              <span class="material-symbols-rounded" id="fullscreenIcon" style="font-size:1.3rem;">fullscreen</span>
-            </button>
-          </div>
-
-          <!-- Anti-Screenshot / Focus Loss / Recording Blackout Shield -->
-          <div id="antiCaptureShield" class="video-anti-capture-shield" style="display:none; z-index:25;">
-            <span class="material-symbols-rounded" style="font-size:3rem; color:#f59e0b;">security</span>
-            <h4 style="margin:8px 0 4px; font-weight:800;">تم إيقاف الفيديو مؤقتاً لحماية المحتوى من التسجيل أو التصوير</h4>
-            <p style="font-size:0.85rem; opacity:0.85; margin:0 0 12px;">يُمنع استخدام برامج التصوير أو التحميل أو الخروج من نافذة المحاضرة أثناء التشغيل</p>
-            <button type="button" class="btn btn-primary btn-sm" style="pointer-events:auto;">استئناف المشاهدة الآمنة</button>
-          </div>
-        </div>
-      `}
-
-      <!-- Navigation & Completion Controls -->
-      <div style="display:flex; justify-content:space-between; align-items:center; gap:16px; margin-bottom:24px; flex-wrap:wrap;">
-        <div style="display:flex; gap:10px;">
-          ${lesson.prev_lesson 
-            ? `<a href="/${lesson.prev_lesson.item_type === 'exam' ? 'exams' : 'lessons'}/${lesson.prev_lesson.id}${lesson.prev_lesson.item_type === 'exam' ? '/take' : ''}" class="btn btn-secondary btn-sm"><span class="material-symbols-rounded">arrow_forward</span> الدرس السابق</a>` 
-            : ''
-          }
-          ${lesson.next_lesson 
-            ? `<a href="/${lesson.next_lesson.item_type === 'exam' ? 'exams' : 'lessons'}/${lesson.next_lesson.id}${lesson.next_lesson.item_type === 'exam' ? '/take' : ''}" class="btn btn-secondary btn-sm">الدرس التالي <span class="material-symbols-rounded">arrow_back</span></a>` 
-            : ''
-          }
-        </div>
-
-        <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
-          <button type="button" class="btn btn-outline btn-sm" id="bookmarkBtn" style="gap:6px; font-weight:700;">
-            <span class="material-symbols-rounded" id="bookmarkIcon" style="color:${lesson.is_saved ? '#f59e0b' : 'inherit'};">
-              ${lesson.is_saved ? 'bookmark_added' : 'bookmark_add'}
-            </span>
-            <span id="bookmarkText">${lesson.is_saved ? 'محفوظ للمراجعة' : 'حفظ للمراجعة السريعة'}</span>
-          </button>
-          <button class="btn btn-primary btn-sm" id="markCompleteBtn" ${(lesson.progress?.completed || prereqLocked) ? 'disabled' : ''}>
-            <span class="material-symbols-rounded">check</span> ${lesson.progress?.completed ? 'تم إكمال المشاهدة بنجاح' : 'تحديد كتمت المشاهدة'}
-          </button>
-        </div>
-      </div>
-
-      <!-- Views metrics notice -->
-      ${(lesson.progress && (lesson.max_views || 8)) 
-        ? `
-        <div class="notice notice-info" style="margin-bottom:24px; font-size:0.82rem; font-weight:600;">
-          <span class="material-symbols-rounded" style="font-size:1.15rem;">visibility</span>
-          <span>عدد المشاهدات المتبقية لك: <strong>${Math.max(0, ((lesson.max_views || 8) + (lesson.progress.extra_views || 0)) - (lesson.progress.views_count || 0))}</strong> من أصل ${(lesson.max_views || 8) + (lesson.progress.extra_views || 0)} مشاهدة مسموحة.</span>
-        </div>
-        ` 
-        : ''
-      }
-
-      <!-- Description card -->
-      ${lesson.description 
-        ? `
-        <div class="card" style="margin-bottom: 24px;">
-          <h3 class="card-title" style="margin-bottom: 10px;"><span class="material-symbols-rounded">description</span> مذكرات وتفاصيل الحصة</h3>
-          <div style="color:var(--text-secondary); font-size:0.88rem; line-height:1.75;">${renderChemMarkdown(lesson.description)}</div>
-        </div>
-        ` 
-        : ''
-      }
-
-      <!-- Lesson PDF / Study Notes Material -->
-      ${lesson.pdf_url 
-        ? `
-        <div class="card" style="margin-bottom: 24px; border: 1.5px solid rgba(16,185,129,0.25); background: var(--bg-card);">
-          <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:14px;">
-            <div style="display:flex; align-items:center; gap:12px;">
-              <div style="width:44px; height:44px; border-radius:10px; background:rgba(239,68,68,0.1); color:#ef4444; display:flex; align-items:center; justify-content:center;">
-                <span class="material-symbols-rounded" style="font-size:1.6rem;">picture_as_pdf</span>
-              </div>
-              <div>
-                <h4 style="font-size:0.95rem; font-weight:800; color:var(--text-primary); margin:0 0 2px;">مذكرة وملخص الحصة المنهجي (PDF)</h4>
-                <p style="font-size:0.78rem; color:var(--text-muted); margin:0;">الملخص المعتمد وتدريبات الدرس من إعداد د. زياد رمزي عياد</p>
-              </div>
-            </div>
-            <div style="display:flex; gap:8px;">
-              <a href="${safeUrl(lesson.pdf_url)}" target="_blank" rel="noopener noreferrer" class="btn btn-outline btn-sm" style="display:inline-flex; align-items:center; gap:6px;">
-                <span class="material-symbols-rounded">visibility</span> معاينة الملف
-              </a>
-              <a href="${safeUrl(lesson.pdf_url)}" download class="btn btn-primary btn-sm" style="display:inline-flex; align-items:center; gap:6px;">
-                <span class="material-symbols-rounded">download</span> تحميل المذكرة
+              <h2 style="font-size:1.35rem; font-weight:900; color:var(--text-primary); margin-bottom:10px;">حل امتحان المحاضرة أولاً لفتح الفيديو</h2>
+              <p style="color:var(--text-secondary); font-size:0.95rem; max-width:520px; margin:0 auto 22px; line-height:1.7;">
+                اشترط المعلم اجتياز امتحان <strong>"${esc(prereqExam?.title || 'امتحان المحاضرة')}"</strong> بدرجة لا تقل عن <strong>${prereqExam?.required_score || 60}%</strong> قبل الدخول لمشاهدة فيديو المحاضرة.
+              </p>
+              <a href="/exams/${prereqExam?.id}/take" class="btn btn-primary" style="gap:8px; padding:12px 28px; font-weight:800;">
+                <span class="material-symbols-rounded">quiz</span> حل امتحان المحاضرة الآن
               </a>
             </div>
-          </div>
-        </div>
-        ` 
-        : ''
-      }
+          ` : `
+            <div class="video-container kimyawy-custom-player" id="videoBox" oncontextmenu="return false;" style="user-select:none;-webkit-user-select:none; margin-bottom:12px;">
+              <div id="videoContainer" style="width:100%; height:100%; position:relative; overflow:hidden; background:#050e17;">
+                <div style="display:flex; align-items:center; justify-content:center; height:100%; color:white; flex-direction:column; gap:12px;">
+                  <div class="spinner"></div>
+                  <p style="font-size:0.85rem; opacity:0.8;">جاري تهيئة المشغل المشفر الآمن...</p>
+                </div>
+              </div>
 
-      <!-- Personal Timestamped Study Notes Card -->
-      <div class="card" style="margin-bottom: 24px; border: 1.5px solid var(--border);">
-        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:14px;">
-          <h3 class="card-title" style="margin:0; display:flex; align-items:center; gap:8px;">
-            <span class="material-symbols-rounded" style="color:var(--accent)">edit_note</span>
-            ملاحظاتي الشخصية الموقوتة على المحاضرة
-          </h3>
-          <span style="font-size:0.76rem; color:var(--text-muted); font-weight:600;">سجّل أهم النقاط والمعادلات مع الدقيقة للرجوع إليها ليلة الامتحان</span>
-        </div>
-        <form id="lessonNoteForm" style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:16px;">
-          <input type="text" id="noteTimeInput" class="form-input" placeholder="الدقيقة (مثال 12:30)" dir="ltr" style="width:140px; text-align:center; font-family:monospace;">
-          <input type="text" id="noteContentInput" class="form-input" placeholder="اكتب ملاحظتك أو المعادلة المهمة هنا..." required style="flex:1; min-width:200px;">
-          <button type="submit" class="btn btn-primary btn-sm" style="gap:6px; padding:0 18px;">
-            <span class="material-symbols-rounded">add_task</span> حفظ الملاحظة
+              <!-- Transparent Click & Gesture Shield (Blocks all direct iframe clicks, right-clicks, and IDM hooks) -->
+              <div id="playerClickShield" style="position:absolute; inset:0 0 54px 0; z-index:14; cursor:pointer; display:flex; align-items:center; justify-content:center;">
+                <!-- Opaque Pause Cover (Hides YouTube "More Videos" & Channel Info when paused/stopped) -->
+                <div id="playerPauseMask" style="position:absolute; inset:0; background:radial-gradient(circle at center, rgba(6,78,59,0.88) 0%, rgba(5,14,23,0.97) 100%); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:12px; color:#fff; transition:opacity 0.2s ease;">
+                  <div style="width:74px; height:74px; border-radius:50%; background:var(--primary); color:#fff; display:flex; align-items:center; justify-content:center; box-shadow:0 0 0 10px rgba(16,185,129,0.2), 0 12px 30px rgba(0,0,0,0.5);">
+                    <span class="material-symbols-rounded" id="centerPlayIcon" style="font-size:2.8rem;">play_arrow</span>
+                  </div>
+                  <div style="font-weight:800; font-size:0.95rem; letter-spacing:0.3px;">اضغط لتشغيل المحاضرة داخل المشغل المشفر</div>
+                  <div style="font-size:0.75rem; color:#a7f3d0; display:flex; align-items:center; gap:5px;">
+                    <span class="material-symbols-rounded" style="font-size:0.95rem;">verified_user</span>
+                    محمي بنظام كيمياوي ضد التحميل والتسريب
+                  </div>
+                </div>
+              </div>
+              
+              <!-- Anti-leak Moving Watermark (Instant jump, no animation, 2-part name + phone only, no ID) -->
+              <div id="watermark" class="video-watermark" style="transition: none !important; z-index:18; pointer-events:none;">
+                <span style="font-weight:800;">${esc(shortName)}</span>
+                <span style="opacity:0.6; margin: 0 6px;">•</span>
+                <span style="direction:ltr; display:inline-block;">${esc(user.phone || '')}</span>
+              </div>
+
+              <!-- Custom Kimyawy Encrypted Control Bar -->
+              <div id="kimyawyPlayerControls" dir="ltr" style="position:absolute; bottom:0; left:0; right:0; height:54px; background:linear-gradient(to top, rgba(5,14,23,0.98), rgba(5,14,23,0.86)); border-top:1px solid rgba(255,255,255,0.1); z-index:16; display:flex; align-items:center; gap:10px; padding:0 14px; color:#fff;">
+                <button type="button" id="kpPlayBtn" style="background:var(--primary); border:none; color:#fff; width:36px; height:36px; border-radius:8px; display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0;" title="تشغيل / إيقاف">
+                  <span class="material-symbols-rounded" id="kpPlayIcon" style="font-size:1.4rem;">play_arrow</span>
+                </button>
+                <button type="button" id="kpRewindBtn" style="background:rgba(255,255,255,0.1); border:none; color:#fff; height:32px; padding:0 8px; border-radius:6px; display:flex; align-items:center; gap:2px; cursor:pointer; font-size:0.72rem; font-weight:700; flex-shrink:0;" title="رجوع 10 ثوانٍ">
+                  <span class="material-symbols-rounded" style="font-size:1.05rem;">replay_10</span>
+                </button>
+                <button type="button" id="kpForwardBtn" style="background:rgba(255,255,255,0.1); border:none; color:#fff; height:32px; padding:0 8px; border-radius:6px; display:flex; align-items:center; gap:2px; cursor:pointer; font-size:0.72rem; font-weight:700; flex-shrink:0;" title="تقديم 10 ثوانٍ">
+                  <span class="material-symbols-rounded" style="font-size:1.05rem;">forward_10</span>
+                </button>
+
+                <span id="kpTimeDisplay" style="font-family:monospace; font-size:0.78rem; color:#cbd5e1; white-space:nowrap; min-width:86px; text-align:center;">00:00 / 00:00</span>
+
+                <input type="range" id="kpProgressRange" min="0" max="1000" value="0" style="flex:1; accent-color:#10b981; height:5px; cursor:pointer;">
+
+                <select id="kpSpeedSelect" style="background:rgba(255,255,255,0.12); color:#fff; border:1px solid rgba(255,255,255,0.2); border-radius:6px; padding:4px 6px; font-size:0.75rem; font-weight:700; cursor:pointer;" title="سرعة التشغيل">
+                  <option value="0.75" style="color:#000;">0.75x</option>
+                  <option value="1" selected style="color:#000;">1x</option>
+                  <option value="1.25" style="color:#000;">1.25x</option>
+                  <option value="1.5" style="color:#000;">1.5x</option>
+                  <option value="2" style="color:#000;">2x</option>
+                </select>
+
+                <button type="button" id="kpMuteBtn" style="background:transparent; border:none; color:#fff; width:32px; height:32px; display:flex; align-items:center; justify-content:center; cursor:pointer;" title="الصوت">
+                  <span class="material-symbols-rounded" id="kpMuteIcon" style="font-size:1.25rem;">volume_up</span>
+                </button>
+
+                <button type="button" id="customFullscreenBtn" style="background:rgba(255,255,255,0.12); border:none; color:#fff; width:34px; height:34px; border-radius:8px; display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0;" title="ملء الشاشة">
+                  <span class="material-symbols-rounded" id="fullscreenIcon" style="font-size:1.3rem;">fullscreen</span>
+                </button>
+              </div>
+
+              <!-- Anti-Screenshot / Focus Loss / Recording Blackout Shield -->
+              <div id="antiCaptureShield" class="video-anti-capture-shield" style="display:none; z-index:25;">
+                <span class="material-symbols-rounded" style="font-size:3rem; color:#f59e0b;">security</span>
+                <h4 style="margin:8px 0 4px; font-weight:800;">تم إيقاف الفيديو مؤقتاً لحماية المحتوى من التسجيل أو التصوير</h4>
+                <p style="font-size:0.85rem; opacity:0.85; margin:0 0 12px;">يُمنع استخدام برامج التصوير أو التحميل أو الخروج من نافذة المحاضرة أثناء التشغيل</p>
+                <button type="button" class="btn btn-primary btn-sm" style="pointer-events:auto;">استئناف المشاهدة الآمنة</button>
+              </div>
+            </div>
+          `}
+
+          <!-- Full-Width Green "تم مشاهدة الفيديو" Button (Matching Screenshot) -->
+          <button class="btn btn-primary" id="markCompleteBtn" style="width:100%; justify-content:center; padding:12px 20px; font-size:0.98rem; font-weight:900; border-radius:12px; margin-bottom:14px; background:linear-gradient(135deg, #10b981 0%, #059669 100%); box-shadow:0 6px 18px rgba(16,185,129,0.28);" ${(lesson.progress?.completed || prereqLocked) ? 'disabled' : ''}>
+            <span class="material-symbols-rounded">check_circle</span>
+            <span>${lesson.progress?.completed ? 'تم مشاهدة الفيديو بنجاح' : 'تم مشاهدة الفيديو'}</span>
           </button>
-        </form>
-        <div id="lessonNotesList">
-          <div style="font-size:0.82rem; color:var(--text-muted); text-align:center; padding:10px;">جاري تحميل ملاحظاتك...</div>
+
+          <!-- Previous / Next Lesson Controls -->
+          <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:20px; flex-wrap:wrap;">
+            <div style="display:flex; gap:10px;">
+              ${lesson.prev_lesson 
+                ? `<a href="/${lesson.prev_lesson.item_type === 'exam' ? 'exams' : 'lessons'}/${lesson.prev_lesson.id}${lesson.prev_lesson.item_type === 'exam' ? '/take' : ''}" class="btn btn-secondary btn-sm"><span class="material-symbols-rounded">arrow_forward</span> الدرس السابق</a>` 
+                : ''
+              }
+              ${lesson.next_lesson 
+                ? `<a href="/${lesson.next_lesson.item_type === 'exam' ? 'exams' : 'lessons'}/${lesson.next_lesson.id}${lesson.next_lesson.item_type === 'exam' ? '/take' : ''}" class="btn btn-secondary btn-sm">الدرس التالي <span class="material-symbols-rounded">arrow_back</span></a>` 
+                : ''
+              }
+            </div>
+            ${(lesson.progress && (lesson.max_views || 8)) ? `
+              <span style="font-size:0.78rem; color:var(--text-secondary); font-weight:700; display:inline-flex; align-items:center; gap:5px;">
+                <span class="material-symbols-rounded" style="font-size:1rem; color:var(--primary);">visibility</span>
+                المشاهدات المتبقية: <strong>${Math.max(0, ((lesson.max_views || 8) + (lesson.progress.extra_views || 0)) - (lesson.progress.views_count || 0))}</strong> من ${(lesson.max_views || 8) + (lesson.progress.extra_views || 0)}
+              </span>
+            ` : ''}
+          </div>
+
+          <!-- Description card -->
+          ${lesson.description 
+            ? `
+            <div class="card" style="margin-bottom: 20px;">
+              <h3 class="card-title" style="margin-bottom: 10px;"><span class="material-symbols-rounded">description</span> مذكرات وتفاصيل الحصة</h3>
+              <div style="color:var(--text-secondary); font-size:0.88rem; line-height:1.75;">${renderChemMarkdown(lesson.description)}</div>
+            </div>
+            ` 
+            : ''
+          }
+
+          <!-- Protected Lesson PDF / Study Notes Material -->
+          ${hasPdf 
+            ? `
+            <div class="card" style="margin-bottom: 20px; border: 1.5px solid rgba(16,185,129,0.3); background: var(--bg-card);">
+              <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:14px;">
+                <div style="display:flex; align-items:center; gap:12px;">
+                  <div style="width:44px; height:44px; border-radius:10px; background:rgba(16,185,129,0.12); color:var(--primary); display:flex; align-items:center; justify-content:center;">
+                    <span class="material-symbols-rounded" style="font-size:1.6rem;">shield_lock</span>
+                  </div>
+                  <div>
+                    <h4 style="font-size:0.95rem; font-weight:800; color:var(--text-primary); margin:0 0 2px;">مذكرة وملخص الحصة المنهجي المحمي (PDF)</h4>
+                    <p style="font-size:0.78rem; color:var(--text-muted); margin:0;">يُفتح داخل العارض المشفر المحمي ببيانات الطالب ضد التحميل والتسريب</p>
+                  </div>
+                </div>
+                <div style="display:flex; gap:8px;">
+                  <button type="button" class="btn btn-primary btn-sm open-lesson-pdf-trigger" style="display:inline-flex; align-items:center; gap:6px; font-weight:800;">
+                    <span class="material-symbols-rounded">visibility</span> فتح المذكرة داخل العارض المحمي
+                  </button>
+                </div>
+              </div>
+            </div>
+            ` 
+            : ''
+          }
+
+          <!-- Personal Timestamped Study Notes Card -->
+          <div class="card" id="personalNotesSection" style="margin-bottom: 20px; border: 1.5px solid var(--border);">
+            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:14px;">
+              <h3 class="card-title" style="margin:0; display:flex; align-items:center; gap:8px;">
+                <span class="material-symbols-rounded" style="color:var(--accent)">edit_note</span>
+                ملاحظاتي الشخصية الموقوتة على المحاضرة
+              </h3>
+              <span style="font-size:0.76rem; color:var(--text-muted); font-weight:600;">سجّل أهم النقاط والمعادلات مع الدقيقة للرجوع إليها ليلة الامتحان</span>
+            </div>
+            <form id="lessonNoteForm" style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:16px;">
+              <input type="text" id="noteTimeInput" class="form-input" placeholder="الدقيقة (مثال 12:30)" dir="ltr" style="width:140px; text-align:center; font-family:monospace;">
+              <input type="text" id="noteContentInput" class="form-input" placeholder="اكتب ملاحظتك أو المعادلة المهمة هنا..." required style="flex:1; min-width:200px;">
+              <button type="submit" class="btn btn-primary btn-sm" style="gap:6px; padding:0 18px;">
+                <span class="material-symbols-rounded">add_task</span> حفظ الملاحظة
+              </button>
+            </form>
+            <div id="lessonNotesList">
+              <div style="font-size:0.82rem; color:var(--text-muted); text-align:center; padding:10px;">جاري تحميل ملاحظاتك...</div>
+            </div>
+          </div>
+
+          <!-- Lesson Discussions Form (Only shown if enabled by teacher for this course) -->
+          ${allowForum ? `
+            <div class="card">
+              <h3 class="card-title" style="margin-bottom: 16px;"><span class="material-symbols-rounded" style="color:var(--primary)">forum</span> أسئلة الطلاب على هذا الدرس</h3>
+              
+              <form id="lessonDiscussionForm" style="display:flex; gap:10px; margin-bottom:20px;">
+                <input type="text" id="lessonDiscInput" class="form-input" placeholder="هل لديك سؤال في جزئية معينة من الفيديو؟ اكتبه للمدرس هنا..." required>
+                <button type="submit" class="btn btn-primary"><span class="material-symbols-rounded">send</span> اسأل المدرس</button>
+              </form>
+              
+              <div id="lessonDiscussionsList">
+                <div class="loading-spinner"><div class="spinner"></div></div>
+              </div>
+            </div>
+          ` : ''}
         </div>
+
+        <!-- Side Curriculum Accordion ("أنت هنا") -->
+        ${sidebarCurriculumHtml}
       </div>
 
-      <!-- Lesson Discussions Form (Only shown if enabled by teacher for this course) -->
-      ${allowForum ? `
-        <div class="card">
-          <h3 class="card-title" style="margin-bottom: 16px;"><span class="material-symbols-rounded" style="color:var(--primary)">forum</span> أسئلة الطلاب على هذا الدرس</h3>
-          
-          <form id="lessonDiscussionForm" style="display:flex; gap:10px; margin-bottom:20px;">
-            <input type="text" id="lessonDiscInput" class="form-input" placeholder="هل لديك سؤال في جزئية معينة من الفيديو؟ اكتبه للمدرس هنا..." required>
-            <button type="submit" class="btn btn-primary"><span class="material-symbols-rounded">send</span> اسأل المدرس</button>
-          </form>
-          
-          <div id="lessonDiscussionsList">
-            <div class="loading-spinner"><div class="spinner"></div></div>
-          </div>
+      <!-- Floating Quick Notes Trigger Button (Matching Screenshot: "اضغط هنا عشان تكتب ملاحظاتك") -->
+      <div class="floating-lesson-notes-widget" id="floatingNotesWidget">
+        <button type="button" class="floating-notes-circle-btn" id="floatingNotesBtn" title="اكتب ملاحظاتك على الدرس">
+          <span class="material-symbols-rounded">description</span>
+        </button>
+        <div class="floating-notes-speech-bubble" id="floatingNotesBubble">
+          اضغط هنا عشان تكتب ملاحظاتك
         </div>
-      ` : ''}
+      </div>
     `;
 
     // Load Video URL/Iframe Source securely (if not locked by prerequisite exam)
@@ -713,6 +814,48 @@ export async function initLesson(id) {
       }
     });
 
+    // Bind Protected PDF Viewer triggers
+    document.querySelectorAll('.open-lesson-pdf-trigger').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        pauseProtectedVideo();
+        openProtectedPdfModal(id, lesson.title);
+      });
+    });
+
+    // Bind Side Curriculum Accordion toggles
+    document.querySelectorAll('.lesson-sidebar-unit-card').forEach(card => {
+      card.addEventListener('click', () => {
+        const wrap = card.closest('.lesson-sidebar-unit-wrap');
+        const sub = wrap?.querySelector('.lesson-sidebar-subitems');
+        if (!sub) return;
+        const hidden = sub.style.display === 'none';
+        sub.style.display = hidden ? 'flex' : 'none';
+      });
+    });
+
+    document.querySelectorAll('.lesson-sidebar-item-link[data-locked="1"]').forEach(link => {
+      link.addEventListener('click', (e) => {
+        e.preventDefault();
+        showToast('هذا المحتوى مغلق حالياً حتى تكمل الدرس السابق', 'warning');
+      });
+    });
+
+    // Bind Floating Quick Notes button ("اضغط هنا عشان تكتب ملاحظاتك")
+    const scrollToPersonalNotes = () => {
+      const notesSec = document.getElementById('personalNotesSection');
+      const timeInp = document.getElementById('noteTimeInput');
+      const contentInp = document.getElementById('noteContentInput');
+      const curSec = getCurrentVideoTimeSec();
+      if (timeInp && curSec > 0) {
+        timeInp.value = formatTime(curSec);
+      }
+      notesSec?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      setTimeout(() => contentInp?.focus(), 350);
+    };
+    document.getElementById('floatingNotesBtn')?.addEventListener('click', scrollToPersonalNotes);
+    document.getElementById('floatingNotesBubble')?.addEventListener('click', scrollToPersonalNotes);
+
     // Completion toggle
     const markBtn = document.getElementById('markCompleteBtn');
     if (markBtn && !lesson.progress?.completed && !prereqLocked) {
@@ -721,12 +864,12 @@ export async function initLesson(id) {
         markBtn.innerHTML = '<span class="material-symbols-rounded spin-icon">sync</span> جاري الحفظ...';
         try {
           await api.updateProgress(id, { completed: 1 });
-          markBtn.innerHTML = '<span class="material-symbols-rounded">check</span> تم إكمال المشاهدة بنجاح';
+          markBtn.innerHTML = '<span class="material-symbols-rounded">check_circle</span> تم مشاهدة الفيديو بنجاح';
           showToast('تم تسجيل مشاهدتك للدرس بنجاح', 'success');
         } catch (err) {
           showToast(err.message, 'error');
           markBtn.disabled = false;
-          markBtn.innerHTML = '<span class="material-symbols-rounded">check</span> تحديد كتمت المشاهدة';
+          markBtn.innerHTML = '<span class="material-symbols-rounded">check_circle</span> تم مشاهدة الفيديو';
         }
       });
     }
@@ -867,9 +1010,9 @@ export async function initLesson(id) {
         showToast(res.message, 'success');
         const icon = document.getElementById('bookmarkIcon');
         const text = document.getElementById('bookmarkText');
-        if (icon) icon.style.color = res.is_saved ? '#f59e0b' : 'inherit';
-        if (icon) icon.textContent = res.is_saved ? 'bookmark_added' : 'bookmark_add';
-        if (text) text.textContent = res.is_saved ? 'محفوظ للمراجعة' : 'حفظ للمراجعة السريعة';
+        if (icon) icon.style.color = res.is_saved ? '#f59e0b' : 'var(--primary)';
+        if (icon) icon.textContent = res.is_saved ? 'favorite' : 'favorite_border';
+        if (text) text.textContent = res.is_saved ? 'تمت الإضافة للمفضلة' : 'إضافة إلى المفضلة';
       } catch (e) {
         showToast(e.message, 'error');
       }

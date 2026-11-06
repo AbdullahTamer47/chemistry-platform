@@ -3,6 +3,7 @@ import { api } from '../utils/api.js';
 import { showToast } from '../components/toast.js';
 import { showModal, confirmModal } from '../components/modal.js';
 import { formatTime, esc, escRich, safeUrl } from '../utils/helpers.js';
+import { attachContentProtectionShield } from '../components/pdfShieldViewer.js';
 
 export function renderExams() {
   return `
@@ -398,6 +399,7 @@ export async function initExamTake(id) {
     startTimer();
     bindEvents();
     if (isStrictExam) secureExam();
+    attachContentProtectionShield(document.getElementById('examTakeContent'));
   }
 
   function renderQuestion(q, idx) {
@@ -1051,12 +1053,13 @@ export function renderResult(result, timeTaken) {
         ${result.course_id ? `<a href="/courses/${result.course_id}" class="btn btn-secondary"><span class="material-symbols-rounded">book</span> العودة للمنهج الدراسي</a>` : ''}
         ${result.next_item 
           ? `<a href="/${result.next_item.item_type === 'exam' ? 'exams' : 'lessons'}/${result.next_item.id}${result.next_item.item_type === 'exam' ? '/take' : ''}" class="btn btn-primary">المحتوى التالي <span class="material-symbols-rounded">arrow_back</span></a>` 
-          : `<a href="/exams" class="btn btn-primary">قائمة الامتحانات <span class="material-symbols-rounded">arrow_back</span></a>`
+          : `<a href="/my-results" class="btn btn-primary">نتائجي وتصحيحاتي <span class="material-symbols-rounded">arrow_back</span></a>`
         }
         <a href="/leaderboard" class="btn btn-accent"><span class="material-symbols-rounded">emoji_events</span> عرض لوحة المتصدرين</a>
       </div>
     </div>
   `;
+  attachContentProtectionShield(container);
 }
 
 export function renderExamReview() {

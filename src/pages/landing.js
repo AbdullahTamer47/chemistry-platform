@@ -31,12 +31,6 @@ export function renderLanding() {
           <p class="hero-sakr-subtitle">
             مع د/ زياد رمزي عياد (خبير الكيمياء والـ Chemistry للمرحلة الثانوية والعلوم والـ Science للابتدائية والإعدادية — عام ولغات).. هتشوف التفاعلات لايف، وتفهم أصل كل معادلة بدل الحفظ، وتتدرب على أدق أفكار الامتحانات خطوة بخطوة.
           </p>
-
-          <form id="landingSearchForm" class="compact-search-bar" style="margin: 0 0 18px; background: rgba(255,255,255,0.96); border-color: rgba(255,255,255,0.4);">
-            <span class="material-symbols-rounded">search</span>
-            <input type="text" id="landingSearchInput" placeholder="ابحث عن كورس، مرحلة دراسية، أو Chemistry..." style="color:#064e3b;">
-            <button type="submit">بحث</button>
-          </form>
           
           <div class="hero-sakr-actions">
             ${isLoggedIn()

@@ -283,19 +283,91 @@ export function initNavbar() {
   const mobileDarkToggle = document.getElementById('mobileDarkToggle');
   if (mobileDarkToggle) mobileDarkToggle.addEventListener('click', toggleDark);
 
+  // Inject Bassthalk-style Top Bar into .main-content (with search bar, wallet pill, notifications, theme toggle, avatar)
+  const mainContent = document.querySelector('.main-content');
+  const user = getUser();
+  const teacher = isTeacher();
+  const isDarkNow = document.documentElement.getAttribute('data-theme') === 'dark';
+  if (mainContent && !mainContent.querySelector('.app-topbar')) {
+    const topbar = document.createElement('header');
+    topbar.className = 'app-topbar';
+    topbar.innerHTML = `
+      <div class="app-topbar-inner">
+        <form id="appTopbarSearchForm" class="compact-search-bar app-topbar-search" role="search">
+          <span class="material-symbols-rounded">search</span>
+          <input type="text" id="appTopbarSearchInput" placeholder="ابحث عن كورس، مرحلة دراسية، أو Chemistry..." aria-label="بحث الكورسات">
+          <button type="submit">بحث</button>
+        </form>
+
+        <div class="app-topbar-actions">
+          ${!teacher ? `
+            <a href="/wallet" class="app-topbar-wallet-pill" title="رصيد المحفظة">
+              <span class="material-symbols-rounded">account_balance_wallet</span>
+              <span id="topbarWalletAmount">${Number(user?.balance || 0)} جنيه</span>
+            </a>
+          ` : ''}
+          <a href="/${teacher ? 'admin/notifications' : 'notifications'}" class="app-topbar-icon-btn" title="الإشعارات" style="position:relative;">
+            <span class="material-symbols-rounded">notifications</span>
+            <span class="topbar-notif-dot" id="topbarNotifDot" style="display:none;"></span>
+          </a>
+          <button type="button" class="app-topbar-icon-btn" id="topbarDarkToggle" title="تبديل المظهر">
+            <span class="material-symbols-rounded" id="topbarDarkIcon">${isDarkNow ? 'light_mode' : 'dark_mode'}</span>
+          </button>
+          ${user ? `
+            <a href="/profile" class="app-topbar-avatar" title="${esc(user.name)}">
+              ${getInitials(user.name)}
+            </a>
+          ` : ''}
+        </div>
+      </div>
+    `;
+    mainContent.prepend(topbar);
+
+    document.getElementById('topbarDarkToggle')?.addEventListener('click', () => {
+      toggleDark();
+      const nowDark = document.documentElement.getAttribute('data-theme') === 'dark';
+      const icon = document.getElementById('topbarDarkIcon');
+      if (icon) icon.textContent = nowDark ? 'light_mode' : 'dark_mode';
+    });
+
+    document.getElementById('appTopbarSearchForm')?.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const q = (document.getElementById('appTopbarSearchInput')?.value || '').trim();
+      const target = q ? `/courses?q=${encodeURIComponent(q)}` : '/courses';
+      if (typeof window.navigateTo === 'function') {
+        window.navigateTo(target);
+      } else {
+        window.location.href = target;
+      }
+    });
+
+    if (!teacher && user) {
+      api.getWalletBalance().then(w => {
+        const el = document.getElementById('topbarWalletAmount');
+        if (el && w && w.balance !== undefined) {
+          el.textContent = `${Number(w.balance)} جنيه`;
+        }
+      }).catch(() => {});
+    }
+  }
+
   loadNotifBadge();
 }
 
 async function loadNotifBadge() {
   const badge = document.getElementById('notifBadge');
-  if (!badge) return;
+  const dot = document.getElementById('topbarNotifDot');
   try {
     const res = await api.getUnreadCount();
     if (res.count > 0) {
-      badge.style.display = 'inline-flex';
-      badge.textContent = res.count > 99 ? '99+' : res.count;
+      if (badge) {
+        badge.style.display = 'inline-flex';
+        badge.textContent = res.count > 99 ? '99+' : res.count;
+      }
+      if (dot) dot.style.display = 'block';
     } else {
-      badge.style.display = 'none';
+      if (badge) badge.style.display = 'none';
+      if (dot) dot.style.display = 'none';
     }
   } catch (e) {}
 }

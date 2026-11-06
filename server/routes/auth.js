@@ -328,6 +328,33 @@ router.get('/dashboard', authMiddleware, (req, res) => {
       .sort((a, b) => new Date(b.date) - new Date(a.date))
       .slice(0, 7);
 
+    // Find "أنت هنا" (Current / Next Lesson to resume across enrolled courses)
+    let resumeLesson = db.prepare(`
+      SELECT l.id as lesson_id, l.title as lesson_title, l.order_num, l.chapter_id, l.course_id,
+             ch.title as chapter_title, c.title as course_title,
+             COALESCE(lp.watch_time, 0) as watch_time
+      FROM enrollments e
+      JOIN courses c ON c.id = e.course_id
+      JOIN lessons l ON l.course_id = c.id
+      LEFT JOIN chapters ch ON ch.id = l.chapter_id
+      LEFT JOIN lesson_progress lp ON lp.lesson_id = l.id AND lp.user_id = e.user_id
+      WHERE e.user_id = ? AND e.is_suspended = 0 AND COALESCE(lp.completed, 0) = 0
+      ORDER BY CASE WHEN lp.views_count > 0 THEN 0 ELSE 1 END ASC, e.activated_at DESC, COALESCE(ch.order_num, 0) ASC, l.order_num ASC
+      LIMIT 1
+    `).get(userId) || null;
+
+    if (resumeLesson && resumeLesson.chapter_id) {
+      const chCounts = db.prepare(`
+        SELECT COUNT(*) as total,
+               SUM(CASE WHEN lp.completed = 1 THEN 1 ELSE 0 END) as completed
+        FROM lessons l
+        LEFT JOIN lesson_progress lp ON lp.lesson_id = l.id AND lp.user_id = ?
+        WHERE l.chapter_id = ?
+      `).get(userId, resumeLesson.chapter_id);
+      resumeLesson.chapter_total = chCounts?.total || 1;
+      resumeLesson.chapter_completed = chCounts?.completed || 0;
+    }
+
     res.json({
       user,
       stats: {
@@ -336,6 +363,7 @@ router.get('/dashboard', authMiddleware, (req, res) => {
         rank,
         enrolled_count: activeCourses.length
       },
+      resumeLesson,
       activeCourses,
       recentActivity
     });

@@ -218,7 +218,9 @@ export const api = {
   },
 
   // Pillar 1: Wallet & Paymob & Vouchers
+  getWallet: () => request('/payments/wallet/balance'),
   getWalletBalance: () => request('/payments/wallet/balance'),
+  getLessonPdfToken: (id) => request(`/lessons/${id}/pdf-token`, { method: 'POST' }),
   paymobCheckout: (body) => request('/payments/paymob/checkout', { method: 'POST', body }),
   chargeVoucher: (voucher_code) => request('/payments/wallet/charge-voucher', { method: 'POST', body: { voucher_code } }),
   getVouchers: () => request('/payments/vouchers'),

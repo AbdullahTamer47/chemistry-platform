@@ -105,30 +105,35 @@ export async function initDashboard() {
             </p>
           </div>
         </div>
-        <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; flex: 1; justify-content: flex-end; min-width: 260px;">
-          <form id="dashCourseSearchForm" class="compact-search-bar" style="max-width: 310px; background: rgba(255,255,255,0.96); border-color: rgba(255,255,255,0.4);">
-            <span class="material-symbols-rounded">search</span>
-            <input type="text" id="dashCourseSearchInput" placeholder="ابحث عن كورس أو محاضرة..." style="color:#064e3b;">
-            <button type="submit">بحث</button>
-          </form>
-          <a href="/courses" class="btn btn-sm" style="background:#ffffff; color:#065f46 !important; font-weight:800; border-radius:12px; padding:9px 16px; box-shadow:0 4px 12px rgba(0,0,0,0.12);">
+        <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; justify-content: flex-end;">
+          <a href="/courses" class="btn btn-sm" style="background:#ffffff; color:#065f46 !important; font-weight:800; border-radius:12px; padding:10px 18px; box-shadow:0 4px 12px rgba(0,0,0,0.12);">
             <span class="material-symbols-rounded" style="color:#059669 !important;">play_circle</span> استعراض الكورسات
           </a>
         </div>
       </div>
+
+      ${data.resumeLesson ? `
+        <div class="you-are-here-banner" style="margin-top: 16px;">
+          <div style="display:flex; align-items:center; gap:14px; flex:1; min-width:0;">
+            <span class="you-are-here-pill">أنت هنا</span>
+            <div style="min-width:0; flex:1;">
+              <div style="font-size:0.78rem; color:rgba(255,255,255,0.85); font-weight:700; margin-bottom:2px; display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                <span>${esc(data.resumeLesson.course_title)}</span>
+                ${data.resumeLesson.chapter_title ? `<span>• ${esc(data.resumeLesson.chapter_title)}</span>` : ''}
+                ${data.resumeLesson.chapter_total ? `<span dir="ltr" style="background:rgba(255,255,255,0.16); padding:1px 8px; border-radius:99px; font-size:0.72rem;">(${data.resumeLesson.chapter_completed || 0}/${data.resumeLesson.chapter_total})</span>` : ''}
+              </div>
+              <div style="font-size:1.02rem; font-weight:900; color:#ffffff; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+                أكمل من حيث توقفت: ${esc(data.resumeLesson.lesson_title)}
+              </div>
+            </div>
+          </div>
+          <a href="/lessons/${data.resumeLesson.lesson_id}" class="btn btn-sm" style="background:#10b981; color:#042f2e !important; font-weight:900; border-radius:12px; padding:10px 20px; flex-shrink:0; gap:6px; box-shadow:0 4px 14px rgba(16,185,129,0.35);">
+            <span class="material-symbols-rounded" style="color:#042f2e !important;">play_arrow</span> استئناف الحصة الآن
+          </a>
+        </div>
+      ` : ''}
     `);
     if (!welcomeOk) return;
-
-    document.getElementById('dashCourseSearchForm')?.addEventListener('submit', (e) => {
-      e.preventDefault();
-      const q = (document.getElementById('dashCourseSearchInput')?.value || '').trim();
-      const target = q ? `/courses?q=${encodeURIComponent(q)}` : '/courses';
-      if (typeof window.navigateTo === 'function') {
-        window.navigateTo(target);
-      } else {
-        window.location.href = target;
-      }
-    });
 
     safeSetHTML('dashStats', `
       <div class="stat-card">

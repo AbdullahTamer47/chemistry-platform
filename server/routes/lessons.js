@@ -1,15 +1,20 @@
 import { Router } from 'express';
 import crypto from 'crypto';
+import fs from 'fs';
+import path from 'path';
 import db from '../db.js';
-import { authMiddleware, teacherMiddleware, optionalAuth, isTeacher, canAccessCourse } from '../middleware/auth.js';
+import { authMiddleware, teacherMiddleware, optionalAuth, isTeacher, canAccessCourse, SECRET_KEY } from '../middleware/auth.js';
 
 const router = Router();
 
-// Public lesson list (course outline). Never includes video URLs for non-teachers.
+// Public lesson list (course outline). Never includes video URLs or raw PDF URLs for non-teachers.
 router.get('/course/:courseId', optionalAuth, (req, res) => {
   try {
     const lessons = db.prepare('SELECT l.*, ch.title as chapter_title FROM lessons l LEFT JOIN chapters ch ON l.chapter_id = ch.id WHERE l.course_id = ? ORDER BY l.order_num').all(req.params.courseId);
-    res.json(isTeacher(req.user) ? lessons : lessons.map(({ video_url, ...rest }) => rest));
+    res.json(isTeacher(req.user)
+      ? lessons.map(l => ({ ...l, has_pdf: Boolean(l.pdf_url) }))
+      : lessons.map(({ video_url, pdf_url, ...rest }) => ({ ...rest, has_pdf: Boolean(pdf_url) }))
+    );
   } catch (err) { res.status(500).json({ error: 'حدث خطأ' }); }
 });
 
@@ -224,10 +229,136 @@ router.get('/:id', authMiddleware, (req, res) => {
     if (currentIndex > 0) lesson.prev_lesson = allItems[currentIndex - 1];
     if (currentIndex < allItems.length - 1) lesson.next_lesson = allItems[currentIndex + 1];
 
-    // The video URL is only released through /video-token, which enforces the view limit and prerequisite exam gate.
-    if (!isTeacher(req.user)) delete lesson.video_url;
+    lesson.has_pdf = Boolean(lesson.pdf_url);
+    // The video URL and raw PDF URL are only released through signed tokens to prevent scraping/leaks.
+    if (!isTeacher(req.user)) {
+      delete lesson.video_url;
+      delete lesson.pdf_url;
+    }
     res.json(lesson);
   } catch (err) { console.error('Lesson error:', err); res.status(500).json({ error: 'حدث خطأ' }); }
+});
+
+// Issue a short-lived signed token for protected PDF / File viewing
+router.post('/:id/pdf-token', authMiddleware, (req, res) => {
+  try {
+    const lesson = db.prepare('SELECT * FROM lessons WHERE id = ?').get(req.params.id);
+    if (!lesson) return res.status(404).json({ error: 'الدرس غير موجود' });
+    if (!lesson.pdf_url) return res.status(404).json({ error: 'لا يوجد ملف PDF مرفق بهذا الدرس' });
+
+    const denied = checkLessonAccess(req.user, lesson, getCourseItems(lesson.course_id));
+    if (denied) return res.status(denied.status).json(denied.body);
+
+    const exp = Date.now() + 30 * 60 * 1000; // 30 minutes
+    const payload = `${req.user.id}:${lesson.id}:${exp}`;
+    const sig = crypto.createHmac('sha256', SECRET_KEY).update(payload).digest('hex');
+    const token = Buffer.from(`${payload}:${sig}`).toString('base64url');
+
+    const shortName = String(req.user.name || '').trim().split(/\s+/).slice(0, 2).join(' ');
+    const wmText = `${shortName} • ${req.user.phone || ''}`;
+
+    // Also provide XOR-obfuscated embed info in case it's a Google Drive preview
+    let embedMode = 'stream';
+    let targetUrl = `/api/lessons/${lesson.id}/pdf-stream?token=${encodeURIComponent(token)}`;
+    const rawPdf = String(lesson.pdf_url || '').trim();
+    if (rawPdf.includes('drive.google.com')) {
+      let fileId = '';
+      if (rawPdf.includes('/d/')) fileId = rawPdf.split('/d/')[1].split('/')[0].split('?')[0];
+      else if (rawPdf.includes('id=')) fileId = rawPdf.split('id=')[1].split('&')[0];
+      fileId = fileId.replace(/[^A-Za-z0-9_-]/g, '');
+      if (fileId) {
+        embedMode = 'drive_preview';
+        targetUrl = `https://drive.google.com/file/d/${fileId}/preview`;
+      }
+    }
+
+    const rawCipherPayload = JSON.stringify({ u: targetUrl, m: embedMode, t: lesson.title });
+    const keyBytes = Buffer.from(sig.slice(0, 16), 'utf8');
+    const srcBytes = Buffer.from(rawCipherPayload, 'utf8');
+    const xored = Buffer.alloc(srcBytes.length);
+    for (let i = 0; i < srcBytes.length; i++) {
+      xored[i] = srcBytes[i] ^ keyBytes[i % keyBytes.length];
+    }
+
+    res.json({
+      token,
+      key: sig.slice(0, 16),
+      pdf_cipher: xored.toString('base64'),
+      stream_url: `/api/lessons/${lesson.id}/pdf-stream?token=${encodeURIComponent(token)}`,
+      embed_mode: embedMode,
+      watermark: wmText,
+      expires_at: new Date(exp).toISOString()
+    });
+  } catch (err) {
+    console.error('PDF token error:', err);
+    res.status(500).json({ error: 'حدث خطأ في تجهيز الملف المحمي' });
+  }
+});
+
+// Stream protected PDF inline without exposing raw URL or download headers
+router.get('/:id/pdf-stream', async (req, res) => {
+  try {
+    const rawToken = String(req.query.token || '');
+    if (!rawToken) return res.status(403).send('غير مصرح بالوصول للملف');
+
+    const decoded = Buffer.from(rawToken, 'base64url').toString('utf8');
+    const parts = decoded.split(':');
+    if (parts.length !== 4) return res.status(403).send('توكن غير صالح');
+    const [userId, lessonId, expStr, sig] = parts;
+    if (String(lessonId) !== String(req.params.id)) return res.status(403).send('توكن غير مطابق للدرس');
+    if (Date.now() > Number(expStr)) return res.status(403).send('انتهت صلاحية جلسة عرض الملف');
+
+    const expectedSig = crypto.createHmac('sha256', SECRET_KEY).update(`${userId}:${lessonId}:${expStr}`).digest('hex');
+    if (sig !== expectedSig) return res.status(403).send('توقيع غير صالح');
+
+    const lesson = db.prepare('SELECT id, title, pdf_url FROM lessons WHERE id = ?').get(lessonId);
+    if (!lesson || !lesson.pdf_url) return res.status(404).send('الملف غير موجود');
+
+    const pdfUrl = String(lesson.pdf_url).trim();
+    res.setHeader('Cache-Control', 'private, no-store, no-cache, must-revalidate, max-age=0');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+    res.setHeader('Content-Disposition', 'inline; filename="kimyawy-protected.pdf"');
+
+    if (pdfUrl.startsWith('data:application/pdf;base64,')) {
+      const b64 = pdfUrl.split(',')[1] || '';
+      const buf = Buffer.from(b64, 'base64');
+      res.setHeader('Content-Type', 'application/pdf');
+      return res.send(buf);
+    }
+
+    if (pdfUrl.startsWith('/uploads/')) {
+      const safeFile = path.basename(pdfUrl);
+      const localPath = path.join(process.cwd(), 'uploads', safeFile);
+      if (fs.existsSync(localPath)) {
+        res.setHeader('Content-Type', 'application/pdf');
+        return fs.createReadStream(localPath).pipe(res);
+      }
+    }
+
+    if (pdfUrl.includes('drive.google.com')) {
+      let fileId = '';
+      if (pdfUrl.includes('/d/')) fileId = pdfUrl.split('/d/')[1].split('/')[0].split('?')[0];
+      else if (pdfUrl.includes('id=')) fileId = pdfUrl.split('id=')[1].split('&')[0];
+      fileId = fileId.replace(/[^A-Za-z0-9_-]/g, '');
+      if (fileId) {
+        return res.redirect(`https://drive.google.com/file/d/${fileId}/preview`);
+      }
+    }
+
+    if (pdfUrl.startsWith('http://') || pdfUrl.startsWith('https://')) {
+      const upstream = await fetch(pdfUrl);
+      if (!upstream.ok) return res.status(502).send('تعذر جلب الملف من المصدر');
+      res.setHeader('Content-Type', upstream.headers.get('content-type') || 'application/pdf');
+      const arrBuf = await upstream.arrayBuffer();
+      return res.send(Buffer.from(arrBuf));
+    }
+
+    return res.status(404).send('رابط الملف غير مدعوم');
+  } catch (err) {
+    console.error('PDF stream error:', err);
+    res.status(500).send('حدث خطأ أثناء بث الملف المحمي');
+  }
 });
 
 router.post('/:id/video-token', authMiddleware, async (req, res) => {
