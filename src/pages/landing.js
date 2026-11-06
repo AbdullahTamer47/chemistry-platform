@@ -21,21 +21,27 @@ export function renderLanding() {
         <div class="hero-sakr-content">
           <div class="hero-sakr-badge">
             <span class="material-symbols-rounded">science</span>
-            <span>منصة د/ زياد رمزي عياد التعليمية</span>
+            <span>منصة د/ زياد رمزي عياد التعليمية — كيمياء & Chemistry (عام ولغات)</span>
           </div>
 
           <h1 class="hero-sakr-title">
-            طريقك الأضمن لإتقان الكيمياء وضمان الدرجة النهائية
+            طريقك الأضمن لإتقان الكيمياء والـ Chemistry وضمان الدرجة النهائية
           </h1>
 
           <p class="hero-sakr-subtitle">
-            مع د/ زياد رمزي عياد.. هتشوف التفاعلات لايف، وتفهم أصل كل معادلة بدل الحفظ، وتتدرب على أدق أفكار امتحانات الثانوية خطوة بخطوة علشان تقفّل المادة وأنت واثق من نفسك.
+            مع د/ زياد رمزي عياد (خبير الكيمياء والـ Chemistry للمرحلة الثانوية والعلوم والـ Science للابتدائية والإعدادية — عام ولغات).. هتشوف التفاعلات لايف، وتفهم أصل كل معادلة بدل الحفظ، وتتدرب على أدق أفكار الامتحانات خطوة بخطوة.
           </p>
+
+          <form id="landingSearchForm" class="compact-search-bar" style="margin: 0 0 18px; background: rgba(255,255,255,0.96); border-color: rgba(255,255,255,0.4);">
+            <span class="material-symbols-rounded">search</span>
+            <input type="text" id="landingSearchInput" placeholder="ابحث عن كورس، مرحلة دراسية، أو Chemistry..." style="color:#064e3b;">
+            <button type="submit">بحث</button>
+          </form>
           
           <div class="hero-sakr-actions">
             ${isLoggedIn()
               ? `<a href="/${isTeacher() ? 'admin' : 'dashboard'}" class="btn-sakr-hero-white"><span class="material-symbols-rounded">dashboard</span> الانتقال إلى ${isTeacher() ? 'لوحة المعلم والإدارة' : 'لوحة الطالب'}</a>
-                 <a href="/lab" class="btn-sakr-hero-trans" style="display:inline-flex; align-items:center; gap:8px;"><span class="material-symbols-rounded" style="color:#10b981;">science</span> المختبر التفاعلي</a>`
+                 <a href="/courses" class="btn-sakr-hero-trans" style="display:inline-flex; align-items:center; gap:8px;"><span class="material-symbols-rounded" style="color:#10b981;">school</span> تصفح الكورسات</a>`
               : `<a href="/register" class="btn-sakr-hero-white"><span class="material-symbols-rounded">rocket_launch</span> اشترك دلوقتي !</a>
                  <a href="/courses" class="btn-sakr-hero-trans"><span class="material-symbols-rounded">school</span> تصفح الكورسات</a>
                  <a href="/parent-portal" class="btn-sakr-hero-trans" style="display:inline-flex; align-items:center; gap:8px;"><span class="material-symbols-rounded" style="color:#10b981;">family_restroom</span> بوابة ولي الأمر</a>`
@@ -45,11 +51,11 @@ export function renderLanding() {
           <div class="hero-sakr-pills">
             <div class="hero-sakr-pill">
               <span class="material-symbols-rounded">verified</span>
-              <span>شرح المنهج كاملاً بالتفصيل</span>
+              <span>كيمياء عربي & Chemistry لغات</span>
             </div>
             <div class="hero-sakr-pill">
-              <span class="material-symbols-rounded">biotech</span>
-              <span>المختبر التفاعلي ووزن المعادلات</span>
+              <span class="material-symbols-rounded">school</span>
+              <span>ابتدائي · إعدادي · ثانوي</span>
             </div>
             <div class="hero-sakr-pill">
               <span class="material-symbols-rounded">family_restroom</span>
@@ -159,7 +165,7 @@ export function renderLanding() {
               </p>
               <div class="quote-author">
                 <span class="author-name">د. زياد رمزي عياد</span>
-                <span class="author-title">صيدلي ومحاضر الكيمياء للثانوية العامة واللغات</span>
+                <span class="author-title">صيدلي ومحاضر الكيمياء والـ Chemistry & Science (عام ولغات)</span>
               </div>
             </div>
 
@@ -276,32 +282,32 @@ export function renderLanding() {
     <!-- Grades Levels -->
     <section class="grades-section reveal" id="grades">
       <div class="section-container">
-        <h2 class="section-title"><span class="material-symbols-rounded">school</span> المراحل الدراسية المتاحة</h2>
-        <p class="section-subtitle">شرح متخصص ومرتب لكل مرحلة دراسية</p>
+        <h2 class="section-title"><span class="material-symbols-rounded">school</span> المراحل الدراسية المتاحة (عام ولغات)</h2>
+        <p class="section-subtitle">اختر مرحلتك الدراسية لاستعراض الكورسات المخصصة لصفك الدراسي مباشرة (كيمياء / علوم & Chemistry / Science)</p>
         <div class="grades-grid">
           <div class="grade-card grade-prep">
             <div class="grade-icon" style="display:flex; justify-content:center; margin-bottom:12px;">
-              <span class="material-symbols-rounded" style="font-size:3.5rem; color:var(--accent);">school</span>
+              <span class="material-symbols-rounded" style="font-size:3.5rem; color:var(--accent);">Auto_Stories</span>
             </div>
-            <h3>المرحلة الإعدادية</h3>
-            <p>شرح متكامل لدروس العلوم والتفاعلات الكيميائية بطريقة تفاعلية وعملية مبسطة (الصف الأول، الثاني، والثالث الإعدادي).</p>
-            <a href="/courses" class="btn btn-outline btn-sm">عرض الكورسات</a>
+            <h3>المرحلة الابتدائية (٤، ٥، ٦ ابتدائي)</h3>
+            <p>تأسيس ممتع ومبسط لمادة العلوم والـ Science (عام ولغات) للصفوف الرابع والخامس والسادس الابتدائي بالتجارب المصورة والأنشطة التفاعلية.</p>
+            <a href="/courses?stage=primary" class="btn btn-outline btn-sm">تصفح كورسات الابتدائي</a>
           </div>
           <div class="grade-card grade-secondary">
             <div class="grade-icon" style="display:flex; justify-content:center; margin-bottom:12px;">
-              <span class="material-symbols-rounded" style="font-size:3.5rem; color:var(--primary);">local_library</span>
+              <span class="material-symbols-rounded" style="font-size:3.5rem; color:var(--primary);">school</span>
             </div>
-            <h3>الصف الأول والثاني الثانوي</h3>
-            <p>تأسيس قوي في الكيمياء الكمية والحرارية وبنية الذرة والجدول الدوري استعداداً للثانوية العامة.</p>
-            <a href="/courses" class="btn btn-outline btn-sm">عرض الكورسات</a>
+            <h3>المرحلة الإعدادية (١، ٢، ٣ إعدادي)</h3>
+            <p>شرح متكامل لدروس العلوم والـ Science والتفاعلات الكيميائية بطريقة تفاعلية وعملية مبسطة (الأول، الثاني، والثالث الإعدادي — عام ولغات).</p>
+            <a href="/courses?stage=prep" class="btn btn-outline btn-sm">تصفح كورسات الإعدادي</a>
           </div>
           <div class="grade-card grade-primary">
             <div class="grade-icon" style="display:flex; justify-content:center; margin-bottom:12px;">
               <span class="material-symbols-rounded" style="font-size:3.5rem; color:var(--info);">workspace_premium</span>
             </div>
-            <h3>الصف الثالث الثانوي</h3>
-            <p>التحضير الشامل للثانوية العامة في الأبواب الخمسة (الانتقالية، التحليلية، الاتزان، الكهربية، والعضوية) مع حل آلاف الأفكار الوزارية.</p>
-            <a href="/courses" class="btn btn-primary btn-sm">تصفح كورسات ثالثة ثانوي</a>
+            <h3>المرحلة الثانوية (١، ٢، ٣ ثانوي)</h3>
+            <p>التحضير الشامل للكيمياء والـ Chemistry (عام ولغات) للصفوف الأول والثاني والثالث الثانوي مع حل آلاف الأفكار الوزارية والتجارب المعملية.</p>
+            <a href="/courses?stage=secondary" class="btn btn-primary btn-sm">تصفح كورسات الثانوي</a>
           </div>
         </div>
       </div>
@@ -333,7 +339,6 @@ export function renderLanding() {
             <h4 style="font-weight: 800; font-size: 1.1rem; color: var(--text-primary); margin-bottom: 20px;">روابط سريعة</h4>
             <div class="footer-links" style="display: flex; flex-direction: column; gap: 12px;">
               <a href="/courses" style="color: var(--text-secondary); font-weight: 600; font-size: 0.9rem;">تصفح الكورسات</a>
-              <a href="/lab" style="color: var(--text-secondary); font-weight: 600; font-size: 0.9rem;">المختبر الكيميائي التفاعلي</a>
               <a href="/parent-portal" style="color: var(--text-secondary); font-weight: 600; font-size: 0.9rem;">بوابة متابعة ولي الأمر</a>
               <a href="/register" style="color: var(--text-secondary); font-weight: 600; font-size: 0.9rem;">إنشاء حساب جديد</a>
               <a href="/login" style="color: var(--text-secondary); font-weight: 600; font-size: 0.9rem;">تسجيل الدخول للمنصة</a>
@@ -359,6 +364,18 @@ export function renderLanding() {
 
 export function initLanding() {
   initPublicHeader();
+
+  const searchForm = document.getElementById('landingSearchForm');
+  searchForm?.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const q = (document.getElementById('landingSearchInput')?.value || '').trim();
+    const target = q ? `/courses?q=${encodeURIComponent(q)}` : '/courses';
+    if (typeof window.navigateTo === 'function') {
+      window.navigateTo(target);
+    } else {
+      window.location.href = target;
+    }
+  });
 
   const faqItems = document.querySelectorAll('.faq-item');
   faqItems.forEach(item => {

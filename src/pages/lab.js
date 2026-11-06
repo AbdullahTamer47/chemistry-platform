@@ -13,25 +13,25 @@ import {
 } from '../utils/chemistryCore.js';
 
 export function renderLab() {
-  const logged = isLoggedIn();
-  const headerHtml = logged ? renderNavbar('lab') : renderPublicHeader('lab');
-  const wrapperClass = logged ? 'app-layout' : 'landing';
-  const mainStyle = logged ? '' : 'padding-top: 110px; padding-bottom: 60px; min-height: 85vh;';
-  const containerClass = logged ? 'main-content' : 'section-container';
-
   const categories = ['الكل', ...Array.from(new Set(THANAVYA_REACTIONS.map(r => r.category)))];
   const qualGroups = ['الكل', ...Array.from(new Set(QUALITATIVE_TESTS.map(q => q.group)))];
 
   return `
-    <div class="${wrapperClass}" style="min-height: 100vh;">
-      ${headerHtml}
-      <main class="${containerClass}" style="${mainStyle}">
-        <div class="page-header" style="margin-bottom: 24px;">
-          <h1 class="page-title" style="display:flex; align-items:center; gap:10px;">
-            <span class="material-symbols-rounded" style="color:var(--primary); font-size:2rem;">science</span>
-            المختبر الكيميائي التفاعلي ومساعد المعادلات
-          </h1>
-          <p class="page-subtitle">موسوعة معادلات المنهج كاملة، موازن المعادلات الفوري، محاكي الكشف الكيفي، وحاسبات الكتلة المولية والمعايرة</p>
+    <div class="app-layout" style="min-height: 100vh;">
+      ${renderNavbar('lab')}
+      <main class="main-content">
+        <div class="page-header" style="margin-bottom: 24px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:16px;">
+          <div>
+            <h1 class="page-title" style="display:flex; align-items:center; gap:10px;">
+              <span class="material-symbols-rounded" style="color:var(--primary); font-size:2rem;">science</span>
+              المختبر الكيميائي التفاعلي ومساعد المعادلات
+            </h1>
+            <p class="page-subtitle">موسوعة معادلات المنهج كاملة، موازن المعادلات الفوري، محاكي الكشف الكيفي، وحاسبات الكتلة المولية والمعايرة</p>
+          </div>
+          <div class="compact-search-bar" style="max-width: 360px;">
+            <span class="material-symbols-rounded">search</span>
+            <input type="text" id="globalLabSearchInput" placeholder="بحث خاص بالمختبر (معادلات، كواشف، أيونات)...">
+          </div>
         </div>
 
         <!-- Lab Navigation Tabs (Google Material Icons Only) -->
@@ -368,11 +368,22 @@ export function initLab() {
   // 3. Qualitative Analysis Lab
   const qualFilter = document.getElementById('qualGroupFilter');
   const qualGrid = document.getElementById('qualResultsGrid');
+  const globalLabSearch = document.getElementById('globalLabSearchInput');
 
   function renderQualLab() {
     if (!qualGrid) return;
     const g = qualFilter?.value || 'الكل';
-    const items = QUALITATIVE_TESTS.filter(item => g === 'الكل' || item.group === g);
+    const q = (globalLabSearch?.value || '').trim().toLowerCase();
+    const items = QUALITATIVE_TESTS.filter(item => {
+      if (g !== 'الكل' && item.group !== g) return false;
+      if (!q) return true;
+      return (
+        item.ion.toLowerCase().includes(q) ||
+        item.group.toLowerCase().includes(q) ||
+        item.mainTest.toLowerCase().includes(q) ||
+        item.confirmTest.toLowerCase().includes(q)
+      );
+    });
     qualGrid.innerHTML = items.map(item => `
       <div style="background:var(--bg-secondary); border:1px solid var(--border-light); border-radius:14px; padding:16px;">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
@@ -391,6 +402,16 @@ export function initLab() {
 
   qualFilter?.addEventListener('change', renderQualLab);
   renderQualLab();
+
+  // Bind Lab-specific compact search bar to filter inside the Lab (equations, qualitative tests, flashcards)
+  globalLabSearch?.addEventListener('input', () => {
+    const val = globalLabSearch.value;
+    if (eqSearch) {
+      eqSearch.value = val;
+      renderEquationsBank();
+    }
+    renderQualLab();
+  });
 
   // 4. Molar Mass & Moles Calculator
   const molarInput = document.getElementById('molarFormulaInput');

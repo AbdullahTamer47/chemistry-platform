@@ -26,7 +26,6 @@ export function renderPublicHeader(activeNav = 'home') {
       <nav class="landing-nav">
         <a href="/" class="landing-nav-link ${activeNav === 'home' ? 'active' : ''}" data-nav="hero">الرئيسية</a>
         <a href="/courses" class="landing-nav-link ${activeNav === 'courses' ? 'active' : ''}">الكورسات</a>
-        <a href="/lab" class="landing-nav-link ${activeNav === 'lab' ? 'active' : ''}">المختبر الكيميائي</a>
         <a href="/parent-portal" class="landing-nav-link ${activeNav === 'parent-portal' ? 'active' : ''}">بوابة ولي الأمر</a>
         <a href="#faq" class="landing-nav-link ${activeNav === 'faq' ? 'active' : ''}" data-scroll="faq">الأسئلة الشائعة</a>
       </nav>
@@ -63,9 +62,6 @@ export function renderPublicHeader(activeNav = 'home') {
         </a>
         <a href="/courses" class="landing-drawer-link ${activeNav === 'courses' ? 'active' : ''}">
           <span class="material-symbols-rounded">school</span> الكورسات
-        </a>
-        <a href="/lab" class="landing-drawer-link ${activeNav === 'lab' ? 'active' : ''}">
-          <span class="material-symbols-rounded">science</span> المختبر الكيميائي التفاعلي
         </a>
         <a href="/parent-portal" class="landing-drawer-link ${activeNav === 'parent-portal' ? 'active' : ''}">
           <span class="material-symbols-rounded">family_restroom</span> بوابة متابعة ولي الأمر

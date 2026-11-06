@@ -195,6 +195,9 @@ export function initLogin() {
 
 export function renderRegister() {
   const gradeDescriptions = {
+    'رابعة ابتدائي': 'الصف الرابع الابتدائي',
+    'خامسة ابتدائي': 'الصف الخامس الابتدائي',
+    'سادسة ابتدائي': 'الصف السادس الابتدائي',
     'أولى إعدادي': 'الصف الأول الإعدادي',
     'ثانية إعدادي': 'الصف الثاني الإعدادي',
     'ثالثة إعدادي': 'الصف الثالث الإعدادي',
@@ -253,13 +256,26 @@ export function renderRegister() {
             </div>
           </div>
 
-          <div class="sakr-input-group">
-            <label class="sakr-input-label" for="regGrade">المرحلة الدراسية <span style="color:var(--danger);">*</span></label>
-            <div class="sakr-input-wrap">
-              <span class="material-symbols-rounded input-icon">school</span>
-              <select class="sakr-input-field" id="regGrade" required style="cursor: pointer;">
-                ${gradesList.map(g => `<option value="${esc(g)}" ${g === 'ثالثة ثانوي' ? 'selected' : ''}>${esc(gradeDescriptions[g] || g)} (${esc(g)})</option>`).join('')}
-              </select>
+          <div class="auth-phone-grid">
+            <div class="sakr-input-group">
+              <label class="sakr-input-label" for="regGrade">المرحلة الدراسية <span style="color:var(--danger);">*</span></label>
+              <div class="sakr-input-wrap">
+                <span class="material-symbols-rounded input-icon">school</span>
+                <select class="sakr-input-field" id="regGrade" required style="cursor: pointer;">
+                  ${gradesList.map(g => `<option value="${esc(g)}" ${g === 'ثالثة ثانوي' ? 'selected' : ''}>${esc(gradeDescriptions[g] || g)} (${esc(g)})</option>`).join('')}
+                </select>
+              </div>
+            </div>
+
+            <div class="sakr-input-group">
+              <label class="sakr-input-label" for="regStudyTrack">نظام الدراسة (عام / لغات) <span style="color:var(--danger);">*</span></label>
+              <div class="sakr-input-wrap">
+                <span class="material-symbols-rounded input-icon">translate</span>
+                <select class="sakr-input-field" id="regStudyTrack" required style="cursor: pointer;">
+                  <option value="عام" selected>عام (عربي — كيمياء / علوم)</option>
+                  <option value="لغات">لغات (Chemistry / Science)</option>
+                </select>
+              </div>
             </div>
           </div>
 
@@ -337,6 +353,7 @@ export function initRegister() {
     const parentPhone = normalizeDigits(document.getElementById('regParentPhone')?.value || '');
     const studentPhone = normalizeDigits(document.getElementById('regPhone')?.value || '');
     const grade = document.getElementById('regGrade')?.value || 'ثالثة ثانوي';
+    const studyTrack = document.getElementById('regStudyTrack')?.value || 'عام';
     const name = (document.getElementById('regName')?.value || '').trim();
     const password = passwordInput?.value || '';
 
@@ -379,7 +396,23 @@ export function initRegister() {
     btn.innerHTML = '<span class="material-symbols-rounded spin-icon">sync</span> جاري إنشاء حسابك وتجهيز المنصة...';
 
     try {
-      const data = await api.register({ name, phone: studentPhone, password, grade, parent_phone: parentPhone });
+      let deviceId = localStorage.getItem('chem_device_id');
+      if (!deviceId) {
+        deviceId = 'dev_' + Math.random().toString(36).substring(2, 12);
+        localStorage.setItem('chem_device_id', deviceId);
+      }
+      const deviceName = /Mobi|Android/i.test(navigator.userAgent) ? 'موبايل' : 'كمبيوتر / لابتوب';
+
+      const data = await api.register({
+        name,
+        phone: studentPhone,
+        password,
+        grade,
+        study_track: studyTrack,
+        parent_phone: parentPhone,
+        device_id: deviceId,
+        device_name: deviceName
+      });
       setAuth(data.user, data.token);
       showInlineAuthAlert('regAlertBox', 'تم إنشاء حسابك بنجاح! جاري تحويلك للوحة التحكم...', 'success');
       showToast('تم إنشاء حسابك بنجاح! مرحباً بك في كيمياوي', 'success');

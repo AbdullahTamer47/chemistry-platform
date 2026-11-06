@@ -18,6 +18,14 @@ async function request(endpoint, options = {}) {
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
   }
+  try {
+    let deviceId = localStorage.getItem('chem_device_id');
+    if (!deviceId) {
+      deviceId = 'dev_' + Math.random().toString(36).substring(2, 12);
+      localStorage.setItem('chem_device_id', deviceId);
+    }
+    headers['X-Device-Id'] = deviceId;
+  } catch (_) {}
 
   const config = {
     method: options.method || 'GET',

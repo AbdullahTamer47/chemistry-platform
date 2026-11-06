@@ -1,6 +1,7 @@
 import { getUser, isTeacher, logout } from '../utils/auth.js';
 import { getInitials, esc } from '../utils/helpers.js';
 import { api } from '../utils/api.js';
+import { renderBedigitalSidebarBadge } from './bedigitalBrand.js';
 import zraLogoFace from '../assets/zra-logo-face.png';
 import zraLogoText from '../assets/zra-logo-text.png';
 
@@ -16,9 +17,6 @@ export function renderNavbar(currentPage) {
     </a>
     <a class="nav-item ${currentPage === 'courses' ? 'active' : ''}" href="/courses">
       <span class="material-symbols-rounded">school</span> الكورسات والمحاضرات
-    </a>
-    <a class="nav-item ${currentPage === 'exams' ? 'active' : ''}" href="/exams">
-      <span class="material-symbols-rounded">assignment</span> الامتحانات والتقييمات
     </a>
     <a class="nav-item ${currentPage === 'lab' ? 'active' : ''}" href="/lab">
       <span class="material-symbols-rounded">science</span> المختبر الكيميائي التفاعلي
@@ -121,9 +119,9 @@ export function renderNavbar(currentPage) {
           <span class="material-symbols-rounded">school</span>
           <span>الكورسات</span>
         </a>
-        <a href="/exams" class="mobile-bottom-tab ${currentPage === 'exams' ? 'active' : ''}">
-          <span class="material-symbols-rounded">assignment</span>
-          <span>الامتحانات</span>
+        <a href="/my-results" class="mobile-bottom-tab ${currentPage === 'my-results' ? 'active' : ''}">
+          <span class="material-symbols-rounded">fact_check</span>
+          <span>نتائجي</span>
         </a>
         <a href="/lab" class="mobile-bottom-tab ${currentPage === 'lab' ? 'active' : ''}">
           <span class="material-symbols-rounded">science</span>
@@ -178,13 +176,15 @@ export function renderNavbar(currentPage) {
           <div class="sidebar-user-avatar">${getInitials(user.name)}</div>
           <div class="sidebar-user-info">
             <div class="sidebar-user-name">${esc(user.name)}</div>
-            <div class="sidebar-user-role">${teacher ? 'معلم / إدارة المنصة' : esc(user.grade || 'طالب')}</div>
+            <div class="sidebar-user-role">${teacher ? 'معلم / إدارة المنصة' : `${esc(user.grade || 'طالب')} · ${esc(user.study_track || 'عام')}`}</div>
           </div>
         </a>
         <div class="sidebar-logout" id="logoutBtn">
           <span class="material-symbols-rounded">logout</span> تسجيل خروج
         </div>
       ` : ''}
+
+      ${renderBedigitalSidebarBadge()}
     </aside>
 
     ${mobileBottomBar}

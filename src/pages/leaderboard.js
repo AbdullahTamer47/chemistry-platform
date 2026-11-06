@@ -1,25 +1,42 @@
 import { renderNavbar, initNavbar } from '../components/navbar.js';
+import { renderBrandErrorIllustration, renderBrandLoader } from '../components/bedigitalBrand.js';
 import { api } from '../utils/api.js';
-import { getUser } from '../utils/auth.js';
+import { getUser, isTeacher } from '../utils/auth.js';
 import { showToast } from '../components/toast.js';
-import { getInitials, esc } from '../utils/helpers.js';
+import { getInitials, esc, gradesList } from '../utils/helpers.js';
 
 export function renderLeaderboard() {
+  const user = getUser();
+  const teacher = isTeacher();
+  const studentScopeLabel = user && !teacher ? `${user.grade || ''} (${user.study_track || 'عام'})` : '';
+
   return `<div class="app-layout">
     ${renderNavbar('leaderboard')}
     <main class="main-content">
-      <div class="page-header">
-        <h1 class="page-title"><span class="material-symbols-rounded" style="color:var(--accent)">emoji_events</span> لوحة الشرف والمتصدرين</h1>
-        <p class="page-subtitle">قائمة أوائل المنصة (أعلى 10 طلاب متفوقين في متوسط نتائج الامتحانات المعتمدة)</p>
+      <div class="page-header" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;">
+        <div>
+          <h1 class="page-title"><span class="material-symbols-rounded" style="color:var(--accent)">emoji_events</span> لوحة الشرف والمتصدرين</h1>
+          <p class="page-subtitle">
+            ${teacher
+              ? 'قائمة أوائل المنصة (أعلى 10 طلاب وفق معادلة التفوق التراكمي لعدد الامتحانات والمعدل)'
+              : `أعلى 10 طلاب متفوقين في مرحلتك الدراسية وشعبتك: ${esc(studentScopeLabel)}`}
+          </p>
+        </div>
+        ${!teacher && studentScopeLabel ? `
+          <span class="badge badge-success" style="font-size:0.82rem;padding:6px 14px;">
+            <span class="material-symbols-rounded" style="font-size:1rem;">verified</span>
+            مخصصة لطلاب ${esc(studentScopeLabel)}
+          </span>
+        ` : ''}
       </div>
-      <div class="tabs" id="lbTabs">
-        <div class="tab active" data-filter="">جميع المراحل</div>
-        <div class="tab" data-filter="ثالثة ثانوي">ثالثة ثانوي</div>
-        <div class="tab" data-filter="ثانية ثانوي">ثانية ثانوي</div>
-        <div class="tab" data-filter="أولى ثانوي">أولى ثانوي</div>
-      </div>
-      <div class="card" id="lbMyRank" style="margin-bottom:20px"><div class="loading-spinner"><div class="spinner"></div></div></div>
-      <div class="card" id="lbContent"><div class="loading-spinner"><div class="spinner"></div></div></div>
+      ${teacher ? `
+        <div class="tabs" id="lbTabs">
+          <div class="tab active" data-filter="">جميع المراحل</div>
+          ${gradesList.map(g => `<div class="tab" data-filter="${esc(g)}">${esc(g)}</div>`).join('')}
+        </div>
+      ` : ''}
+      <div class="card" id="lbMyRank" style="margin-bottom:20px">${renderBrandLoader('جاري حساب ترتيبك ونقاطك...')}</div>
+      <div class="card" id="lbContent">${renderBrandLoader('جاري تحميل قائمة المتصدرين...')}</div>
     </main>
   </div>`;
 }
@@ -27,11 +44,18 @@ export function renderLeaderboard() {
 export async function initLeaderboard() {
   initNavbar();
   const user = getUser();
+  const teacher = isTeacher();
 
   async function load(grade) {
     try {
+      const targetGrade = teacher ? grade : (user?.grade || '');
+      const targetTrack = teacher ? '' : (user?.study_track || 'عام');
+      const queryParams = {};
+      if (targetGrade) queryParams.grade = targetGrade;
+      if (targetTrack) queryParams.track = targetTrack;
+
       const [students, myRank] = await Promise.all([
-        api.getLeaderboard(grade ? { grade } : {}),
+        api.getLeaderboard(queryParams),
         api.getMyRank()
       ]);
 
@@ -48,7 +72,7 @@ export async function initLeaderboard() {
           <div style="display:flex;align-items:center;gap:12px;">
             <div class="stat-icon gold" style="width:52px;height:52px;font-size:1.4rem"><span class="material-symbols-rounded">workspace_premium</span></div>
             <div>
-              <div style="font-size:0.82rem;color:var(--text-muted)">ترتيبك الحالي</div>
+              <div style="font-size:0.82rem;color:var(--text-muted)">ترتيبك في دفعتك (${esc(myRank.grade || user?.grade || '')} · ${esc(myRank.study_track || user?.study_track || 'عام')})</div>
               <div style="font-size:1.8rem;font-weight:900;color:var(--accent)">#${myRank.rank || '-'}</div>
             </div>
           </div>
@@ -58,16 +82,16 @@ export async function initLeaderboard() {
             <span style="font-weight:800;color:${myRank.badge.color};font-size:0.95rem">${myRank.badge.title}</span>
           </div>` : ''}
           <div style="display:flex;gap:20px;flex-wrap:wrap;">
+            <div><div style="font-size:0.82rem;color:var(--text-muted)">نقاط التفوق</div><div style="font-size:1.4rem;font-weight:800;color:var(--accent)">${myRank.mastery_points || myRank.total_score || 0}</div></div>
             <div><div style="font-size:0.82rem;color:var(--text-muted)">المعدل العام</div><div style="font-size:1.4rem;font-weight:800;color:var(--primary)">${myRank.avg_score || 0}%</div></div>
-            <div><div style="font-size:0.82rem;color:var(--text-muted)">إجمالي النقاط</div><div style="font-size:1.4rem;font-weight:800;color:var(--accent)">${myRank.total_score || 0}</div></div>
-            <div><div style="font-size:0.82rem;color:var(--text-muted)">الامتحانات المجتازة</div><div style="font-size:1.4rem;font-weight:800">${myRank.total_exams || 0}</div></div>
+            <div><div style="font-size:0.82rem;color:var(--text-muted)">الامتحانات المنجزة</div><div style="font-size:1.4rem;font-weight:800">${myRank.total_exams || 0}</div></div>
           </div>
         </div>
       `;
 
       document.getElementById('lbContent').innerHTML = students.length === 0
-        ? '<div class="empty-state"><span class="material-symbols-rounded">emoji_events</span><h3>لا يوجد متصدرون في هذه المرحلة حتى الآن</h3><p>يظهر في لوحة المتصدرين فقط الطلاب المتفوقون الذين اجتازوا الامتحانات بنسبة نجاح مرتفعة.</p></div>'
-        : `<ul class="leaderboard-list">${students.map(s => `
+        ? `<div class="empty-state">${renderBrandErrorIllustration('empty')}<h3>لا يوجد متصدرون في هذه المرحلة حتى الآن</h3><p>يظهر في لوحة المتصدرين أعلى 10 طلاب متفوقين حسب مجموع النقاط التراكمي وعدد الامتحانات المجتازة.</p></div>`
+        : `<ul class="leaderboard-list">${students.slice(0, 10).map(s => `
           <li class="leaderboard-item ${s.id === user?.id ? 'current-user' : ''}">
             <div class="leaderboard-rank ${s.rank <= 3 ? `rank-${s.rank}` : ''}" style="${s.rank > 3 ? 'background:var(--bg-main);color:var(--text-muted)' : ''}">${s.rank <= 3 ? `<span class="material-symbols-rounded" style="color:${s.rank===1 ? '#EAB308' : s.rank===2 ? '#94A3B8' : '#D97706'}; font-size:1.3rem;">workspace_premium</span>` : s.rank}</div>
             <div class="leaderboard-avatar">${getInitials(s.name)}</div>
@@ -79,15 +103,18 @@ export async function initLeaderboard() {
                   <span>${esc(s.badge.title)}</span>
                 </span>` : ''}
               </div>
-              <div class="leaderboard-grade">${esc(s.grade || '')} · ${s.exams_taken || 1} امتحان · ${s.total_score || (s.avg_score || 0)} نقطة</div>
+              <div class="leaderboard-grade">${esc(s.grade || '')} (${esc(s.study_track || 'عام')}) · ${s.exams_taken || 1} امتحانات · مجموع الدرجات: ${s.total_score || 0}</div>
             </div>
-            <div class="leaderboard-score">${s.avg_score || s.score || 0}%</div>
+            <div style="text-align:left;">
+              <div class="leaderboard-score">${s.avg_score || s.score || 0}%</div>
+              <div style="font-size:0.72rem;color:var(--text-muted);font-weight:700;">${s.mastery_points || s.total_score || 0} نقطة</div>
+            </div>
           </li>
         `).join('')}</ul>`;
     } catch (err) { showToast(err.message, 'error'); }
   }
 
-  document.getElementById('lbTabs').addEventListener('click', (e) => {
+  document.getElementById('lbTabs')?.addEventListener('click', (e) => {
     const tab = e.target.closest('.tab');
     if (!tab) return;
     document.querySelectorAll('#lbTabs .tab').forEach(t => t.classList.remove('active'));

@@ -1,5 +1,6 @@
 import { esc } from '../utils/helpers.js';
 import { renderNavbar, initNavbar } from '../components/navbar.js';
+import { renderBrandErrorIllustration, renderBrandLoader } from '../components/bedigitalBrand.js';
 import { api } from '../utils/api.js';
 import { showToast } from '../components/toast.js';
 
@@ -165,35 +166,15 @@ export function renderCertificates() {
         <div class="page-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:16px;">
           <div>
             <h1 class="page-title"><span class="material-symbols-rounded" style="color:var(--warning)">workspace_premium</span> شهادات التقدير والتفوق المعتمدة</h1>
-            <p class="page-subtitle">شهادات مصورة عالية الجودة موثقة ومعتمدة من د. زياد رمزي عياد للامتحانات المحددة بشهادة</p>
+            <p class="page-subtitle">شهادات مصورة عالية الجودة موثقة ومعتمدة من د. زياد رمزي عياد للامتحانات المحددة بشهادة داخل كورساتك</p>
           </div>
           <a href="/my-results" class="btn btn-outline" style="gap:6px;">
             <span class="material-symbols-rounded">insights</span> تحليلات درجاتي
           </a>
         </div>
 
-        <!-- CERTIFICATE VERIFICATION LOOKUP BAR -->
-        <div class="card" style="padding:18px 22px;margin-bottom:24px;border:1.5px solid var(--border);background:var(--bg-card);">
-          <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:14px;">
-            <div>
-              <h3 style="font-size:1rem;font-weight:800;margin:0 0 4px;display:flex;align-items:center;gap:8px;color:var(--text-primary);">
-                <span class="material-symbols-rounded" style="color:var(--primary);">verified</span>
-                التحقق الرسمي من صحة الشهادة (Certificate Verification)
-              </h3>
-              <p style="font-size:0.8rem;color:var(--text-secondary);margin:0;">أدخل الكود المرجعي المطبوع على الشهادة (مثال: CERT-ZRA-...) للتأكد من توثيقها في سجلات المنصة</p>
-            </div>
-            <form id="verifyCertForm" style="display:flex;gap:8px;flex-wrap:wrap;flex:1;max-width:420px;">
-              <input type="text" id="verifyCertInput" class="form-input" placeholder="CERT-ZRA-..." dir="ltr" required style="flex:1;min-width:180px;font-family:monospace;text-transform:uppercase;">
-              <button type="submit" class="btn btn-primary btn-sm" style="gap:6px;padding:0 18px;">
-                <span class="material-symbols-rounded">manage_search</span> تحقق الآن
-              </button>
-            </form>
-          </div>
-          <div id="verifyCertResult" style="margin-top:12px;display:none;"></div>
-        </div>
-
         <div id="certificatesContainer">
-          <div class="loading-spinner"><div class="spinner"></div></div>
+          ${renderBrandLoader('جاري تحميل شهادات التقدير...')}
         </div>
       </main>
     </div>
@@ -205,52 +186,19 @@ export async function initCertificates() {
   const container = document.getElementById('certificatesContainer');
   if (!container) return;
 
-  const verifyForm = document.getElementById('verifyCertForm');
-  const verifyResult = document.getElementById('verifyCertResult');
-  verifyForm?.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const code = document.getElementById('verifyCertInput')?.value.trim().toUpperCase();
-    if (!code || !verifyResult) return;
-    verifyResult.style.display = 'block';
-    verifyResult.innerHTML = `<div style="font-size:0.85rem;color:var(--text-muted);padding:8px;">جاري التحقق من السجلات الرسمية...</div>`;
-    try {
-      const cert = await api.verifyCertificate(encodeURIComponent(code));
-      verifyResult.innerHTML = `
-        <div style="padding:14px 18px;border-radius:12px;background:rgba(16,185,129,0.1);border:1.5px solid var(--success);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;">
-          <div>
-            <div style="font-weight:800;color:var(--success);font-size:0.95rem;display:flex;align-items:center;gap:6px;">
-              <span class="material-symbols-rounded">verified</span> شهادة أصلية موثقة ومعتمدة بالمنصة
-            </div>
-            <div style="font-size:0.85rem;color:var(--text-primary);margin-top:4px;">
-              الطالب: <strong>${esc(cert.student_name)}</strong> (${esc(cert.grade || '')}) · الاختبار: <strong>${esc(cert.exam_title)}</strong> · النسبة: <strong>${cert.percentage}%</strong>
-            </div>
-          </div>
-          <span class="badge badge-success" dir="ltr" style="font-family:monospace;">${esc(cert.cert_code)}</span>
-        </div>
-      `;
-    } catch (err) {
-      verifyResult.innerHTML = `
-        <div style="padding:12px 16px;border-radius:10px;background:rgba(239,68,68,0.1);border:1px solid var(--error);color:var(--error);font-weight:700;font-size:0.86rem;display:flex;align-items:center;gap:6px;">
-          <span class="material-symbols-rounded">error</span>
-          <span>${esc(err.message || 'رمز الشهادة غير مسجل في قاعدة البيانات')}</span>
-        </div>
-      `;
-    }
-  });
-
   try {
     const certs = await api.getMyCertificates();
 
     if (!certs || certs.length === 0) {
       container.innerHTML = `
         <div class="card" style="text-align:center;padding:50px 24px;max-width:680px;margin:30px auto;">
-          <span class="material-symbols-rounded" style="font-size:4.5rem;color:var(--warning);margin-bottom:12px;">workspace_premium</span>
-          <h3 style="font-size:1.3rem;font-weight:800;margin-bottom:8px;">لم تحصل على شهادة تقدير حتى الآن</h3>
+          ${renderBrandErrorIllustration('empty')}
+          <h3 style="font-size:1.3rem;font-weight:800;margin:12px 0 8px;">لم تحصل على شهادة تقدير حتى الآن</h3>
           <p style="color:var(--text-secondary);font-size:0.9rem;margin-bottom:24px;line-height:1.6;">
-            تُصدر شهادات التقدير المصورة تلقائياً عند اجتياز الامتحانات التي يفعّل فيها المعلم خاصية إصدار الشهادة.
+            تُصدر شهادات التقدير المصورة تلقائياً عند اجتياز الامتحانات المحددة بشهادة داخل الكورسات المشترك بها.
           </p>
-          <a href="/exams" class="btn btn-primary" style="padding:12px 28px;font-weight:800;gap:8px;">
-            <span class="material-symbols-rounded">assignment</span> استعراض الامتحانات المتاحة
+          <a href="/courses" class="btn btn-primary" style="padding:12px 28px;font-weight:800;gap:8px;">
+            <span class="material-symbols-rounded">school</span> تصفح الكورسات والمحاضرات
           </a>
         </div>
       `;

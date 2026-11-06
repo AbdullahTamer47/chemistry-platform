@@ -8,24 +8,33 @@ const router = Router();
 // Get all courses (public)
 router.get('/', (req, res) => {
   try {
-    const { grade } = req.query;
+    const { grade, track } = req.query;
     let query = `SELECT c.*, u.name as teacher_name,
       (SELECT COUNT(*) FROM lessons WHERE course_id = c.id) as lesson_count,
       (SELECT COUNT(*) FROM enrollments WHERE course_id = c.id) as student_count,
       (SELECT COUNT(*) FROM exams WHERE course_id = c.id) as exam_count
       FROM courses c LEFT JOIN users u ON c.teacher_id = u.id`;
 
-    const params = [];
-    if (grade) {
-      query += ' WHERE c.grade = ?';
-      params.push(grade);
-    }
     query += ' ORDER BY c.created_at DESC';
 
-    const courses = db.prepare(query).all(...params).map(c => ({
+    let courses = db.prepare(query).all().map(c => ({
       ...c,
       thumbnail: normalizeImageUrl(c.thumbnail)
     }));
+
+    if (grade) {
+      courses = courses.filter(c => {
+        const list = c.target_grades ? String(c.target_grades).split(',').map(s => s.trim()) : [c.grade];
+        return list.includes(grade) || c.grade === grade;
+      });
+    }
+    if (track) {
+      courses = courses.filter(c => {
+        const tracks = c.study_tracks ? String(c.study_tracks).split(',').map(s => s.trim()) : ['عام', 'لغات'];
+        return tracks.includes(track);
+      });
+    }
+
     res.json(courses);
   } catch (err) {
     console.error(err);
@@ -278,6 +287,8 @@ router.post('/', authMiddleware, teacherMiddleware, (req, res) => {
       title,
       description,
       grade,
+      target_grades,
+      study_tracks,
       price,
       is_free,
       thumbnail,
@@ -289,12 +300,24 @@ router.post('/', authMiddleware, teacherMiddleware, (req, res) => {
       original_price,
       badge_text
     } = req.body;
+
+    const cleanGradesList = Array.isArray(target_grades)
+      ? target_grades.map(s => String(s).trim()).filter(Boolean)
+      : (target_grades ? String(target_grades).split(',').map(s => s.trim()).filter(Boolean) : [grade || 'ثالثة ثانوي']);
+    const primaryGrade = cleanGradesList[0] || grade || 'ثالثة ثانوي';
+    const targetGradesStr = cleanGradesList.join(',');
+    const studyTracksStr = Array.isArray(study_tracks)
+      ? study_tracks.join(',')
+      : (study_tracks || 'عام,لغات');
+
     const result = db.prepare(
-      'INSERT INTO courses (title, description, grade, price, is_free, thumbnail, teacher_id, allow_student_replies, sequential_access, allow_chem_lab, course_type, duration_days, original_price, badge_text) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+      'INSERT INTO courses (title, description, grade, target_grades, study_tracks, price, is_free, thumbnail, teacher_id, allow_student_replies, sequential_access, allow_chem_lab, course_type, duration_days, original_price, badge_text) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
     ).run(
       title || 'كورس جديد',
       description || '',
-      grade || 'ثالثة ثانوي',
+      primaryGrade,
+      targetGradesStr,
+      studyTracksStr,
       Number(price) || 0,
       is_free || Number(price) === 0 ? 1 : 0,
       normalizeImageUrl(thumbnail) || null,
@@ -326,6 +349,8 @@ router.put('/:id', authMiddleware, teacherMiddleware, (req, res) => {
       title,
       description,
       grade,
+      target_grades,
+      study_tracks,
       price,
       is_free,
       thumbnail,
@@ -338,9 +363,26 @@ router.put('/:id', authMiddleware, teacherMiddleware, (req, res) => {
       badge_text
     } = req.body;
 
+    let nextTargetGrades = existing.target_grades || existing.grade;
+    let nextGrade = grade !== undefined ? grade : existing.grade;
+    if (target_grades !== undefined) {
+      const arr = Array.isArray(target_grades)
+        ? target_grades.map(s => String(s).trim()).filter(Boolean)
+        : String(target_grades).split(',').map(s => s.trim()).filter(Boolean);
+      if (arr.length > 0) {
+        nextTargetGrades = arr.join(',');
+        nextGrade = arr[0];
+      }
+    } else if (grade !== undefined) {
+      nextTargetGrades = grade;
+    }
+
+    const nextStudyTracks = study_tracks !== undefined
+      ? (Array.isArray(study_tracks) ? study_tracks.join(',') : String(study_tracks || 'عام,لغات'))
+      : (existing.study_tracks || 'عام,لغات');
+
     const nextTitle = title !== undefined ? title : existing.title;
     const nextDesc = description !== undefined ? description : existing.description;
-    const nextGrade = grade !== undefined ? grade : existing.grade;
     const nextPrice = price !== undefined ? Number(price) : existing.price;
     const nextIsFree = is_free !== undefined ? (is_free ? 1 : 0) : (price !== undefined ? (Number(price) === 0 ? 1 : 0) : existing.is_free);
     const nextThumb = thumbnail !== undefined ? (normalizeImageUrl(thumbnail) || null) : normalizeImageUrl(existing.thumbnail);
@@ -357,6 +399,8 @@ router.put('/:id', authMiddleware, teacherMiddleware, (req, res) => {
         title = ?,
         description = ?,
         grade = ?,
+        target_grades = ?,
+        study_tracks = ?,
         price = ?,
         is_free = ?,
         thumbnail = ?,
@@ -373,6 +417,8 @@ router.put('/:id', authMiddleware, teacherMiddleware, (req, res) => {
       nextTitle,
       nextDesc,
       nextGrade,
+      nextTargetGrades,
+      nextStudyTracks,
       nextPrice,
       nextIsFree,
       nextThumb,

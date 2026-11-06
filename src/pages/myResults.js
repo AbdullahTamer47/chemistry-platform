@@ -1,4 +1,6 @@
 import { renderNavbar, initNavbar } from '../components/navbar.js';
+import { renderBrandErrorIllustration, renderBrandLoader } from '../components/bedigitalBrand.js';
+import { showModal } from '../components/modal.js';
 import { api } from '../utils/api.js';
 import { showToast } from '../components/toast.js';
 import { formatDate, formatTime, esc } from '../utils/helpers.js';
@@ -11,14 +13,11 @@ export function renderMyResults() {
         <div class="page-header" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px;">
           <div>
             <h1 class="page-title"><span class="material-symbols-rounded" style="color:var(--primary)">insights</span> تحليلات الأداء ونتائجي</h1>
-            <p class="page-subtitle">مخطط إنجاز المنهج، مسار تطور درجاتك عبر العام، وشهادات التفوق المعتمدة</p>
+            <p class="page-subtitle">مخطط إنجاز المنهج، مسار تطور درجاتك عبر العام، والامتحان العلاجي لأخطائك السابقة</p>
           </div>
           <div style="display:flex;gap:10px;flex-wrap:wrap;">
             <a href="/certificates" class="btn btn-outline" style="gap:6px;">
               <span class="material-symbols-rounded" style="color:var(--warning);">workspace_premium</span> شهاداتي المعتمدة
-            </a>
-            <a href="/exams" class="btn btn-primary" style="gap:6px;">
-              <span class="material-symbols-rounded">assignment</span> الامتحانات المتاحة
             </a>
           </div>
         </div>
@@ -50,7 +49,7 @@ export function renderMyResults() {
         </div>
 
         <div id="myResultsList">
-          <div class="loading-spinner"><div class="spinner"></div></div>
+          ${renderBrandLoader('جاري تحليل نتائجك وامتحاناتك السابقة...')}
         </div>
       </main>
     </div>
@@ -64,22 +63,40 @@ export async function initMyResults() {
   const analyticsEl = document.getElementById('visualAnalyticsContainer');
   if (!listEl) return;
 
+  function showNoExamsAdaptiveModal(customMessage) {
+    showModal('التدريب العلاجي الذكي على الأخطاء', `
+      <div style="text-align:center; padding:10px 6px;">
+        ${renderBrandErrorIllustration('info')}
+        <h3 style="font-size:1.15rem; font-weight:800; color:var(--text-primary); margin:12px 0 8px;">لم تقم بدخول أي امتحانات بعد!</h3>
+        <p style="font-size:0.9rem; color:var(--text-secondary); line-height:1.7; margin-bottom:20px;">
+          ${esc(customMessage || 'لتفعيل ميزة "اختبار أخطائي"، يجب أولاً الاشتراك في أحد الكورسات وحل اختبارات المحاضرات داخل الكورس، ليقوم النظام الذكي بفرز الأسئلة التي أخطأت فيها وتوليد تدريب علاجي مخصص لك.')}
+        </p>
+        <div style="display:flex; justify-content:center; gap:10px; flex-wrap:wrap;">
+          <a href="/courses" class="btn btn-primary" onclick="document.querySelector('.modal-overlay')?.remove()">
+            <span class="material-symbols-rounded">school</span> الذهاب إلى الكورسات والمحاضرات
+          </a>
+          <button type="button" class="btn btn-secondary" onclick="document.querySelector('.modal-overlay')?.remove()">إغلاق</button>
+        </div>
+      </div>
+    `);
+  }
+
   document.getElementById('startAdaptiveMistakesBtn')?.addEventListener('click', async () => {
     const btn = document.getElementById('startAdaptiveMistakesBtn');
     btn.disabled = true;
     btn.innerHTML = '<span class="material-symbols-rounded spin-icon">sync</span> جاري فحص بنك أخطائك...';
     try {
       const data = await api.getAdaptiveMistakesQuiz();
-      if (!data.questions || data.questions.length === 0) {
-        showToast(data.message || 'لا توجد أخطاء مسجلة بحسابك حالياً. ممتاز!', 'info');
+      if (data.no_attempts || !data.questions || data.questions.length === 0) {
+        showNoExamsAdaptiveModal(data.message);
       } else {
         sessionStorage.setItem('adaptive_quiz', JSON.stringify(data));
-        showToast(`تم تجهيز ${data.count} سؤال من أخطائك السابقة للتدريب`, 'success');
+        showToast(`تم تجهيز ${data.count} سؤال للتدريب المخصص`, 'success');
         if (window.navigateTo) window.navigateTo('/exams/adaptive/take');
         else window.location.href = '/exams/adaptive/take';
       }
     } catch (err) {
-      showToast(err.message, 'error');
+      showNoExamsAdaptiveModal(err.message);
     } finally {
       btn.disabled = false;
       btn.innerHTML = '<span class="material-symbols-rounded">rocket_launch</span> ابدأ اختبار أخطائي الآن';
@@ -195,14 +212,14 @@ export async function initMyResults() {
     if (!attempts || attempts.length === 0) {
       statsEl.innerHTML = '';
       listEl.innerHTML = `
-        <div class="card" style="text-align:center; padding:60px 24px; max-width:640px; margin:40px auto;">
-          <div style="font-size:4.5rem; color:var(--text-muted); margin-bottom:14px;">
-            <span class="material-symbols-rounded" style="font-size:4.5rem;">history_edu</span>
-          </div>
-          <h3 style="font-weight:800; font-size:1.3rem; margin-bottom:8px;">لا يوجد سجل امتحانات بعد</h3>
-          <p style="color:var(--text-secondary); font-size:0.9rem; margin-bottom:24px;">لم تقم بتسليم أي اختبار أو واجب حتى الآن. ابدأ بحل أول امتحان لتسجيل درجاتك وترتيبك!</p>
-          <a href="/exams" class="btn btn-primary" style="padding:10px 24px;">
-            <span class="material-symbols-rounded">rocket_launch</span> ابدأ بحل أول امتحان الآن
+        <div class="card" style="text-align:center; padding:50px 24px; max-width:640px; margin:30px auto;">
+          ${renderBrandErrorIllustration('empty')}
+          <h3 style="font-weight:800; font-size:1.3rem; margin:12px 0 8px;">لم تقم بدخول أي امتحانات بعد</h3>
+          <p style="color:var(--text-secondary); font-size:0.9rem; margin-bottom:24px; line-height:1.7;">
+            الامتحانات والواجبات متاحة داخل كل كورس تشترك به. افتح الكورس الخاص بك وابدأ بحل اختبارات المحاضرات لتظهر درجاتك وتحليلاتك هنا!
+          </p>
+          <a href="/courses" class="btn btn-primary" style="padding:10px 24px;">
+            <span class="material-symbols-rounded">school</span> الذهاب إلى الكورسات والمحاضرات
           </a>
         </div>
       `;

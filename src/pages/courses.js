@@ -4,8 +4,15 @@ import { isLoggedIn, getUser } from '../utils/auth.js';
 import { showToast } from '../components/toast.js';
 import { showModal } from '../components/modal.js';
 import { renderPublicHeader, initPublicHeader } from '../components/publicHeader.js';
-import { esc, formatFullArabicDate, getShortGradeBadge, gradesList, normalizeImageUrl, generateCourseFallbackSvg } from '../utils/helpers.js';
+import { renderBrandErrorIllustration, renderBrandLoader } from '../components/bedigitalBrand.js';
+import { esc, formatFullArabicDate, getShortGradeBadge, gradesList, getCourseGrades, courseMatchesGrade, courseMatchesTrack, normalizeImageUrl, generateCourseFallbackSvg } from '../utils/helpers.js';
 import { renderChemMarkdown } from '../utils/chemMarkdown.js';
+
+const STAGE_GRADES_MAP = {
+  primary: ['رابعة ابتدائي', 'خامسة ابتدائي', 'سادسة ابتدائي'],
+  prep: ['أولى إعدادي', 'ثانية إعدادي', 'ثالثة إعدادي'],
+  secondary: ['أولى ثانوي', 'ثانية ثانوي', 'ثالثة ثانوي']
+};
 
 export function getCourseCover(c) {
   const thumb = normalizeImageUrl(c?.thumbnail);
@@ -18,19 +25,21 @@ export function getCourseCover(c) {
 export function renderCourseCardBassthalk(c, { isRecommended = false } = {}) {
   const coverImg = getCourseCover(c);
   const fallbackImg = generateCourseFallbackSvg(c);
-  const shortGrade = getShortGradeBadge(c.grade);
+  const courseGrades = getCourseGrades(c);
+  const shortGrade = courseGrades.map(g => getShortGradeBadge(g)).join(' · ');
+  const trackLabel = c.study_tracks === 'لغات' ? 'لغات' : c.study_tracks === 'عام' ? 'عام' : 'عام ولغات';
   const isFree = c.is_free || Number(c.price) === 0;
   const priceLabel = isFree ? 'مجاني' : `${c.price} جنيه`;
   const createdStr = formatFullArabicDate(c.created_at) || 'الثلاثاء، ٢٩ سبتمبر ٢٠٢٦';
   const updatedStr = formatFullArabicDate(c.updated_at || c.created_at) || createdStr;
-  const descText = c.description || `هذا الكورس خاص بطلاب ${c.grade || 'الثانوية العامة'} وشامل الشرح والتدريبات`;
+  const descText = c.description || `هذا الكورس خاص بطلاب ${courseGrades.join(' و ')} (${trackLabel}) وشامل الشرح والتدريبات`;
 
   return `
     <div class="course-card-bassthalk ${isRecommended ? 'recommended-grade-card' : ''}">
       ${isRecommended ? `
         <div class="course-card-rec-ribbon">
           <span class="material-symbols-rounded" style="font-size:1rem;">recommend</span>
-          <span>مرشح لمرحلتك الدراسية (${esc(c.grade)})</span>
+          <span>مرشح لمرحلتك (${esc(courseGrades.join(' + '))} · ${esc(trackLabel)})</span>
         </div>
       ` : ''}
       <a href="/courses/${c.id}" class="course-card-thumb-wrap" aria-label="${esc(c.title)}">
@@ -41,7 +50,7 @@ export function renderCourseCardBassthalk(c, { isRecommended = false } = {}) {
         <!-- Row 1: Title (Right in RTL) & Short Grade (Left in RTL) -->
         <div class="course-card-head-row">
           <a href="/courses/${c.id}" class="course-card-main-title">${esc(c.title)}</a>
-          <span class="course-card-short-grade">${esc(shortGrade)}</span>
+          <span class="course-card-short-grade" title="${esc(courseGrades.join(' + '))} (${esc(trackLabel)})">${esc(shortGrade)} · ${esc(trackLabel)}</span>
         </div>
 
         <!-- Row 2: Price + Description + Details Link (Right in RTL) & Dates (Left in RTL) -->
@@ -102,30 +111,36 @@ export function renderCourses() {
             </div>
           </div>
 
-          <!-- DURATION / BUNDLE SCOPE FILTER PILLS -->
-          <div class="filter-pills" style="display:flex; gap:8px; flex-wrap:wrap; align-items:center; padding:12px 16px; background:var(--bg-secondary); border-radius:12px; border:1px solid var(--border-light); overflow-x:auto;">
-            <span style="font-size:0.85rem; font-weight:800; color:var(--text-primary); margin-left:8px; display:flex; align-items:center; gap:4px; flex-shrink:0;">
-              <span class="material-symbols-rounded" style="font-size:1.1rem; color:var(--primary);">tune</span> نوع الكورس:
-            </span>
-            <button type="button" class="btn btn-sm type-filter-btn btn-primary" data-type="all" style="border-radius:20px; font-weight:700;">الكل</button>
-            <button type="button" class="btn btn-sm type-filter-btn btn-outline" data-type="monthly" style="border-radius:20px; font-weight:700;">
-              <span class="material-symbols-rounded" style="font-size:1rem;">calendar_month</span> كورسات الشهور والفصول
-            </button>
-            <button type="button" class="btn btn-sm type-filter-btn btn-outline" data-type="quarterly" style="border-radius:20px; font-weight:700;">
-              <span class="material-symbols-rounded" style="font-size:1rem;">layers</span> باقات الـ 3 شهور
-            </button>
-            <button type="button" class="btn btn-sm type-filter-btn btn-outline" data-type="term" style="border-radius:20px; font-weight:700;">
-              <span class="material-symbols-rounded" style="font-size:1rem;">library_books</span> باقات الترم
-            </button>
-            <button type="button" class="btn btn-sm type-filter-btn btn-outline" data-type="annual" style="border-radius:20px; font-weight:700;">
-              <span class="material-symbols-rounded" style="font-size:1rem;">workspace_premium</span> منهج السنة الكامل
-            </button>
+          <!-- DURATION / BUNDLE SCOPE + TRACK FILTER PILLS -->
+          <div class="filter-pills" style="display:flex; gap:8px; flex-wrap:wrap; align-items:center; justify-content:space-between; padding:12px 16px; background:var(--bg-secondary); border-radius:12px; border:1px solid var(--border-light);">
+            <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+              <span style="font-size:0.85rem; font-weight:800; color:var(--text-primary); margin-left:4px; display:flex; align-items:center; gap:4px; flex-shrink:0;">
+                <span class="material-symbols-rounded" style="font-size:1.1rem; color:var(--primary);">tune</span> نوع الكورس:
+              </span>
+              <button type="button" class="btn btn-sm type-filter-btn btn-primary" data-type="all" style="border-radius:20px; font-weight:700;">الكل</button>
+              <button type="button" class="btn btn-sm type-filter-btn btn-outline" data-type="monthly" style="border-radius:20px; font-weight:700;">كورسات الشهور والفصول</button>
+              <button type="button" class="btn btn-sm type-filter-btn btn-outline" data-type="quarterly" style="border-radius:20px; font-weight:700;">باقات الـ 3 شهور</button>
+              <button type="button" class="btn btn-sm type-filter-btn btn-outline" data-type="term" style="border-radius:20px; font-weight:700;">باقات الترم</button>
+              <button type="button" class="btn btn-sm type-filter-btn btn-outline" data-type="annual" style="border-radius:20px; font-weight:700;">منهج السنة الكامل</button>
+            </div>
+
+            <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap;">
+              <span style="font-size:0.82rem; font-weight:800; color:var(--text-primary); display:flex; align-items:center; gap:4px;">
+                <span class="material-symbols-rounded" style="font-size:1.05rem; color:var(--primary);">translate</span> الشعبة:
+              </span>
+              <button type="button" class="btn btn-sm track-filter-btn btn-primary" data-track="" style="border-radius:20px; font-weight:700;">الكل</button>
+              <button type="button" class="btn btn-sm track-filter-btn btn-outline" data-track="عام" style="border-radius:20px; font-weight:700;">عام (عربي)</button>
+              <button type="button" class="btn btn-sm track-filter-btn btn-outline" data-track="لغات" style="border-radius:20px; font-weight:700;">لغات (Chemistry)</button>
+            </div>
           </div>
 
-          <!-- SEQUENTIAL GRADE TABS -->
+          <!-- SEQUENTIAL GRADE & STAGE TABS -->
           <div class="tabs" id="gradeTabs" style="margin:0;">
-            <div class="tab active" data-grade="">جميع المراحل</div>
-            ${gradesList.map(g => `<div class="tab" data-grade="${esc(g)}">${esc(g)}</div>`).join('')}
+            <div class="tab active" data-grade="" data-stage="">جميع المراحل</div>
+            <div class="tab" data-grade="" data-stage="primary">المرحلة الابتدائية</div>
+            <div class="tab" data-grade="" data-stage="prep">المرحلة الإعدادية</div>
+            <div class="tab" data-grade="" data-stage="secondary">المرحلة الثانوية</div>
+            ${gradesList.map(g => `<div class="tab" data-grade="${esc(g)}" data-stage="">${esc(g)}</div>`).join('')}
           </div>
         </div>
 
@@ -154,6 +169,7 @@ export async function initCourses() {
   const logged = isLoggedIn();
   const user = getUser();
   const studentGrade = user && user.role === 'student' ? user.grade : '';
+  const studentTrack = user && user.role === 'student' ? (user.study_track || 'عام') : '';
 
   if (logged) {
     initNavbar();
@@ -161,7 +177,10 @@ export async function initCourses() {
     initPublicHeader();
   }
 
-  let currentGrade = '';
+  const params = new URLSearchParams(window.location.search);
+  let currentGrade = params.get('grade') || '';
+  let currentStage = params.get('stage') || '';
+  let currentTrack = params.get('track') || '';
   let currentType = 'all';
   let allCourses = [];
   let allPackages = [];
@@ -171,12 +190,46 @@ export async function initCourses() {
   const searchInput = document.getElementById('courseSearch');
   const countBadge = document.getElementById('coursesCountBadge');
 
+  const initialQuery = params.get('q') || '';
+  if (searchInput && initialQuery) {
+    searchInput.value = initialQuery;
+  }
+
+  // Highlight active tab based on URL params
+  if (currentStage || currentGrade) {
+    document.querySelectorAll('#gradeTabs .tab').forEach(t => {
+      const matchStage = currentStage && t.dataset.stage === currentStage;
+      const matchGrade = currentGrade && t.dataset.grade === currentGrade;
+      t.classList.toggle('active', Boolean(matchStage || matchGrade));
+    });
+  }
+
+  if (currentTrack) {
+    document.querySelectorAll('.track-filter-btn').forEach(b => {
+      const active = b.dataset.track === currentTrack;
+      b.classList.toggle('btn-primary', active);
+      b.classList.toggle('btn-outline', !active);
+    });
+  }
+
+  function courseMatchesCurrentStageOrGrade(c) {
+    if (currentGrade) {
+      return courseMatchesGrade(c, currentGrade);
+    }
+    if (currentStage && STAGE_GRADES_MAP[currentStage]) {
+      return STAGE_GRADES_MAP[currentStage].some(g => courseMatchesGrade(c, g));
+    }
+    return true;
+  }
+
   function renderPackagesSpotlight() {
     if (!packagesContainer) return;
 
     let filteredPkgs = allPackages;
     if (currentGrade) {
       filteredPkgs = filteredPkgs.filter(p => p.grade === currentGrade);
+    } else if (currentStage && STAGE_GRADES_MAP[currentStage]) {
+      filteredPkgs = filteredPkgs.filter(p => STAGE_GRADES_MAP[currentStage].includes(p.grade));
     }
 
     if (filteredPkgs.length === 0) {
@@ -219,18 +272,18 @@ export async function initCourses() {
       countBadge.textContent = `${coursesList.length} كورس`;
     }
 
-    // Recommended section for logged-in student's grade when viewing "جميع المراحل"
+    // Recommended section for logged-in student's grade & track when viewing "جميع المراحل"
     if (recommendedSection) {
-      if (studentGrade && !currentGrade) {
-        const recCourses = coursesList.filter(c => c.grade === studentGrade);
+      if (studentGrade && !currentGrade && !currentStage) {
+        const recCourses = coursesList.filter(c => courseMatchesGrade(c, studentGrade) && courseMatchesTrack(c, studentTrack));
         if (recCourses.length > 0) {
           recommendedSection.style.display = 'block';
           recommendedSection.innerHTML = `
             <div style="margin-bottom:14px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px;">
               <h2 style="font-size:1.2rem; font-weight:900; color:var(--primary); margin:0; display:flex; align-items:center; gap:8px;">
-                <span class="material-symbols-rounded">recommend</span> كورسات مرشحة لمرحلتك الدراسية (${esc(studentGrade)})
+                <span class="material-symbols-rounded">recommend</span> كورسات مرشحة لمرحلتك الدراسية (${esc(studentGrade)} · ${esc(studentTrack)})
               </h2>
-              <span class="badge badge-success" style="font-weight:800;">مخصصة لصفك الدراسي</span>
+              <span class="badge badge-success" style="font-weight:800;">مخصصة لصفك وشعبتك</span>
             </div>
             <div class="courses-grid">
               ${recCourses.map(c => renderCourseCardBassthalk(c, { isRecommended: true })).join('')}
@@ -248,32 +301,38 @@ export async function initCourses() {
 
     if (coursesList.length === 0) {
       grid.innerHTML = `
-        <div class="empty-state" style="grid-column: 1 / -1; padding: 60px 20px;">
-          <span class="material-symbols-rounded" style="font-size:3.5rem; color:var(--text-muted); margin-bottom:12px;">school</span>
-          <h3 style="font-weight:800; font-size:1.2rem;">لا توجد كورسات مضافة حالياً</h3>
-          <p style="color:var(--text-secondary); font-size:0.9rem;">سيقوم المعلم بإضافة الكورسات والمحاضرات قريباً.</p>
+        <div class="empty-state" style="grid-column: 1 / -1; padding: 50px 20px;">
+          ${renderBrandErrorIllustration('empty')}
+          <h3 style="font-weight:800; font-size:1.2rem; margin-top:12px;">لا توجد كورسات مطابقة لهذا التصنيف حالياً</h3>
+          <p style="color:var(--text-secondary); font-size:0.9rem;">جرب اختيار مرحلة دراسية أخرى أو عرض جميع المراحل.</p>
         </div>
       `;
       return;
     }
 
-    // Sort so student's grade courses appear first in the general grid too
+    // Sort so student's grade & track courses appear first in the general grid too
     const sorted = [...coursesList].sort((a, b) => {
       if (studentGrade) {
-        const aMatch = a.grade === studentGrade ? 1 : 0;
-        const bMatch = b.grade === studentGrade ? 1 : 0;
+        const aMatch = (courseMatchesGrade(a, studentGrade) && courseMatchesTrack(a, studentTrack)) ? 1 : 0;
+        const bMatch = (courseMatchesGrade(b, studentGrade) && courseMatchesTrack(b, studentTrack)) ? 1 : 0;
         if (aMatch !== bMatch) return bMatch - aMatch;
       }
       return 0;
     });
 
     grid.innerHTML = sorted.map(c => renderCourseCardBassthalk(c, {
-      isRecommended: Boolean(studentGrade && c.grade === studentGrade && currentGrade)
+      isRecommended: Boolean(studentGrade && courseMatchesGrade(c, studentGrade) && courseMatchesTrack(c, studentTrack) && (currentGrade || currentStage))
     })).join('');
   }
 
   function filterAndRender() {
     let list = [...allCourses];
+
+    list = list.filter(courseMatchesCurrentStageOrGrade);
+
+    if (currentTrack) {
+      list = list.filter(c => courseMatchesTrack(c, currentTrack));
+    }
 
     if (currentType !== 'all') {
       list = list.filter(c => c.course_type === currentType);
@@ -284,7 +343,8 @@ export async function initCourses() {
       list = list.filter(c => 
         c.title.toLowerCase().includes(query) || 
         (c.description && c.description.toLowerCase().includes(query)) ||
-        (c.grade && c.grade.toLowerCase().includes(query))
+        getCourseGrades(c).some(g => g.toLowerCase().includes(query)) ||
+        (c.study_tracks && c.study_tracks.toLowerCase().includes(query))
       );
     }
 
@@ -293,15 +353,11 @@ export async function initCourses() {
   }
 
   async function loadData() {
-    grid.innerHTML = `
-      <div class="skeleton-card skeleton" style="height: 380px; border-radius:22px;"></div>
-      <div class="skeleton-card skeleton" style="height: 380px; border-radius:22px;"></div>
-      <div class="skeleton-card skeleton" style="height: 380px; border-radius:22px;"></div>
-    `;
+    grid.innerHTML = `<div style="grid-column: 1 / -1;">${renderBrandLoader('جاري تحميل الكورسات والمحاضرات...')}</div>`;
     
     try {
       const [coursesRes, packagesRes] = await Promise.all([
-        api.getCourses(currentGrade || undefined),
+        api.getCourses(),
         api.getPackages().catch(() => [])
       ]);
       allCourses = coursesRes || [];
@@ -325,6 +381,19 @@ export async function initCourses() {
     });
   });
 
+  document.querySelectorAll('.track-filter-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.track-filter-btn').forEach(b => {
+        b.classList.remove('btn-primary');
+        b.classList.add('btn-outline');
+      });
+      btn.classList.remove('btn-outline');
+      btn.classList.add('btn-primary');
+      currentTrack = btn.dataset.track || '';
+      filterAndRender();
+    });
+  });
+
   searchInput?.addEventListener('input', filterAndRender);
 
   document.getElementById('gradeTabs')?.addEventListener('click', (e) => {
@@ -332,8 +401,9 @@ export async function initCourses() {
     if (!tab) return;
     document.querySelectorAll('#gradeTabs .tab').forEach(t => t.classList.remove('active'));
     tab.classList.add('active');
-    currentGrade = tab.dataset.grade;
-    loadData();
+    currentGrade = tab.dataset.grade || '';
+    currentStage = tab.dataset.stage || '';
+    filterAndRender();
   });
 
   loadData();

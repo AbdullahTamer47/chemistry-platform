@@ -10,9 +10,15 @@
   "lang": "ar",
   "icons": [
     {
-      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100%25' height='100%25' rx='20' fill='%23059669'/><text x='24' y='72' font-size='65' font-weight='bold' fill='white' font-family='sans-serif'>K</text></svg>",
+      "src": "/favicon.png",
       "sizes": "192x192",
-      "type": "image/svg+xml"
+      "type": "image/png"
+    },
+    {
+      "src": "/favicon.png",
+      "sizes": "512x512",
+      "type": "image/png"
     }
   ]
 }
+

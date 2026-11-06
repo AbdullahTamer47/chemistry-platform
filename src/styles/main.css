@@ -1803,8 +1803,9 @@ tbody tr:hover { background: var(--bg-hover); }
 }
 
 /* ========================================================= */
-/*   bedigital CORPORATE BRAND IDENTITY SYSTEM (v1.0)        */
-/*   Midnight Navy #0B1F3A | Signal Teal #0FB5AE | Gold #E0A526 */
+/*   bedigital CORPORATE BRAND IDENTITY SYSTEM               */
+/*   Harmonized with Kimyawy Emerald (#064e3b / #10b981)     */
+/*   + Nuqta Gold (#E0A526)                                  */
 /* ========================================================= */
 .bedigital-footer-host {
   margin-top: 48px;
@@ -1812,53 +1813,53 @@ tbody tr:hover { background: var(--bg-hover); }
 }
 
 .bedigital-corporate-footer {
-  background-color: #0B1F3A;
+  background-color: #042f2e;
   color: #FFFFFF;
   position: relative;
   overflow: hidden;
-  border-top: 2px solid #0FB5AE;
+  border-top: 2px solid #10b981;
   font-family: 'IBM Plex Sans Arabic', 'Cairo', sans-serif;
   border-radius: 0;
 }
 
-/* Pattern 01 · Dissolve Pixel Matrix Strip */
+/* Pattern 01 · Dissolve Pixel Matrix Strip (Platform Emerald + Gold) */
 .bedigital-dissolve-strip {
-  height: 10px;
+  height: 8px;
   width: 100%;
-  background-color: #071528;
+  background-color: #022c22;
   background-image:
     linear-gradient(90deg,
-      #0FB5AE 0px, #0FB5AE 12px,
+      #10b981 0px, #10b981 12px,
       transparent 12px, transparent 16px,
-      #0D717A 16px, #0D717A 24px,
+      #059669 16px, #059669 24px,
       transparent 24px, transparent 32px,
       #E0A526 32px, #E0A526 40px,
       transparent 40px, transparent 52px,
-      #0C4C5D 52px, #0C4C5D 64px,
+      #065f46 52px, #065f46 64px,
       transparent 64px, transparent 80px
     );
-  background-size: 80px 10px;
+  background-size: 80px 8px;
 }
 
 .bedigital-footer-inner {
   max-width: 1220px;
   margin: 0 auto;
-  padding: 40px 24px 28px;
+  padding: 28px 24px 22px;
 }
 
 .bedigital-footer-top {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr));
-  gap: 32px;
-  align-items: start;
-  margin-bottom: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 20px;
+  margin-bottom: 18px;
 }
 
 .bedigital-lockup {
   display: inline-flex;
   align-items: center;
-  gap: 14px;
-  margin-bottom: 16px;
+  gap: 12px;
 }
 
 .bedigital-wordmark-wrap {
@@ -1869,7 +1870,7 @@ tbody tr:hover { background: var(--bg-hover); }
 .bedigital-wordmark-text {
   font-family: 'Space Grotesk', sans-serif;
   font-weight: 700;
-  font-size: 1.95rem;
+  font-size: 1.55rem;
   letter-spacing: -0.03em;
   line-height: 1;
   display: inline-flex;
@@ -1881,166 +1882,55 @@ tbody tr:hover { background: var(--bg-hover); }
 }
 
 .bedigital-wordmark-text .digital-part {
-  color: #0FB5AE;
+  color: #34d399;
 }
 
 .bedigital-wordmark-text .nuqta-diamond {
   display: inline-block;
-  width: 9px;
-  height: 9px;
+  width: 8px;
+  height: 8px;
   background-color: #E0A526;
   transform: rotate(45deg);
-  margin-left: 7px;
+  margin-left: 6px;
   flex-shrink: 0;
 }
 
 .bedigital-pixel-tag {
   font-family: 'Silkscreen', monospace;
-  font-size: 0.68rem;
-  color: #7BD6D3;
+  font-size: 0.62rem;
+  color: #a7f3d0;
   letter-spacing: 0.06em;
-  margin-top: 4px;
+  margin-top: 3px;
 }
 
 .bedigital-ar-headline {
   font-family: 'Noto Kufi Arabic', 'Cairo', sans-serif;
   font-weight: 700;
-  font-size: 1.3rem;
-  color: #FFFFFF;
-  margin: 0 0 10px;
+  font-size: 1rem;
+  color: #ecfdf5;
+  margin: 0;
 }
 
 .bedigital-ar-headline span {
   font-family: 'Space Grotesk', sans-serif;
-  color: #0FB5AE;
-  font-size: 1.15rem;
-}
-
-.bedigital-ar-body {
-  font-family: 'IBM Plex Sans Arabic', 'Cairo', sans-serif;
-  font-size: 0.9rem;
-  line-height: 1.75;
-  color: #B7E9E7;
-  margin: 0;
-  max-width: 520px;
-}
-
-/* Hard-Edged Callout Card: 0px radius, 6px 6px 0 #0FB5AE solid shadow (Never blurred!) */
-.bedigital-hard-card {
-  background-color: #071528;
-  border: 2px solid #0FB5AE;
-  border-radius: 0 !important;
-  box-shadow: 6px 6px 0 #0FB5AE !important;
-  padding: 20px 22px;
-}
-
-.bedigital-hard-card-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 10px;
-}
-
-.bedigital-silkscreen-badge {
-  font-family: 'Silkscreen', monospace;
-  font-size: 0.72rem;
-  color: #0FB5AE;
-  background: rgba(15, 181, 174, 0.12);
-  border: 1px solid #0D717A;
-  padding: 3px 8px;
-}
-
-.bedigital-nuqta-inline {
-  width: 10px;
-  height: 10px;
-  background-color: #E0A526;
-  transform: rotate(45deg);
-  display: inline-block;
-}
-
-.bedigital-hard-card-title {
-  font-family: 'Noto Kufi Arabic', 'Space Grotesk', sans-serif;
-  font-weight: 700;
-  font-size: 1.12rem;
-  color: #FFFFFF;
-  margin-bottom: 8px;
-}
-
-.bedigital-hard-card-title span {
-  color: #3FC4BE;
-  font-family: 'Space Grotesk', sans-serif;
-}
-
-.bedigital-hard-card-desc {
-  font-size: 0.84rem;
-  color: #F2F6F8;
-  opacity: 0.88;
-  line-height: 1.65;
-  margin: 0 0 14px;
-}
-
-.bedigital-icon-pills {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.bedigital-icon-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  background-color: #0B1F3A;
-  border: 1px solid #0D717A;
-  padding: 5px 10px;
-  font-size: 0.75rem;
-  font-weight: 600;
-  color: #FFFFFF;
-  border-radius: 0;
-  transition: transform 0.15s ease, border-color 0.15s ease;
-}
-
-.bedigital-icon-pill:hover {
-  border-color: #0FB5AE;
-  transform: translate(-2px, -2px);
-  box-shadow: 3px 3px 0 #0FB5AE;
+  color: #34d399;
+  font-size: 0.95rem;
 }
 
 .bedigital-footer-bottom {
-  border-top: 1px solid #0C4C5D;
-  padding-top: 20px;
+  border-top: 1px solid rgba(16, 185, 129, 0.22);
+  padding-top: 16px;
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: center;
   flex-wrap: wrap;
-  gap: 16px;
-}
-
-.bedigital-footer-links {
-  display: flex;
-  align-items: center;
-  gap: 18px;
-  flex-wrap: wrap;
-}
-
-.bedigital-footer-link {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  color: #F2F6F8;
-  font-size: 0.84rem;
-  font-weight: 600;
-  text-decoration: none;
-  transition: color 0.15s ease;
-}
-
-.bedigital-footer-link:hover {
-  color: #0FB5AE;
+  gap: 14px;
 }
 
 .bedigital-copyright {
   font-family: 'Silkscreen', 'Space Grotesk', monospace;
-  font-size: 0.72rem;
-  color: #7BD6D3;
+  font-size: 0.7rem;
+  color: #a7f3d0;
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -2050,10 +1940,10 @@ tbody tr:hover { background: var(--bg-hover); }
 .bedigital-badge-inline {
   font-family: 'Space Grotesk', sans-serif;
   font-weight: 700;
-  font-size: 0.88rem;
+  font-size: 0.82rem;
   color: #FFFFFF;
-  background: #0C4C5D;
-  border: 1px solid #0FB5AE;
+  background: #064e3b;
+  border: 1px solid #10b981;
   padding: 2px 8px;
 }
 
@@ -2064,5 +1954,171 @@ tbody tr:hover { background: var(--bg-hover); }
   transform: rotate(45deg);
   display: inline-block;
 }
+
+/* Sidebar Bottom Compact Brand Badge */
+.bedigital-sidebar-footer {
+  margin-top: auto;
+  padding: 10px 14px 12px;
+  border-top: 1px dashed var(--border-light);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  opacity: 0.85;
+  transition: opacity 0.2s ease;
+}
+
+.bedigital-sidebar-footer:hover {
+  opacity: 1;
+}
+
+.bedigital-sidebar-text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.15;
+}
+
+.bedigital-sidebar-powered {
+  font-family: 'Silkscreen', monospace;
+  font-size: 0.52rem;
+  color: var(--text-muted);
+  letter-spacing: 0.05em;
+}
+
+.bedigital-sidebar-wordmark {
+  font-family: 'Space Grotesk', sans-serif;
+  font-weight: 700;
+  font-size: 0.88rem;
+  color: var(--text-primary);
+  display: inline-flex;
+  align-items: center;
+}
+
+.bedigital-sidebar-wordmark b {
+  color: var(--primary);
+}
+
+.bedigital-sidebar-wordmark .nuqta-diamond-sm {
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  background-color: #E0A526;
+  transform: rotate(45deg);
+  margin-left: 4px;
+}
+
+/* Animated Pixel-Art Loader & Error States */
+.brand-loader-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 44px 20px;
+  gap: 12px;
+  text-align: center;
+}
+
+.brand-pixel-loader-svg,
+.brand-error-svg {
+  filter: drop-shadow(0 6px 14px rgba(5, 150, 105, 0.16));
+}
+
+.pixel-bubble.b1 {
+  animation: pixelFloat 1.5s ease-in-out infinite;
+}
+.pixel-bubble.b2 {
+  animation: pixelFloat 1.5s ease-in-out 0.35s infinite;
+}
+.pixel-bubble.b3 {
+  animation: pixelFloat 1.5s ease-in-out 0.7s infinite;
+}
+.pixel-liquid {
+  animation: pixelPulse 1.8s ease-in-out infinite;
+}
+.pixel-nuqta-pulse {
+  transform-origin: center;
+  animation: nuqtaGlow 1.6s ease-in-out infinite;
+}
+.pixel-float {
+  animation: pixelFloat 2s ease-in-out infinite;
+}
+
+@keyframes pixelFloat {
+  0%, 100% { transform: translateY(0); opacity: 0.95; }
+  50% { transform: translateY(-4px); opacity: 0.55; }
+}
+
+@keyframes pixelPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.75; }
+}
+
+@keyframes nuqtaGlow {
+  0%, 100% { opacity: 1; filter: drop-shadow(0 0 4px rgba(224, 165, 38, 0.6)); }
+  50% { opacity: 0.65; filter: drop-shadow(0 0 0px rgba(224, 165, 38, 0)); }
+}
+
+.brand-loader-label {
+  font-weight: 700;
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+}
+
+/* Compact Search Bar Component (Landing, Dashboard, Lab) */
+.compact-search-bar {
+  display: flex;
+  align-items: center;
+  background: var(--bg-card);
+  border: 1.5px solid var(--border);
+  border-radius: 999px;
+  padding: 4px 6px 4px 14px;
+  gap: 8px;
+  max-width: 440px;
+  width: 100%;
+  box-shadow: var(--shadow-sm);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.compact-search-bar:focus-within {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.15);
+}
+
+.compact-search-bar .material-symbols-rounded {
+  color: var(--primary);
+  font-size: 1.25rem;
+  margin-right: 6px;
+  flex-shrink: 0;
+}
+
+.compact-search-bar input {
+  border: none;
+  background: transparent;
+  outline: none;
+  flex: 1;
+  font-family: inherit;
+  font-size: 0.86rem;
+  color: var(--text-primary);
+  min-width: 0;
+  padding: 6px 4px;
+}
+
+.compact-search-bar button {
+  background: var(--primary);
+  color: #fff;
+  border: none;
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.2s ease;
+  flex-shrink: 0;
+}
+
+.compact-search-bar button:hover {
+  background: var(--primary-dark);
+}
+
 
 

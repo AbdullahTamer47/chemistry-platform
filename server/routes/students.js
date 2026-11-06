@@ -355,8 +355,9 @@ router.get('/analytics', authMiddleware, (req, res) => {
 router.get('/', authMiddleware, teacherMiddleware, (req, res) => {
   try {
     const { grade, course_id } = req.query;
-    let query = `SELECT u.id, u.name, u.phone, u.grade, u.parent_phone, u.created_at,
+    let query = `SELECT u.id, u.name, u.phone, u.grade, COALESCE(u.study_track, 'عام') as study_track, u.parent_phone, u.created_at,
       (SELECT COUNT(*) FROM enrollments WHERE user_id = u.id) as enrolled_courses,
+      (SELECT COUNT(*) FROM user_devices WHERE user_id = u.id) as devices_count,
       (SELECT ROUND(AVG(score),1) FROM exam_attempts WHERE user_id = u.id AND completed_at IS NOT NULL) as avg_score
       FROM users u WHERE u.role = 'student'`;
     const params = [];
@@ -456,7 +457,7 @@ router.delete('/:id/devices', authMiddleware, teacherMiddleware, (req, res) => {
 // Get student details (AFTER specific routes)
 router.get('/:id', authMiddleware, teacherMiddleware, (req, res) => {
   try {
-    const student = db.prepare('SELECT id, name, phone, grade, parent_phone, created_at FROM users WHERE id = ? AND role = ?').get(req.params.id, 'student');
+    const student = db.prepare("SELECT id, name, phone, grade, COALESCE(study_track, 'عام') as study_track, parent_phone, created_at, (SELECT COUNT(*) FROM user_devices WHERE user_id = users.id) as devices_count FROM users WHERE id = ? AND role = ?").get(req.params.id, 'student');
     if (!student) return res.status(404).json({ error: 'الطالب غير موجود' });
     student.enrollments = db.prepare('SELECT e.*, c.title as course_title FROM enrollments e JOIN courses c ON e.course_id = c.id WHERE e.user_id = ?').all(student.id);
     student.exam_attempts = db.prepare('SELECT ea.*, ex.title as exam_title FROM exam_attempts ea JOIN exams ex ON ea.exam_id = ex.id WHERE ea.user_id = ? ORDER BY ea.completed_at DESC LIMIT 20').all(student.id);
@@ -468,9 +469,9 @@ router.get('/:id', authMiddleware, teacherMiddleware, (req, res) => {
 // Update student
 router.put('/:id', authMiddleware, teacherMiddleware, (req, res) => {
   try {
-    const { name, phone, grade, parent_phone, password } = req.body;
-    let query = 'UPDATE users SET name=COALESCE(?,name), phone=COALESCE(?,phone), grade=COALESCE(?,grade), parent_phone=COALESCE(?,parent_phone)';
-    const params = [name ?? null, phone ?? null, grade ?? null, parent_phone ?? null];
+    const { name, phone, grade, study_track, parent_phone, password } = req.body;
+    let query = 'UPDATE users SET name=COALESCE(?,name), phone=COALESCE(?,phone), grade=COALESCE(?,grade), study_track=COALESCE(?,study_track), parent_phone=COALESCE(?,parent_phone)';
+    const params = [name ?? null, phone ?? null, grade ?? null, study_track ?? null, parent_phone ?? null];
     if (password) {
       if (String(password).length < 6) {
         return res.status(400).json({ error: 'كلمة المرور يجب أن تكون 6 أحرف على الأقل' });

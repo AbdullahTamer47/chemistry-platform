@@ -48,9 +48,9 @@ export function renderDashboard() {
                 <span class="material-symbols-rounded" style="font-size:1.75rem; color:#10b981;">science</span>
                 <span>المختبر التفاعلي</span>
               </a>
-              <a href="/exams" class="quick-action-tile">
-                <span class="material-symbols-rounded" style="font-size:1.75rem; color:#3b82f6;">quiz</span>
-                <span>الامتحانات والواجبات</span>
+              <a href="/my-results" class="quick-action-tile">
+                <span class="material-symbols-rounded" style="font-size:1.75rem; color:#3b82f6;">fact_check</span>
+                <span>نتائجي وتدريب أخطائي</span>
               </a>
               <a href="/wallet" class="quick-action-tile">
                 <span class="material-symbols-rounded" style="font-size:1.75rem; color:var(--accent);">account_balance_wallet</span>
@@ -100,12 +100,17 @@ export async function initDashboard() {
           <div style="min-width: 0; flex: 1;">
             <h1 style="font-size: clamp(1.15rem, 3vw, 1.55rem); font-weight: 900; line-height: 1.35; color: #ffffff;">${greeting}، ${esc(data.user?.name || user.name)}</h1>
             <p style="opacity: 0.95; font-size: 0.85rem; margin-top: 6px; font-weight: 600; display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
-              <span class="badge" style="background: rgba(255,255,255,0.22); color: #ffffff; font-size:0.75rem; padding: 4px 10px;">${esc(data.user?.grade || user.grade)}</span>
+              <span class="badge" style="background: rgba(255,255,255,0.22); color: #ffffff; font-size:0.75rem; padding: 4px 10px;">${esc(data.user?.grade || user.grade)} · ${esc(data.user?.study_track || user.study_track || 'عام')}</span>
               <span>جاهز لمحاضرة جديدة في الكيمياء؟</span>
             </p>
           </div>
         </div>
-        <div style="display:flex; gap:10px; flex-wrap:wrap;">
+        <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; flex: 1; justify-content: flex-end; min-width: 260px;">
+          <form id="dashCourseSearchForm" class="compact-search-bar" style="max-width: 310px; background: rgba(255,255,255,0.96); border-color: rgba(255,255,255,0.4);">
+            <span class="material-symbols-rounded">search</span>
+            <input type="text" id="dashCourseSearchInput" placeholder="ابحث عن كورس أو محاضرة..." style="color:#064e3b;">
+            <button type="submit">بحث</button>
+          </form>
           <a href="/courses" class="btn btn-sm" style="background:#ffffff; color:#065f46 !important; font-weight:800; border-radius:12px; padding:9px 16px; box-shadow:0 4px 12px rgba(0,0,0,0.12);">
             <span class="material-symbols-rounded" style="color:#059669 !important;">play_circle</span> استعراض الكورسات
           </a>
@@ -113,6 +118,17 @@ export async function initDashboard() {
       </div>
     `);
     if (!welcomeOk) return;
+
+    document.getElementById('dashCourseSearchForm')?.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const q = (document.getElementById('dashCourseSearchInput')?.value || '').trim();
+      const target = q ? `/courses?q=${encodeURIComponent(q)}` : '/courses';
+      if (typeof window.navigateTo === 'function') {
+        window.navigateTo(target);
+      } else {
+        window.location.href = target;
+      }
+    });
 
     safeSetHTML('dashStats', `
       <div class="stat-card">

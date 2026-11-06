@@ -29,11 +29,11 @@ import {
 import { renderAdminCourseDetail, initAdminCourseDetail } from './pages/adminCourseDetail.js';
 import { renderAdminExamDetail, initAdminExamDetail } from './pages/adminExamDetail.js';
 import { renderNavbar, initNavbar } from './components/navbar.js';
-import { renderBedigitalFooter } from './components/bedigitalBrand.js';
+import { renderBrandErrorIllustration, renderBrandLoader } from './components/bedigitalBrand.js';
 import { api } from './utils/api.js';
 import { isLoggedIn, isTeacher, requireAuth, requireTeacher, getUser } from './utils/auth.js';
 import { showToast } from './components/toast.js';
-import { timeAgo, esc, gradesList } from './utils/helpers.js';
+import { timeAgo, esc, gradesList, studyTracksList } from './utils/helpers.js';
 
 const app = document.getElementById('app');
 
@@ -64,10 +64,10 @@ function renderErrorState(containerId, message) {
   const el = document.getElementById(containerId);
   if (!el) return;
   el.innerHTML = `
-    <div class="empty-state" style="padding:40px;">
-      <span class="material-symbols-rounded" style="color:var(--danger,#ef4444);font-size:3rem;">error</span>
-      <h3 style="margin:12px 0 6px;">حدث خطأ في التحميل</h3>
-      <p style="color:var(--text-muted);margin-bottom:16px;">${esc(message)}</p>
+    <div class="empty-state brand-error-state" style="padding:40px;">
+      ${renderBrandErrorIllustration('error')}
+      <h3 style="margin:12px 0 6px;font-weight:800;">حدث خطأ أثناء تحميل البيانات</h3>
+      <p style="color:var(--text-muted);margin-bottom:18px;max-width:420px;margin-inline:auto;">${esc(message)}</p>
       <button class="btn btn-primary btn-sm" onclick="window.location.reload()">
         <span class="material-symbols-rounded">refresh</span> إعادة المحاولة
       </button>
@@ -164,7 +164,7 @@ function renderProfile() {
     ${renderNavbar('profile')}
     <main class="main-content">
       <div class="page-header"><h1 class="page-title"><span class="material-symbols-rounded" style="color:var(--primary)">person</span> الملف الشخصي</h1></div>
-      <div id="profileContent"><div class="loading-spinner"><div class="spinner"></div></div></div>
+      <div id="profileContent">${renderBrandLoader('جاري تحميل بيانات الحساب...')}</div>
     </main>
   </div>`;
 }
@@ -175,6 +175,49 @@ async function initProfile(navId) {
     const user = await api.getMe();
     const container = document.getElementById('profileContent');
     if (!container) return;
+
+    const isStudent = user.role !== 'teacher';
+
+    if (isStudent) {
+      container.innerHTML = `
+        <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(320px, 1fr));gap:24px;max-width:850px">
+          <div class="card">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:8px;">
+              <h3 style="font-weight:800;display:flex;align-items:center;gap:8px;margin:0;"><span class="material-symbols-rounded" style="color:var(--primary)">verified_user</span> بيانات الطالب الموثقة</h3>
+              <span class="badge badge-info" style="font-size:0.75rem;"><span class="material-symbols-rounded" style="font-size:0.9rem;">lock</span> للقراءة فقط</span>
+            </div>
+            <div class="form-group"><label class="form-label">الاسم الرباعي</label><input type="text" class="form-input" value="${esc(user.name)}" disabled style="opacity:0.8;background:var(--bg-secondary);"></div>
+            <div class="form-group"><label class="form-label">رقم هاتف الطالب</label><input type="tel" class="form-input" value="${esc(user.phone)}" disabled dir="ltr" style="opacity:0.8;background:var(--bg-secondary);"></div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+              <div class="form-group"><label class="form-label">الصف الدراسي</label><input type="text" class="form-input" value="${esc(user.grade || 'غير محدد')}" disabled style="opacity:0.8;background:var(--bg-secondary);"></div>
+              <div class="form-group"><label class="form-label">الشعبة / نظام الدراسة</label><input type="text" class="form-input" value="${esc(user.study_track === 'لغات' ? 'لغات (Chemistry / Science)' : 'عام (عربي)')}" disabled style="opacity:0.8;background:var(--bg-secondary);"></div>
+            </div>
+            <div class="form-group"><label class="form-label">رقم هاتف ولي الأمر</label><input type="tel" class="form-input" value="${esc(user.parent_phone || '')}" disabled dir="ltr" style="opacity:0.8;background:var(--bg-secondary);"></div>
+          </div>
+          <div class="card" style="display:flex;flex-direction:column;justify-content:space-between;">
+            <div>
+              <h3 style="font-weight:800;margin-bottom:16px;display:flex;align-items:center;gap:8px;"><span class="material-symbols-rounded" style="color:var(--accent)">shield_lock</span> سياسة أمان الحساب والأجهزة</h3>
+              <div style="background:rgba(16,185,129,0.06);border:1px solid rgba(16,185,129,0.2);border-radius:14px;padding:18px;line-height:1.8;font-size:0.9rem;color:var(--text-secondary);">
+                <p style="margin-bottom:10px;font-weight:700;color:var(--text-primary);display:flex;align-items:center;gap:6px;">
+                  <span class="material-symbols-rounded" style="color:var(--primary);font-size:1.2rem;">info</span>
+                  تعديل البيانات محصور بإدارة المعلم فقط
+                </p>
+                <ul style="margin:0;padding-right:18px;display:flex;flex-direction:column;gap:8px;">
+                  <li>لحماية حسابك ومنع مشاركة الحسابات، لا يمكن تعديل الاسم أو الصف أو الشعبة أو كلمة المرور بعد التسجيل إلا من خلال المعلم.</li>
+                  <li>يُسمح بفتح الحساب على <strong>جهازين كحد أقصى</strong> (مثل: هاتفك المحمول + جهاز الكمبيوتر).</li>
+                  <li>لتغيير بياناتك أو طلب إعادة ضبط الأجهزة المسجلة، تواصل مع الدعم الفني للمنصة.</li>
+                </ul>
+              </div>
+            </div>
+            <div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--border-light);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
+              <span style="font-size:0.82rem;color:var(--text-muted)">عضو منذ ${new Date(user.created_at).toLocaleDateString('ar-EG', { year: 'numeric', month: 'long', day: 'numeric' })}</span>
+              <a href="https://wa.me/201012345678" target="_blank" rel="noopener noreferrer" class="btn btn-secondary btn-sm"><span class="material-symbols-rounded">support_agent</span> تواصل مع إدارة المنصة</a>
+            </div>
+          </div>
+        </div>
+      `;
+      return;
+    }
 
     container.innerHTML = `
       <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(320px, 1fr));gap:24px;max-width:850px">
@@ -188,7 +231,7 @@ async function initProfile(navId) {
                 ${gradesList.map(g => `<option value="${g}" ${user.grade===g?'selected':''}>${g}</option>`).join('')}
               </select>
             </div>
-            <div class="form-group"><label class="form-label">رقم هاتف ولي الأمر</label><input type="tel" class="form-input" id="pParent" value="${esc(user.parent_phone || '')}" dir="ltr" placeholder="01XXXXXXXXX" required></div>
+            <div class="form-group"><label class="form-label">رقم هاتف ولي الأمر</label><input type="tel" class="form-input" id="pParent" value="${esc(user.parent_phone || '')}" dir="ltr" placeholder="01XXXXXXXXX"></div>
             <button type="submit" class="btn btn-primary btn-block"><span class="material-symbols-rounded">save</span> حفظ التعديلات</button>
           </form>
         </div>
@@ -207,7 +250,7 @@ async function initProfile(navId) {
       </div>
     `;
 
-    document.getElementById('profileForm').addEventListener('submit', async (e) => {
+    document.getElementById('profileForm')?.addEventListener('submit', async (e) => {
       e.preventDefault();
       try {
         const updated = await api.updateProfile({
@@ -230,7 +273,7 @@ async function initProfile(navId) {
       } catch (err) { showToast(err.message, 'error'); }
     });
 
-    document.getElementById('passwordForm').addEventListener('submit', async (e) => {
+    document.getElementById('passwordForm')?.addEventListener('submit', async (e) => {
       e.preventDefault();
       const newPass = document.getElementById('newPass').value;
       const confirmPass = document.getElementById('confirmPass').value;
@@ -253,7 +296,7 @@ const routes = {
   '/login': { render: renderLogin, init: initLogin },
   '/register': { render: renderRegister, init: initRegister },
   '/parent-portal': { render: renderParentPortal, init: initParentPortal },
-  '/lab': { render: renderLab, init: initLab },
+  '/lab': { render: renderLab, init: initLab, auth: true },
   '/dashboard': { 
     render: () => {
       if (isTeacher()) {
@@ -269,7 +312,21 @@ const routes = {
     auth: true 
   },
   '/courses': { render: renderCourses, init: initCourses },
-  '/exams': { render: renderExams, init: initExams, auth: true },
+  '/exams': {
+    render: () => {
+      if (isTeacher()) {
+        window.history.replaceState(null, '', '/admin/exams');
+        return renderAdminExams();
+      }
+      window.history.replaceState(null, '', '/courses');
+      return renderCourses();
+    },
+    init: () => {
+      if (isTeacher()) return initAdminExams();
+      return initCourses();
+    },
+    auth: true
+  },
   '/my-results': { render: renderMyResults, init: initMyResults, auth: true },
   '/leaderboard': { render: renderLeaderboard, init: initLeaderboard, auth: true },
   '/live': { render: renderLive, init: initLive, auth: true },
@@ -372,11 +429,12 @@ async function navigate() {
 
   if (!route) {
     if (navigationId !== myNavId) return;
-    app.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;min-height:100vh;text-align:center;flex-direction:column;gap:16px">
-      <div style="font-size:5rem; color: var(--primary); display: flex; justify-content: center; align-items: center;"><span class="material-symbols-rounded" style="font-size: 5rem;">science</span></div>
-      <h1 style="font-size:2rem;font-weight:800">404</h1>
-      <p style="color:var(--text-muted)">الصفحة غير موجودة</p>
-      <a href="/" class="btn btn-primary">الرئيسية</a>
+    app.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;min-height:100vh;text-align:center;flex-direction:column;gap:14px;padding:24px;">
+      ${renderBrandErrorIllustration('404')}
+      <h1 style="font-size:2.4rem;font-weight:900;color:var(--primary);margin:0;">404</h1>
+      <h3 style="font-size:1.2rem;font-weight:800;margin:0;">الصفحة المطلوبة غير موجودة</h3>
+      <p style="color:var(--text-muted);max-width:380px;">ربما تم نقل هذا الرابط أو أنه غير متاح حالياً.</p>
+      <a href="/" class="btn btn-primary"><span class="material-symbols-rounded">home</span> العودة للرئيسية</a>
     </div>`;
     return;
   }
@@ -401,13 +459,6 @@ async function navigate() {
     const root = document.getElementById('app') || app;
     if (!root) return;
     root.innerHTML = route.render();
-    if (!root.querySelector('.bedigital-corporate-footer')) {
-      const mainContainer = root.querySelector('main.main-content') || root.querySelector('.landing') || root;
-      const footerHost = document.createElement('div');
-      footerHost.className = 'bedigital-footer-host';
-      footerHost.innerHTML = renderBedigitalFooter();
-      mainContainer.appendChild(footerHost);
-    }
     if (route.init) await route.init(myNavId);
   } catch (err) {
     if (navigationId === myNavId) {

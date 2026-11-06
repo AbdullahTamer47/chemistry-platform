@@ -100,6 +100,9 @@ export function debounce(fn, ms = 300) {
 }
 
 export const gradesList = [
+  'رابعة ابتدائي',
+  'خامسة ابتدائي',
+  'سادسة ابتدائي',
   'أولى إعدادي',
   'ثانية إعدادي',
   'ثالثة إعدادي',
@@ -107,6 +110,50 @@ export const gradesList = [
   'ثانية ثانوي',
   'ثالثة ثانوي',
 ];
+
+export const studyTracksList = ['عام', 'لغات'];
+
+export function getCourseGrades(course) {
+  if (!course) return [];
+  const raw = course.target_grades || course.grade || '';
+  if (Array.isArray(raw)) return raw.filter(Boolean);
+  if (typeof raw === 'string' && raw.startsWith('[')) {
+    try {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    } catch (_) {}
+  }
+  const list = String(raw).split(',').map(s => s.trim()).filter(Boolean);
+  if (list.length > 0) return list;
+  return course.grade ? [course.grade] : [];
+}
+
+export function getCourseTracks(course) {
+  if (!course) return ['عام', 'لغات'];
+  const raw = course.study_tracks || 'عام,لغات';
+  if (Array.isArray(raw)) return raw.filter(Boolean);
+  const list = String(raw).split(',').map(s => s.trim()).filter(Boolean);
+  return list.length > 0 ? list : ['عام', 'لغات'];
+}
+
+export function courseMatchesGrade(course, grade) {
+  if (!grade) return true;
+  if (grade === 'stage:primary') {
+    return getCourseGrades(course).some(g => g.includes('ابتدائي'));
+  }
+  if (grade === 'stage:prep') {
+    return getCourseGrades(course).some(g => g.includes('إعدادي'));
+  }
+  if (grade === 'stage:secondary') {
+    return getCourseGrades(course).some(g => g.includes('ثانوي'));
+  }
+  return getCourseGrades(course).includes(grade) || course?.grade === grade;
+}
+
+export function courseMatchesTrack(course, track) {
+  if (!track || track === 'all') return true;
+  return getCourseTracks(course).includes(track);
+}
 
 export function createPaginatedList({ data, containerId, renderList, filterFn, itemsPerPage = 10, searchPlaceholder = 'بحث...', onRender }) {
   let currentPage = 1;

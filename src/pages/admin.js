@@ -2,7 +2,7 @@ import { renderNavbar, initNavbar } from '../components/navbar.js';
 import { api } from '../utils/api.js';
 import { showToast } from '../components/toast.js';
 import { showModal, confirmModal } from '../components/modal.js';
-import { formatDate, gradesList, createPaginatedList, normalizeImageUrl, extractGoogleDriveId } from '../utils/helpers.js';
+import { formatDate, gradesList, getCourseGrades, createPaginatedList, normalizeImageUrl, extractGoogleDriveId } from '../utils/helpers.js';
 import { exportToCSV } from '../utils/export.js';
 import { openImageCropperModal, compressImageFile, dataUrlToFile } from '../utils/imageProcessor.js';
 
@@ -300,10 +300,30 @@ export async function initAdminCourses() {
       btn.addEventListener('click', () => {
         const id = btn.dataset.id;
         const c = courses.find(x => x.id == id);
+        const selectedGrades = getCourseGrades(c);
+        const currentTracks = c.study_tracks || 'عام,لغات';
         showModal('تعديل الكورس', `
           <div class="form-group"><label class="form-label">عنوان الكورس</label><input type="text" class="form-input" id="ecTitle" value="${escA(c.title)}" required></div>
           <div class="form-group"><label class="form-label">الوصف والتفاصيل</label><textarea class="form-input" id="ecDesc" rows="3">${escA(c.description || '')}</textarea></div>
-          <div class="form-group"><label class="form-label">المرحلة الدراسية</label><select class="form-select" id="ecGrade">${gradesList.map(g => `<option value="${g}" ${c.grade===g?'selected':''}>${g}</option>`).join('')}</select></div>
+          <div class="form-group">
+            <label class="form-label">الصفوف الدراسية المستهدفة (يمكنك اختيار صف واحد أو أكثر)</label>
+            <div style="display:grid;grid-template-columns:repeat(auto-fill, minmax(135px, 1fr));gap:8px;background:var(--bg-secondary);padding:12px;border-radius:10px;border:1px solid var(--border-light);">
+              ${gradesList.map(g => `
+                <label style="display:flex;align-items:center;gap:6px;font-size:0.82rem;font-weight:600;cursor:pointer;">
+                  <input type="checkbox" class="ec-grade-cb" value="${g}" ${selectedGrades.includes(g) ? 'checked' : ''}>
+                  <span>${g}</span>
+                </label>
+              `).join('')}
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">الشعبة / نظام الدراسة المستهدف</label>
+            <select class="form-select" id="ecStudyTracks">
+              <option value="عام,لغات" ${currentTracks === 'عام,لغات' ? 'selected' : ''}>عام ولغات معاً (كيمياء & Chemistry)</option>
+              <option value="عام" ${currentTracks === 'عام' ? 'selected' : ''}>عام فقط (عربي — كيمياء / علوم)</option>
+              <option value="لغات" ${currentTracks === 'لغات' ? 'selected' : ''}>لغات فقط (Chemistry / Science)</option>
+            </select>
+          </div>
           
           <div class="form-group">
             <label class="form-label">صورة غلاف الكورس (رابط أو رفع من جهازك)</label>
@@ -367,6 +387,9 @@ export async function initAdminCourses() {
         bindCourseThumbUpload('ecThumbFile', 'ecThumb');
         document.getElementById('updateCourseBtn').addEventListener('click', async () => {
           try {
+            const checkedGrades = Array.from(document.querySelectorAll('.ec-grade-cb:checked')).map(cb => cb.value);
+            if (!checkedGrades.length) return showToast('يرجى اختيار صف دراسي واحد على الأقل', 'warning');
+            const study_tracks = document.getElementById('ecStudyTracks').value || 'عام,لغات';
             const price = parseInt(document.getElementById('ecPrice').value) || 0;
             const original_price = parseInt(document.getElementById('ecOrigPrice').value) || 0;
             const course_type = document.getElementById('ecType').value;
@@ -377,7 +400,9 @@ export async function initAdminCourses() {
             await api.updateCourse(id, { 
               title: document.getElementById('ecTitle').value, 
               description: document.getElementById('ecDesc').value, 
-              grade: document.getElementById('ecGrade').value, 
+              grade: checkedGrades[0],
+              target_grades: checkedGrades.join(','),
+              study_tracks,
               thumbnail,
               price, 
               original_price,
@@ -433,7 +458,8 @@ export async function initAdminCourses() {
               </span>
             </div>
             <div class="exam-meta">
-              <span>${escA(c.grade)}</span>
+              <span>${escA(getCourseGrades(c).join(' + '))}</span>
+              <span>${escA(c.study_tracks === 'لغات' ? 'لغات (Chemistry)' : c.study_tracks === 'عام' ? 'عام (عربي)' : 'عام ولغات')}</span>
               <span>${c.lesson_count || 0} درس</span>
               <span>${c.student_count || 0} طالب</span>
               <span>${c.is_free ? 'مجاني' : c.price + ' جنيه'}</span>
@@ -454,7 +480,25 @@ export async function initAdminCourses() {
     showModal('إضافة كورس جديد', `
       <div class="form-group"><label class="form-label">عنوان الكورس</label><input type="text" class="form-input" id="mcTitle" placeholder="مثال: كورس العناصر الانتقالية (الصف الثالث الثانوي)" required></div>
       <div class="form-group"><label class="form-label">الوصف والتفاصيل</label><textarea class="form-input" id="mcDesc" rows="3" placeholder="تفاصيل المحاضرات والمذكرات المتضمنة..."></textarea></div>
-      <div class="form-group"><label class="form-label">المرحلة الدراسية</label><select class="form-select" id="mcGrade">${gradesList.map(g => `<option value="${g}" ${g === 'ثالثة ثانوي' ? 'selected' : ''}>${g}</option>`).join('')}</select></div>
+      <div class="form-group">
+        <label class="form-label">الصفوف الدراسية المستهدفة (يمكنك اختيار صف واحد أو أكثر)</label>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill, minmax(135px, 1fr));gap:8px;background:var(--bg-secondary);padding:12px;border-radius:10px;border:1px solid var(--border-light);">
+          ${gradesList.map(g => `
+            <label style="display:flex;align-items:center;gap:6px;font-size:0.82rem;font-weight:600;cursor:pointer;">
+              <input type="checkbox" class="mc-grade-cb" value="${g}" ${g === 'ثالثة ثانوي' ? 'checked' : ''}>
+              <span>${g}</span>
+            </label>
+          `).join('')}
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">الشعبة / نظام الدراسة المستهدف</label>
+        <select class="form-select" id="mcStudyTracks">
+          <option value="عام,لغات" selected>عام ولغات معاً (كيمياء & Chemistry)</option>
+          <option value="عام">عام فقط (عربي — كيمياء / علوم)</option>
+          <option value="لغات">لغات فقط (Chemistry / Science)</option>
+        </select>
+      </div>
       
       <div class="form-group">
         <label class="form-label">صورة غلاف الكورس (اختياري — رابط أو رفع من جهازك)</label>
@@ -519,6 +563,9 @@ export async function initAdminCourses() {
 
     document.getElementById('saveCourseBtn').addEventListener('click', async () => {
       try {
+        const checkedGrades = Array.from(document.querySelectorAll('.mc-grade-cb:checked')).map(cb => cb.value);
+        if (!checkedGrades.length) return showToast('يرجى اختيار صف دراسي واحد على الأقل', 'warning');
+        const study_tracks = document.getElementById('mcStudyTracks').value || 'عام,لغات';
         const price = parseInt(document.getElementById('mcPrice').value) || 0;
         const original_price = parseInt(document.getElementById('mcOrigPrice').value) || 0;
         const course_type = document.getElementById('mcType').value;
@@ -529,7 +576,9 @@ export async function initAdminCourses() {
         await api.createCourse({ 
           title: document.getElementById('mcTitle').value, 
           description: document.getElementById('mcDesc').value, 
-          grade: document.getElementById('mcGrade').value, 
+          grade: checkedGrades[0],
+          target_grades: checkedGrades.join(','),
+          study_tracks,
           thumbnail,
           price, 
           original_price,
@@ -804,7 +853,10 @@ export async function initAdminStudents() {
               <div class="form-group"><label class="form-label">الاسم</label><input type="text" class="form-input" id="esName" value="${escA(s.name)}" required></div>
               <div class="form-group"><label class="form-label">رقم هاتف الطالب</label><input type="text" class="form-input" id="esPhone" value="${escA(s.phone)}" required dir="ltr"></div>
               <div class="form-group"><label class="form-label">رقم هاتف ولي الأمر</label><input type="text" class="form-input" id="esParent" value="${escA(s.parent_phone || '')}" required dir="ltr"></div>
-              <div class="form-group"><label class="form-label">المرحلة</label><select class="form-select" id="esGrade">${gradesList.map(g => `<option value="${g}" ${s.grade===g?'selected':''}>${g}</option>`).join('')}</select></div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+                <div class="form-group"><label class="form-label">المرحلة الدراسية</label><select class="form-select" id="esGrade">${gradesList.map(g => `<option value="${g}" ${s.grade===g?'selected':''}>${g}</option>`).join('')}</select></div>
+                <div class="form-group"><label class="form-label">الشعبة / نظام الدراسة</label><select class="form-select" id="esStudyTrack"><option value="عام" ${(s.study_track||'عام')==='عام'?'selected':''}>عام (عربي)</option><option value="لغات" ${s.study_track==='لغات'?'selected':''}>لغات (Chemistry)</option></select></div>
+              </div>
               <div class="form-group"><label class="form-label">كلمة مرور جديدة (اتركها فارغة لعدم التغيير)</label><input type="password" class="form-input" id="esPass"></div>
               ${enrollmentsHtml}
               <button class="btn btn-primary btn-block" style="margin-top:20px" id="updateStBtn">تحديث الطالب</button>
@@ -827,8 +879,11 @@ export async function initAdminStudents() {
             document.getElementById('updateStBtn').addEventListener('click', async () => {
               try {
                 await api.updateStudent(s.id, {
-                  name: document.getElementById('esName').value, phone: document.getElementById('esPhone').value,
-                  parent_phone: document.getElementById('esParent').value, grade: document.getElementById('esGrade').value,
+                  name: document.getElementById('esName').value,
+                  phone: document.getElementById('esPhone').value,
+                  parent_phone: document.getElementById('esParent').value,
+                  grade: document.getElementById('esGrade').value,
+                  study_track: document.getElementById('esStudyTrack').value,
                   password: document.getElementById('esPass').value || undefined
                 });
                 showToast('تم تحديث الطالب', 'success');
@@ -881,6 +936,21 @@ export async function initAdminStudents() {
           } catch(err) { showToast(err.message, 'error'); }
         });
       });
+      document.querySelectorAll('.reset-dev-btn').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          const s = students.find(x => x.id == btn.dataset.id);
+          if (!s) return;
+          const ok = await confirmModal('إعادة ضبط الأجهزة', `هل أنت متأكد من مسح الأجهزة المسجلة للطالب "${escA(s.name)}" (${s.devices_count || 0}/2 أجهزة حالياً)؟ سيمكنه ذلك من تسجيل الدخول من جهازين جديدين.`);
+          if (ok) {
+            try {
+              const res = await api.resetStudentDevices(s.id);
+              showToast(res.message || 'تم إعادة ضبط أجهزة الطالب بنجاح', 'success');
+              load(currentGrade);
+            } catch (err) { showToast(err.message, 'error'); }
+          }
+        });
+      });
+
       document.querySelectorAll('.delete-st-btn').forEach(btn => {
         btn.addEventListener('click', async () => {
           const ok = await confirmModal('تأكيد حذف الطالب', 'هل أنت متأكد من حذف حساب الطالب نهائياً؟ سيتم حذف جميع اشتراكاته ودرجاته.');
@@ -903,12 +973,13 @@ export async function initAdminStudents() {
       filterFn: (s, search) => !search || s.name.toLowerCase().includes(search) || s.phone.includes(search) || (s.parent_phone && s.parent_phone.includes(search)),
       renderList: (items, totalFiltered) => {
         if (totalFiltered === 0) return '<div class="empty-state"><span class="material-symbols-rounded">group</span><h3>لا يوجد طلاب مطابقين</h3></div>';
-        return `<div class="mobile-swipe-hint"><span class="material-symbols-rounded">swipe</span> اسحب أفقياً لعرض باقي سجلات الطلاب</div><div class="table-wrapper"><table><thead><tr><th>الاسم</th><th>هاتف الطالب</th><th>هاتف ولي الأمر</th><th>المرحلة</th><th>الكورسات</th><th>المعدل</th><th>إجراءات</th></tr></thead><tbody>
-          ${items.map(s => `<tr><td style="font-weight:600">${escA(s.name)}</td><td dir="ltr">${escA(s.phone)}</td><td dir="ltr">${escA(s.parent_phone || '-')}</td><td>${escA(s.grade || '-')}</td><td>${s.enrolled_courses}</td><td><span class="badge ${(s.avg_score || 0) >= 60 ? 'badge-success' : 'badge-danger'}">${s.avg_score || 0}%</span></td>
+        return `<div class="mobile-swipe-hint"><span class="material-symbols-rounded">swipe</span> اسحب أفقياً لعرض باقي سجلات الطلاب</div><div class="table-wrapper"><table><thead><tr><th>الاسم</th><th>هاتف الطالب</th><th>هاتف ولي الأمر</th><th>المرحلة والشعبة</th><th>الأجهزة</th><th>الكورسات</th><th>المعدل</th><th>إجراءات</th></tr></thead><tbody>
+          ${items.map(s => `<tr><td style="font-weight:600">${escA(s.name)}</td><td dir="ltr">${escA(s.phone)}</td><td dir="ltr">${escA(s.parent_phone || '-')}</td><td>${escA(s.grade || '-')} <span class="badge ${s.study_track === 'لغات' ? 'badge-info' : 'badge-success'}" style="font-size:0.65rem;">${escA(s.study_track || 'عام')}</span></td><td><span class="badge ${(s.devices_count || 0) >= 2 ? 'badge-warning' : 'badge-info'}">${s.devices_count || 0}/2</span></td><td>${s.enrolled_courses}</td><td><span class="badge ${(s.avg_score || 0) >= 60 ? 'badge-success' : 'badge-danger'}">${s.avg_score || 0}%</span></td>
           <td><div style="display:flex;gap:4px">
             <button class="btn btn-ghost btn-sm wa-st-btn" data-id="${s.id}" title="رسائل وتقارير (طالب / ولي أمر)"><span class="material-symbols-rounded" style="color:#25D366">chat</span></button>
             <button class="btn btn-ghost btn-sm report-st-btn" data-id="${s.id}" title="تقرير الطالب"><span class="material-symbols-rounded" style="color:var(--info)">analytics</span></button>
-            <button class="btn btn-ghost btn-sm edit-st-btn" data-id="${s.id}" title="تعديل"><span class="material-symbols-rounded">edit</span></button>
+            <button class="btn btn-ghost btn-sm reset-dev-btn" data-id="${s.id}" title="إعادة ضبط أجهزة الطالب (${s.devices_count || 0}/2)"><span class="material-symbols-rounded" style="color:var(--warning)">devices</span></button>
+            <button class="btn btn-ghost btn-sm edit-st-btn" data-id="${s.id}" title="تعديل بيانات الطالب"><span class="material-symbols-rounded">edit</span></button>
             <button class="btn btn-ghost btn-sm text-danger delete-st-btn" data-id="${s.id}" title="حذف" style="color:var(--error)"><span class="material-symbols-rounded">delete</span></button>
           </div></td></tr>`).join('')}
         </tbody></table></div>`;

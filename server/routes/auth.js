@@ -37,12 +37,13 @@ function cleanName(name) {
 // Register
 router.post('/register', registerLimiter, (req, res) => {
   try {
-    const { name, phone, password, grade, parent_phone, parent_phone_secondary } = req.body;
+    const { name, phone, password, grade, study_track, parent_phone, parent_phone_secondary, device_id, device_name } = req.body;
 
     if (!name || !phone || !password || !grade) {
       return res.status(400).json({ error: 'الاسم ورقم الهاتف وكلمة المرور والمرحلة الدراسية مطلوبون' });
     }
 
+    const cleanTrack = study_track === 'لغات' ? 'لغات' : 'عام';
     const cleanPhone = normalizePhone(phone);
     const cleanParentPhone = normalizePhone(parent_phone);
     const cleanParentPhone2 = normalizePhone(parent_phone_secondary);
@@ -72,17 +73,29 @@ router.post('/register', registerLimiter, (req, res) => {
 
     const hashedPassword = bcrypt.hashSync(password, 8);
     const result = db.prepare(
-      'INSERT INTO users (name, phone, password, role, grade, parent_phone, parent_phone_secondary) VALUES (?, ?, ?, ?, ?, ?, ?)'
-    ).run(safeName, cleanPhone, hashedPassword, 'student', grade, cleanParentPhone, cleanParentPhone2 || null);
+      'INSERT INTO users (name, phone, password, role, grade, study_track, parent_phone, parent_phone_secondary) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+    ).run(safeName, cleanPhone, hashedPassword, 'student', grade, cleanTrack, cleanParentPhone, cleanParentPhone2 || null);
 
-    let user = db.prepare('SELECT id, name, role, phone, grade, parent_phone FROM users WHERE id = ?').get(result.lastInsertRowid);
+    let user = db.prepare('SELECT id, name, role, phone, grade, study_track, parent_phone FROM users WHERE id = ?').get(result.lastInsertRowid);
     if (!user) {
-      user = db.prepare('SELECT id, name, role, phone, grade, parent_phone FROM users WHERE phone = ?').get(cleanPhone);
+      user = db.prepare('SELECT id, name, role, phone, grade, study_track, parent_phone FROM users WHERE phone = ?').get(cleanPhone);
     }
 
     if (!user) {
       throw new Error('user lookup failed after insert');
     }
+
+    // Bind initial device on registration
+    try {
+      const activeDeviceId = device_id || req.headers['x-device-id'] || ('dev_' + Buffer.from(req.ip + (req.headers['user-agent'] || '')).toString('base64').slice(0, 20));
+      if (activeDeviceId) {
+        db.prepare('INSERT INTO user_devices (user_id, device_id, device_name) VALUES (?, ?, ?)').run(
+          user.id,
+          activeDeviceId,
+          device_name || 'جهاز طالب'
+        );
+      }
+    } catch (_) {}
 
     const token = generateToken(user);
 
@@ -127,19 +140,18 @@ router.post('/login', loginLimiter, (req, res) => {
 
     const { password: _, ...safeUser } = user;
 
-    // Device Fingerprinting (Maximum 2 Devices per Student, auto-rotates oldest)
+    // Strict Device Fingerprinting (Maximum 2 Devices per Student — blocks 3rd device until teacher resets)
     const { device_id, device_name } = req.body;
     if (user.role === 'student') {
-      const activeDeviceId = device_id || ('dev_' + Buffer.from(req.ip + (req.headers['user-agent'] || '')).toString('base64').slice(0, 20));
+      const activeDeviceId = device_id || req.headers['x-device-id'] || ('dev_' + Buffer.from(req.ip + (req.headers['user-agent'] || '')).toString('base64').slice(0, 20));
       const devices = db.prepare('SELECT * FROM user_devices WHERE user_id = ?').all(user.id);
       const isRegistered = devices.some(d => d.device_id === activeDeviceId);
 
       if (!isRegistered) {
         if (devices.length >= 2) {
-          const oldest = db.prepare('SELECT id FROM user_devices WHERE user_id = ? ORDER BY last_login ASC, id ASC LIMIT 1').get(user.id);
-          if (oldest) {
-            db.prepare('DELETE FROM user_devices WHERE id = ?').run(oldest.id);
-          }
+          return res.status(403).json({
+            error: 'عفواً، لقد وصلت للحد الأقصى المسموح به لتسجيل الدخول (جهازان فقط لكل طالب). لتسجيل الدخول من جهاز جديد يرجى التواصل مع المعلم لإعادة ضبط أجهزتك.'
+          });
         }
         db.prepare('INSERT INTO user_devices (user_id, device_id, device_name) VALUES (?, ?, ?)').run(
           user.id,
@@ -167,7 +179,7 @@ router.post('/login', loginLimiter, (req, res) => {
 router.get('/me', authMiddleware, (req, res) => {
   try {
     let user = db.prepare(`
-      SELECT u.id, u.name, u.phone, u.role, u.grade, u.parent_phone, u.parent_phone_secondary, u.avatar, u.created_at,
+      SELECT u.id, u.name, u.phone, u.role, u.grade, COALESCE(u.study_track, 'عام') as study_track, u.parent_phone, u.parent_phone_secondary, u.avatar, u.created_at,
              COALESCE(sw.balance, 0) as balance
       FROM users u
       LEFT JOIN student_wallets sw ON sw.user_id = u.id
@@ -180,6 +192,7 @@ router.get('/me', authMiddleware, (req, res) => {
         phone: req.user.phone || '',
         role: req.user.role || 'student',
         grade: req.user.grade || 'ثالثة ثانوي',
+        study_track: req.user.study_track || 'عام',
         parent_phone: '',
         balance: 0
       };
@@ -190,9 +203,12 @@ router.get('/me', authMiddleware, (req, res) => {
   }
 });
 
-// Update profile (Father + Mother phones) - supports both /me and /profile
+// Update profile (Teacher only; student profile data is locked after registration)
 router.put(['/me', '/profile'], authMiddleware, (req, res) => {
   try {
+    if (req.user.role === 'student') {
+      return res.status(403).json({ error: 'لا يمكن للطالب تعديل بيانات الحساب بعد التسجيل إلا من خلال المعلم' });
+    }
     const { name, grade, parent_phone, parent_phone_secondary } = req.body;
     const cleanedName = name !== undefined ? cleanName(name) : null;
     if (name !== undefined && (!cleanedName || cleanedName.length < 3)) {
@@ -204,7 +220,7 @@ router.put(['/me', '/profile'], authMiddleware, (req, res) => {
     db.prepare('UPDATE users SET name = COALESCE(?, name), grade = COALESCE(?, grade), parent_phone = COALESCE(?, parent_phone), parent_phone_secondary = COALESCE(?, parent_phone_secondary) WHERE id = ?')
       .run(cleanedName, grade ?? null, normParent1, normParent2, req.user.id);
     const user = db.prepare(`
-      SELECT u.id, u.name, u.phone, u.role, u.grade, u.parent_phone, u.parent_phone_secondary, u.avatar, u.created_at,
+      SELECT u.id, u.name, u.phone, u.role, u.grade, COALESCE(u.study_track, 'عام') as study_track, u.parent_phone, u.parent_phone_secondary, u.avatar, u.created_at,
              COALESCE(sw.balance, 0) as balance
       FROM users u
       LEFT JOIN student_wallets sw ON sw.user_id = u.id
@@ -216,9 +232,12 @@ router.put(['/me', '/profile'], authMiddleware, (req, res) => {
   }
 });
 
-// Change password
+// Change password (Teacher only; students contact teacher to change password)
 router.put('/change-password', authMiddleware, (req, res) => {
   try {
+    if (req.user.role === 'student') {
+      return res.status(403).json({ error: 'لا يمكن للطالب تغيير كلمة المرور إلا من خلال المعلم' });
+    }
     const { currentPassword, newPassword } = req.body;
     const user = db.prepare('SELECT password, phone FROM users WHERE id = ?').get(req.user.id);
     const pwError = checkPasswordStrength(newPassword, user?.phone);
@@ -243,7 +262,7 @@ router.get('/dashboard', authMiddleware, (req, res) => {
 
     // Fetch user with balance
     let user = db.prepare(`
-      SELECT u.id, u.name, u.role, u.phone, u.grade, u.parent_phone, u.parent_phone_secondary, u.avatar, u.created_at,
+      SELECT u.id, u.name, u.role, u.phone, u.grade, COALESCE(u.study_track, 'عام') as study_track, u.parent_phone, u.parent_phone_secondary, u.avatar, u.created_at,
              COALESCE(sw.balance, 0) as balance
       FROM users u
       LEFT JOIN student_wallets sw ON sw.user_id = u.id

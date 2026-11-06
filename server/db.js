@@ -742,12 +742,15 @@ addColumnIfMissing('exam_sessions', 'retake_reason', 'TEXT');
 addColumnIfMissing('exam_sessions', 'updated_at', 'DATETIME');
 addColumnIfMissing('enrollments', 'expires_at', 'DATETIME');
 addColumnIfMissing('users', 'parent_phone_secondary', 'TEXT');
+addColumnIfMissing('users', 'study_track', "TEXT DEFAULT 'عام'");
 addColumnIfMissing('courses', 'course_type', "TEXT DEFAULT 'monthly'");
 addColumnIfMissing('courses', 'duration_days', 'INTEGER DEFAULT 30');
 addColumnIfMissing('courses', 'original_price', 'REAL DEFAULT 0');
 addColumnIfMissing('courses', 'badge_text', 'TEXT');
 addColumnIfMissing('courses', 'updated_at', 'DATETIME');
 addColumnIfMissing('courses', 'allow_chem_lab', 'INTEGER DEFAULT 0');
+addColumnIfMissing('courses', 'target_grades', 'TEXT');
+addColumnIfMissing('courses', 'study_tracks', "TEXT DEFAULT 'عام,لغات'");
 addColumnIfMissing('activation_codes', 'code_purpose', "TEXT DEFAULT 'course'");
 addColumnIfMissing('activation_codes', 'wallet_amount', 'REAL DEFAULT 0');
 

@@ -138,6 +138,16 @@ router.post('/adaptive-mistakes-quiz', authMiddleware, (req, res) => {
       SELECT answers FROM exam_attempts WHERE user_id = ? AND completed_at IS NOT NULL
     `).all(req.user.id);
 
+    if (!isTeacherUser && attempts.length === 0) {
+      return res.json({
+        no_attempts: true,
+        has_mistakes: false,
+        count: 0,
+        questions: [],
+        message: 'لم تقم بدخول أو حل أي امتحانات بعد! افتح أحد الكورسات المشترك بها وقم بحل اختبارات المحاضرات أولاً ليقوم النظام بتحليل إجاباتك وتوليد تدريب علاجي مخصص لأخطائك.'
+      });
+    }
+
     const wrongQuestionIds = new Set();
     attempts.forEach(a => {
       try {
