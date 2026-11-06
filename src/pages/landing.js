@@ -5,6 +5,7 @@ import drZiadPoseFlask from '../assets/dr-ziad-pose-flask.jpg';
 import drZiadPoseThumbs from '../assets/dr-ziad-pose-thumbs.jpg';
 import { isLoggedIn, isTeacher } from '../utils/auth.js';
 import { renderPublicHeader, initPublicHeader } from '../components/publicHeader.js';
+import { renderBedigitalFooter } from '../components/bedigitalBrand.js';
 import zraLogoFace from '../assets/zra-logo-face.png';
 import zraLogoText from '../assets/zra-logo-text.png';
 
@@ -318,13 +319,13 @@ export function renderLanding() {
     </section>
 
     <!-- Footer -->
-    <footer class="footer" style="background: var(--bg-card); border-top: 1px solid var(--border-light); padding-top: 60px;">
+    <footer class="footer" style="background: var(--bg-card); border-top: 1px solid var(--border-light); padding-top: 50px;">
       <div class="section-container">
-        <div class="footer-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 40px; margin-bottom: 40px;">
+        <div class="footer-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 40px; margin-bottom: 36px;">
           <div>
             <div class="footer-logo" style="display: flex; align-items: center; gap: 8px; margin-bottom: 16px;">
-              <img src="${zraLogoFace}" alt="Z.R.A" class="logo-face-img" style="height: 48px;" />
-              <img src="${zraLogoText}" alt="Z.R.A" class="logo-text-img" style="height: 36px;" />
+              <img src="${zraLogoFace}" alt="Z.R.A" class="logo-face-img" style="height: 48px;" loading="lazy" decoding="async" />
+              <img src="${zraLogoText}" alt="Z.R.A" class="logo-text-img" style="height: 36px;" loading="lazy" decoding="async" />
             </div>
             <p class="footer-desc" style="color: var(--text-secondary); font-size: 0.9rem; line-height: 1.8; max-width: 380px;">منصة كيمياوي التعليمية - تجربة دراسة كيمياء فريدة وشاملة تضمن للطلاب الفهم الدقيق، التطبيق العملي، والتفوق الأكاديمي مع د. زياد رمزي عياد.</p>
           </div>
@@ -350,13 +351,8 @@ export function renderLanding() {
             </div>
           </div>
         </div>
-        <div class="footer-bottom" style="padding: 24px 0; border-top: 1px solid var(--border-light); text-align: center; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px;">
-          <p style="color: var(--text-muted); font-size: 0.85rem; font-weight: 600;">© ${new Date().getFullYear()} كيمياوي - د. زياد رمزي عياد | جميع الحقوق محفوظة</p>
-          <div style="color: var(--text-muted); font-size: 0.85rem; font-weight: 600;">
-            تم التطوير بواسطة <span style="color: var(--primary); font-weight: 800;">Abdullah Yassen</span>
-          </div>
-        </div>
       </div>
+      ${renderBedigitalFooter()}
     </footer>
   </div>`;
 }

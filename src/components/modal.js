@@ -1,5 +1,5 @@
 export function showModal(title, content, onClose) {
-  const existing = document.querySelector('.modal-overlay');
+  const existing = document.querySelector('.modal-overlay:not(.cropper-submodal-overlay)');
   if (existing) existing.remove();
 
   const overlay = document.createElement('div');

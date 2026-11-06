@@ -4,23 +4,20 @@ import { isLoggedIn, getUser } from '../utils/auth.js';
 import { showToast } from '../components/toast.js';
 import { showModal } from '../components/modal.js';
 import { renderPublicHeader, initPublicHeader } from '../components/publicHeader.js';
-import { esc, formatFullArabicDate, getShortGradeBadge, gradesList } from '../utils/helpers.js';
+import { esc, formatFullArabicDate, getShortGradeBadge, gradesList, normalizeImageUrl, generateCourseFallbackSvg } from '../utils/helpers.js';
 import { renderChemMarkdown } from '../utils/chemMarkdown.js';
 
-import chemCurriculum from '../assets/chem-curriculum-3d.jpg';
-import chemExam from '../assets/chem-exam-mastery-3d.jpg';
-
 export function getCourseCover(c) {
-  const thumb = c?.thumbnail ? String(c.thumbnail).trim() : '';
+  const thumb = normalizeImageUrl(c?.thumbnail);
   if (thumb && (thumb.startsWith('data:image/') || thumb.startsWith('/') || thumb.startsWith('http://') || thumb.startsWith('https://'))) {
     return thumb;
   }
-  if (c?.course_type === 'term') return chemExam;
-  return chemCurriculum;
+  return generateCourseFallbackSvg(c);
 }
 
 export function renderCourseCardBassthalk(c, { isRecommended = false } = {}) {
   const coverImg = getCourseCover(c);
+  const fallbackImg = generateCourseFallbackSvg(c);
   const shortGrade = getShortGradeBadge(c.grade);
   const isFree = c.is_free || Number(c.price) === 0;
   const priceLabel = isFree ? 'مجاني' : `${c.price} جنيه`;
@@ -37,7 +34,7 @@ export function renderCourseCardBassthalk(c, { isRecommended = false } = {}) {
         </div>
       ` : ''}
       <a href="/courses/${c.id}" class="course-card-thumb-wrap" aria-label="${esc(c.title)}">
-        <img src="${coverImg}" alt="${esc(c.title)}" loading="lazy">
+        <img src="${esc(coverImg)}" data-fallback="${esc(fallbackImg)}" onerror="if(this.src!==this.dataset.fallback){this.src=this.dataset.fallback;}" alt="${esc(c.title)}" loading="lazy" decoding="async">
       </a>
 
       <div class="course-card-body-bassthalk">

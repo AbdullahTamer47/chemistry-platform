@@ -729,6 +729,8 @@ addColumnIfMissing('exam_attempts', 'late', 'INTEGER DEFAULT 0');
 addColumnIfMissing('lessons', 'pdf_url', 'TEXT');
 addColumnIfMissing('lessons', 'prerequisite_exam_id', 'INTEGER');
 addColumnIfMissing('lessons', 'prerequisite_passing_score', 'INTEGER DEFAULT 60');
+addColumnIfMissing('lessons', 'video_source', "TEXT DEFAULT 'custom_shield'");
+addColumnIfMissing('lessons', 'vdocipher_id', 'TEXT');
 addColumnIfMissing('exams', 'start_time', 'DATETIME');
 addColumnIfMissing('exams', 'end_time', 'DATETIME');
 addColumnIfMissing('exams', 'exam_type', "TEXT DEFAULT 'exam'");
@@ -767,6 +769,7 @@ seedSetting('paymob_api_key', process.env.PAYMOB_API_KEY || '');
 seedSetting('paymob_integration_id_card', process.env.PAYMOB_INTEGRATION_ID_CARD || '');
 seedSetting('paymob_integration_id_wallet', process.env.PAYMOB_INTEGRATION_ID_WALLET || '');
 seedSetting('paymob_iframe_id', process.env.PAYMOB_IFRAME_ID || '');
+seedSetting('vdocipher_api_secret', process.env.VDOCIPHER_API_SECRET || '');
 
 // Always ensure teacher account exists
 try {
@@ -955,13 +958,24 @@ const indexes = [
   'CREATE INDEX IF NOT EXISTS idx_questions_exam ON questions(exam_id)',
   'CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id)',
   'CREATE INDEX IF NOT EXISTS idx_lesson_progress_user ON lesson_progress(user_id)',
+  'CREATE INDEX IF NOT EXISTS idx_lesson_progress_user_lesson ON lesson_progress(user_id, lesson_id)',
   'CREATE INDEX IF NOT EXISTS idx_code_usage_code ON code_usage(code_id)',
   'CREATE INDEX IF NOT EXISTS idx_payment_requests_user_status ON payment_requests(user_id, status)',
   'CREATE INDEX IF NOT EXISTS idx_fawry_orders_user_status ON fawry_orders(user_id, status)',
   'CREATE INDEX IF NOT EXISTS idx_live_sessions_scheduled ON live_sessions(scheduled_at)',
   'CREATE INDEX IF NOT EXISTS idx_enrollments_user ON enrollments(user_id)',
   'CREATE INDEX IF NOT EXISTS idx_enrollments_course ON enrollments(course_id)',
+  'CREATE INDEX IF NOT EXISTS idx_enrollments_user_course ON enrollments(user_id, course_id, is_suspended)',
   'CREATE INDEX IF NOT EXISTS idx_lesson_notes_user_lesson ON lesson_notes(user_id, lesson_id)',
+  'CREATE INDEX IF NOT EXISTS idx_courses_grade_type ON courses(grade, course_type, created_at)',
+  'CREATE INDEX IF NOT EXISTS idx_lessons_course_chapter ON lessons(course_id, chapter_id, order_num)',
+  'CREATE INDEX IF NOT EXISTS idx_exams_course_chapter ON exams(course_id, chapter_id)',
+  'CREATE INDEX IF NOT EXISTS idx_users_role_grade ON users(role, grade)',
+  'CREATE INDEX IF NOT EXISTS idx_users_phone ON users(phone)',
+  'CREATE INDEX IF NOT EXISTS idx_users_parent_phone ON users(parent_phone)',
+  'CREATE INDEX IF NOT EXISTS idx_activation_codes_code_purpose ON activation_codes(code, code_purpose, is_active)',
+  'CREATE INDEX IF NOT EXISTS idx_discussions_course_lesson ON discussions(course_id, lesson_id)',
+  'CREATE INDEX IF NOT EXISTS idx_video_tokens_token_user ON video_tokens(token, user_id)',
 ];
 for (const idx of indexes) {
   try { db.exec(idx); } catch (e) {}

@@ -1,7 +1,7 @@
 import { renderNavbar, initNavbar } from '../components/navbar.js';
 import { renderPublicHeader, initPublicHeader } from '../components/publicHeader.js';
 import { isLoggedIn } from '../utils/auth.js';
-import { renderChemEquation } from '../utils/chemMarkdown.js';
+import { renderChemEquation, renderChemToolbar, bindChemToolbars } from '../utils/chemMarkdown.js';
 import { esc } from '../utils/helpers.js';
 import {
   calculateMolarMass,
@@ -51,6 +51,9 @@ export function renderLab() {
           <button type="button" class="course-bassthalk-tab-btn" data-lab-tab="transition-titration">
             <span class="material-symbols-rounded">experiment</span> السلسلة الانتقالية والمعايرة
           </button>
+          <button type="button" class="course-bassthalk-tab-btn" data-lab-tab="flashcards">
+            <span class="material-symbols-rounded">style</span> بطاقات المراجعة الذكية (Flashcards)
+          </button>
         </div>
 
         <!-- TAB 1: EQUATIONS BANK -->
@@ -80,6 +83,7 @@ export function renderLab() {
               اكتب المتفاعلات والنواتج مفصولة بعلامة <code dir="ltr">-&gt;</code> أو <code dir="ltr">=</code> وسيقوم المساعد بوزن المعادلة وحساب المعاملات وعدد الذرات فوراً:
             </p>
 
+            ${renderChemToolbar('balancerInput')}
             <div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:14px;">
               <input type="text" id="balancerInput" class="form-input" dir="ltr" value="Fe + O2 -> Fe3O4" placeholder="مثال: Fe + H2O -> Fe3O4 + H2" style="flex:1; min-width:240px; font-family:monospace; font-size:1.05rem; font-weight:700;">
               <button type="button" id="balanceBtn" class="btn btn-primary" style="gap:6px; font-weight:800; padding:0 24px;">
@@ -208,6 +212,25 @@ export function renderLab() {
             </div>
           </div>
         </section>
+
+        <!-- TAB 6: SMART CHEMISTRY FLASHCARDS -->
+        <section id="lab-pane-flashcards" class="lab-pane" style="display:none;">
+          <div class="card">
+            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; margin-bottom:18px;">
+              <div>
+                <h3 style="font-size:1.15rem; font-weight:900; margin:0 0 4px; display:flex; align-items:center; gap:8px;">
+                  <span class="material-symbols-rounded" style="color:var(--primary);">style</span>
+                  بطاقات المراجعة الذكية السريعة (اضغط على البطاقة لقلبها وإظهار الإجابة)
+                </h3>
+                <p style="font-size:0.84rem; color:var(--text-secondary); margin:0;">مراجعة مركزة لأهم معادلات وألوان ورواسب وكواشف الكيمياء للثانوية العامة</p>
+              </div>
+              <button type="button" id="shuffleFlashcardsBtn" class="btn btn-outline btn-sm" style="gap:6px; font-weight:800;">
+                <span class="material-symbols-rounded">shuffle</span> خلط البطاقات عشوائياً
+              </button>
+            </div>
+            <div id="flashcardsGrid" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(min(100%, 320px), 1fr)); gap:16px;"></div>
+          </div>
+        </section>
       </main>
     </div>
   `;
@@ -221,8 +244,9 @@ export function initLab() {
   }
 
   // Tab switching
+  bindChemToolbars();
   const tabBtns = document.querySelectorAll('[data-lab-tab]');
-  const panes = ['equations-bank', 'equation-balancer', 'qualitative-lab', 'molar-calc', 'transition-titration'];
+  const panes = ['equations-bank', 'equation-balancer', 'qualitative-lab', 'molar-calc', 'transition-titration', 'flashcards'];
   tabBtns.forEach(btn => {
     btn.addEventListener('click', () => {
       tabBtns.forEach(b => b.classList.remove('active'));
@@ -303,7 +327,7 @@ export function initLab() {
           ${renderChemEquation(res.balanced)}
         </div>
         <div style="font-size:0.84rem; font-weight:800; margin-bottom:8px; color:var(--text-primary);">جدول التحقق من تساوي عدد الذرات في الطرفين:</div>
-        <div style="display:flex; gap:10px; flex-wrap:wrap;">
+        <div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:12px;">
           ${res.atomSummary.map(a => `
             <div style="background:var(--bg-card); border:1px solid var(--border-light); border-radius:10px; padding:8px 14px; display:flex; align-items:center; gap:8px;">
               <strong dir="ltr" style="color:var(--primary); font-size:1rem;">${esc(a.element)}</strong>
@@ -311,8 +335,23 @@ export function initLab() {
             </div>
           `).join('')}
         </div>
+        <div id="balancerStreamExplanation" style="font-size:0.84rem; color:var(--text-secondary); background:var(--bg-card); padding:10px 14px; border-radius:10px; border-right:3px solid var(--primary); min-height:36px;"></div>
       </div>
     `;
+    const streamEl = document.getElementById('balancerStreamExplanation');
+    if (streamEl) {
+      const fullExplain = `التفسير العلمي (قانون بقاء الكتلة): تم ضبط المعاملات الجزيئية بحيث يتساوى مجموع ذرات العناصر (${res.atomSummary.map(a => `${a.element}=${a.count}`).join(' ، ')}) في طرفي المتفاعلات والنواتج بدقة.`;
+      const words = fullExplain.split(' ');
+      let idx = 0;
+      streamEl.textContent = '';
+      const streamTimer = setInterval(() => {
+        if (idx >= words.length) {
+          clearInterval(streamTimer);
+          return;
+        }
+        streamEl.textContent += (idx === 0 ? '' : ' ') + words[idx++];
+      }, 22);
+    }
   }
 
   document.getElementById('balanceBtn')?.addEventListener('click', runBalancer);
@@ -463,4 +502,63 @@ export function initLab() {
       </div>
     `;
   });
+
+  // 6. Smart Chemistry Flashcards
+  const flashcardsGrid = document.getElementById('flashcardsGrid');
+  let flashcardsDeck = THANAVYA_REACTIONS.slice(0, 18).map((r, i) => ({
+    id: i + 1,
+    category: r.category,
+    frontTitle: r.title,
+    frontHint: `شروط التفاعل: ${r.conditions || 'قياسية'}`,
+    backEq: r.balanced,
+    backObs: r.colorChange,
+    backNotes: r.notes
+  }));
+
+  function renderFlashcards() {
+    if (!flashcardsGrid) return;
+    flashcardsGrid.innerHTML = flashcardsDeck.map(card => `
+      <div class="chem-flashcard" data-fc-id="${card.id}" style="background:var(--bg-secondary); border:1.5px solid var(--border-light); border-radius:16px; padding:18px; cursor:pointer; transition:transform 0.2s ease, border-color 0.2s ease; position:relative; min-height:190px; display:flex; flex-direction:column; justify-content:space-between;">
+        <div class="fc-front">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+            <span class="badge badge-info" style="font-size:0.7rem;">${esc(card.category)}</span>
+            <span style="font-size:0.75rem; color:var(--primary); font-weight:800; display:inline-flex; align-items:center; gap:4px;">
+              <span class="material-symbols-rounded" style="font-size:0.95rem;">flip</span> اضغط لقلب البطاقة
+            </span>
+          </div>
+          <h4 style="font-size:1.02rem; font-weight:900; color:var(--text-primary); margin:0 0 10px; line-height:1.5;">س: اكتب المعادلة والمشاهدة لـ: ${esc(card.frontTitle)}؟</h4>
+          <p style="font-size:0.82rem; color:var(--text-secondary); margin:0;">${esc(card.frontHint)}</p>
+        </div>
+        <div class="fc-back" style="display:none;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+            <span class="badge badge-success" style="font-size:0.7rem;">الإجابة النموذجية</span>
+            <span style="font-size:0.74rem; color:var(--text-muted);">اضغط للعودة للسؤال</span>
+          </div>
+          <div dir="ltr" style="background:#0f172a; color:#34d399; padding:10px; border-radius:10px; font-family:monospace; font-size:0.92rem; font-weight:800; text-align:center; margin-bottom:8px;">
+            ${renderChemEquation(card.backEq)}
+          </div>
+          <div style="font-size:0.8rem; color:var(--text-primary); margin-bottom:4px;"><strong>المشاهدة:</strong> ${esc(card.backObs)}</div>
+          <div style="font-size:0.78rem; color:var(--text-secondary);">${esc(card.backNotes)}</div>
+        </div>
+      </div>
+    `).join('');
+
+    flashcardsGrid.querySelectorAll('.chem-flashcard').forEach(cardEl => {
+      cardEl.addEventListener('click', () => {
+        const front = cardEl.querySelector('.fc-front');
+        const back = cardEl.querySelector('.fc-back');
+        if (!front || !back) return;
+        const showingBack = back.style.display !== 'none';
+        front.style.display = showingBack ? 'block' : 'none';
+        back.style.display = showingBack ? 'none' : 'block';
+        cardEl.style.borderColor = showingBack ? 'var(--border-light)' : 'var(--primary)';
+      });
+    });
+  }
+
+  document.getElementById('shuffleFlashcardsBtn')?.addEventListener('click', () => {
+    flashcardsDeck = [...flashcardsDeck].sort(() => Math.random() - 0.5);
+    renderFlashcards();
+  });
+  renderFlashcards();
 }

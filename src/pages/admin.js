@@ -2,9 +2,9 @@ import { renderNavbar, initNavbar } from '../components/navbar.js';
 import { api } from '../utils/api.js';
 import { showToast } from '../components/toast.js';
 import { showModal, confirmModal } from '../components/modal.js';
-import { formatDate, gradesList, createPaginatedList } from '../utils/helpers.js';
+import { formatDate, gradesList, createPaginatedList, normalizeImageUrl, extractGoogleDriveId } from '../utils/helpers.js';
 import { exportToCSV } from '../utils/export.js';
-import { openImageCropperModal, compressImageFile } from '../utils/imageProcessor.js';
+import { openImageCropperModal, compressImageFile, dataUrlToFile } from '../utils/imageProcessor.js';
 
 export function renderAdmin() {
   return `<div class="app-layout">
@@ -249,14 +249,25 @@ export async function initAdminCourses() {
       preview = document.createElement('img');
       preview.id = `${urlInputId}Preview`;
       preview.alt = 'معاينة صورة الكورس';
-      preview.style.cssText = 'display:none;width:100%;aspect-ratio:16/10;object-fit:cover;border-radius:12px;margin-top:10px;border:1px solid var(--border-light);';
+      preview.style.cssText = 'display:none;width:100%;aspect-ratio:16/10;object-fit:cover;border-radius:12px;margin-top:10px;border:1px solid var(--border-light);background:#064e3b;';
       urlInput.closest('.form-group')?.appendChild(preview);
     }
-    const showPreview = (src) => {
-      if (src) { preview.src = src; preview.style.display = 'block'; } else { preview.style.display = 'none'; }
+    const showPreview = (rawSrc) => {
+      const normalized = normalizeImageUrl(rawSrc);
+      if (normalized) {
+        if (extractGoogleDriveId(rawSrc) && urlInput.value.trim() !== normalized) {
+          urlInput.value = normalized;
+          showToast('تم تحويل رابط Google Drive إلى رابط صورة مباشر تلقائياً', 'info');
+        }
+        preview.src = normalized;
+        preview.style.display = 'block';
+      } else {
+        preview.style.display = 'none';
+      }
     };
     showPreview(urlInput.value.trim());
     urlInput.addEventListener('input', () => showPreview(urlInput.value.trim()));
+    urlInput.addEventListener('change', () => showPreview(urlInput.value.trim()));
     fileInput.addEventListener('change', async (e) => {
       const file = e.target.files?.[0];
       if (!file) return;
@@ -267,7 +278,17 @@ export async function initAdminCourses() {
         if (!cropped) return;
         urlInput.value = cropped;
         showPreview(cropped);
-        showToast('تم تجهيز صورة الكورس بنجاح، اضغط حفظ لتطبيقها', 'success');
+        try {
+          const webpFile = dataUrlToFile(cropped, 'course_cover');
+          const uploaded = await api.uploadFile(webpFile);
+          if (uploaded?.url) {
+            urlInput.value = uploaded.url;
+            showPreview(uploaded.url);
+          }
+        } catch (uploadErr) {
+          // Keeps compressed WebP dataURL if upload endpoint fails
+        }
+        showToast('تم قص ورفع صورة الكورس بنجاح — اضغط حفظ لتطبيقها', 'success');
       } catch (err) {
         showToast(err.message || 'تعذر معالجة الصورة', 'error');
       }
@@ -350,7 +371,7 @@ export async function initAdminCourses() {
             const original_price = parseInt(document.getElementById('ecOrigPrice').value) || 0;
             const course_type = document.getElementById('ecType').value;
             const badge_text = document.getElementById('ecBadge').value;
-            const thumbnail = document.getElementById('ecThumb').value.trim();
+            const thumbnail = normalizeImageUrl(document.getElementById('ecThumb').value.trim());
             const sequential_access = document.getElementById('ecSequential').checked;
             const allow_student_replies = document.getElementById('ecReplies').checked;
             await api.updateCourse(id, { 
@@ -502,7 +523,7 @@ export async function initAdminCourses() {
         const original_price = parseInt(document.getElementById('mcOrigPrice').value) || 0;
         const course_type = document.getElementById('mcType').value;
         const badge_text = document.getElementById('mcBadge').value;
-        const thumbnail = document.getElementById('mcThumb').value.trim();
+        const thumbnail = normalizeImageUrl(document.getElementById('mcThumb').value.trim());
         const sequential_access = document.getElementById('mcSequential').checked;
         const allow_student_replies = document.getElementById('mcReplies').checked;
         await api.createCourse({ 

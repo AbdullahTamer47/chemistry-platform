@@ -1,4 +1,7 @@
-import { showModal } from '../components/modal.js';
+/**
+ * Interactive Image Cropper & Resizer Modal for Course Thumbnails
+ * Uses a dedicated stacked overlay (z-index: 11000) so it NEVER closes or destroys an underlying modal.
+ */
 
 /**
  * Loads a File, Blob, or DataURL into an HTMLImageElement
@@ -124,7 +127,20 @@ export async function openImageCropperModal(file, { targetWidth = 960, targetHei
       </div>
     `;
 
-    const { overlay, close } = showModal('ضبط وقص صورة غلاف الكورس', modalHtml);
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay cropper-submodal-overlay';
+    overlay.style.zIndex = '11000';
+    overlay.innerHTML = `
+      <div class="modal" style="max-width:560px;">
+        <div class="modal-header">
+          <h3 class="modal-title">ضبط وقص صورة غلاف الكورس</h3>
+          <button type="button" class="modal-close" id="cropperModalClose"><span class="material-symbols-rounded">close</span></button>
+        </div>
+        <div class="modal-body">${modalHtml}</div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+    const close = () => { overlay.remove(); };
     const canvas = overlay.querySelector('#cropperPreviewCanvas');
     const ctx = canvas.getContext('2d');
     const zoomSlider = overlay.querySelector('#cropZoomSlider');
@@ -263,11 +279,13 @@ export async function openImageCropperModal(file, { targetWidth = 960, targetHei
       resolve(outDataUrl);
     });
 
-    overlay.querySelector('#cancelCropBtn')?.addEventListener('click', () => {
+    const onCancel = () => {
       cleanup();
       close();
       resolve(null);
-    });
+    };
+    overlay.querySelector('#cancelCropBtn')?.addEventListener('click', onCancel);
+    overlay.querySelector('#cropperModalClose')?.addEventListener('click', onCancel);
   });
 }
 

@@ -63,16 +63,12 @@ export async function initCourseDetail(id) {
   }
 
   try {
-    const course = await api.getCourse(id);
-    let enrollment = null;
-    let userBalance = 0;
-    if (logged) {
-      try { enrollment = await api.getEnrollment(id); } catch (e) {}
-      try {
-        const dash = await api.getDashboard();
-        userBalance = Number(dash?.user?.balance || 0);
-      } catch (e) {}
-    }
+    const [course, enrollment, walletRes] = await Promise.all([
+      api.getCourse(id),
+      logged ? api.getEnrollment(id).catch(() => null) : Promise.resolve(null),
+      logged ? api.getWallet().catch(() => null) : Promise.resolve(null)
+    ]);
+    const userBalance = Number(walletRes?.balance || 0);
     const enrolled = enrollment?.enrolled || course.is_free || isTeacher();
 
     // Calculate total items and completed items

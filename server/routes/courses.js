@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import db from '../db.js';
 import { authMiddleware, teacherMiddleware, optionalAuth, isTeacher, canAccessCourse } from '../middleware/auth.js';
+import { normalizeImageUrl } from './upload.js';
 
 const router = Router();
 
@@ -21,7 +22,10 @@ router.get('/', (req, res) => {
     }
     query += ' ORDER BY c.created_at DESC';
 
-    const courses = db.prepare(query).all(...params);
+    const courses = db.prepare(query).all(...params).map(c => ({
+      ...c,
+      thumbnail: normalizeImageUrl(c.thumbnail)
+    }));
     res.json(courses);
   } catch (err) {
     console.error(err);
@@ -42,6 +46,7 @@ router.get('/:id', optionalAuth, (req, res) => {
     `).get(req.params.id);
 
     if (!course) return res.status(404).json({ error: 'الكورس غير موجود' });
+    course.thumbnail = normalizeImageUrl(course.thumbnail);
 
     const chapters = db.prepare('SELECT * FROM chapters WHERE course_id = ? ORDER BY order_num').all(course.id);
     const exams = db.prepare('SELECT * FROM exams WHERE course_id = ?').all(course.id);
@@ -174,6 +179,7 @@ router.post('/:id/enroll', authMiddleware, (req, res) => {
     const courseId = req.params.id;
     const course = db.prepare('SELECT id, title, is_free, price FROM courses WHERE id = ?').get(courseId);
     if (!course) return res.status(404).json({ error: 'الكورس غير موجود' });
+    course.thumbnail = normalizeImageUrl(course.thumbnail);
 
     const existing = db.prepare('SELECT id FROM enrollments WHERE user_id = ? AND course_id = ?').get(req.user.id, courseId);
     if (existing) return res.status(400).json({ error: 'أنت مشترك بالفعل في هذا الكورس' });
@@ -291,7 +297,7 @@ router.post('/', authMiddleware, teacherMiddleware, (req, res) => {
       grade || 'ثالثة ثانوي',
       Number(price) || 0,
       is_free || Number(price) === 0 ? 1 : 0,
-      thumbnail || null,
+      normalizeImageUrl(thumbnail) || null,
       req.user.id,
       allow_student_replies ? 1 : 0,
       sequential_access ? 1 : 0,
@@ -337,7 +343,7 @@ router.put('/:id', authMiddleware, teacherMiddleware, (req, res) => {
     const nextGrade = grade !== undefined ? grade : existing.grade;
     const nextPrice = price !== undefined ? Number(price) : existing.price;
     const nextIsFree = is_free !== undefined ? (is_free ? 1 : 0) : (price !== undefined ? (Number(price) === 0 ? 1 : 0) : existing.is_free);
-    const nextThumb = thumbnail !== undefined ? (thumbnail || null) : existing.thumbnail;
+    const nextThumb = thumbnail !== undefined ? (normalizeImageUrl(thumbnail) || null) : normalizeImageUrl(existing.thumbnail);
     const nextReplies = allow_student_replies !== undefined ? (allow_student_replies ? 1 : 0) : existing.allow_student_replies;
     const nextSeq = sequential_access !== undefined ? (sequential_access ? 1 : 0) : existing.sequential_access;
     const nextLab = allow_chem_lab !== undefined ? (allow_chem_lab ? 1 : 0) : (existing.allow_chem_lab || 0);

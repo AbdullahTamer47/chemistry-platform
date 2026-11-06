@@ -230,7 +230,7 @@ router.get('/:id', authMiddleware, (req, res) => {
   } catch (err) { console.error('Lesson error:', err); res.status(500).json({ error: 'حدث خطأ' }); }
 });
 
-router.post('/:id/video-token', authMiddleware, (req, res) => {
+router.post('/:id/video-token', authMiddleware, async (req, res) => {
   try {
     const lesson = db.prepare('SELECT * FROM lessons WHERE id = ?').get(req.params.id);
     if (!lesson) return res.status(404).json({ error: 'الدرس غير موجود' });
@@ -267,7 +267,63 @@ router.post('/:id/video-token', authMiddleware, (req, res) => {
     db.prepare('DELETE FROM video_tokens WHERE user_id = ? AND lesson_id = ?').run(req.user.id, lesson.id);
     db.prepare('INSERT INTO video_tokens (token, user_id, lesson_id, expires_at) VALUES (?, ?, ?, ?)').run(token, req.user.id, lesson.id, expiresAt);
     const shortName = String(req.user.name || '').trim().split(/\s+/).slice(0, 2).join(' ');
-    res.json({ token, video_url: lesson.video_url, expires_at: expiresAt, watermark: `${shortName} • ${req.user.phone || ''}` });
+    const wmText = `${shortName} • ${req.user.phone || ''}`;
+
+    // XOR-obfuscate stream payload using token prefix so plain URLs aren't trivially scraped
+    const rawPayload = JSON.stringify({
+      u: lesson.video_url || '',
+      s: lesson.video_source || 'custom_shield',
+      v: lesson.vdocipher_id || ''
+    });
+    const keyBytes = Buffer.from(token.slice(0, 16), 'utf8');
+    const srcBytes = Buffer.from(rawPayload, 'utf8');
+    const xored = Buffer.alloc(srcBytes.length);
+    for (let i = 0; i < srcBytes.length; i++) {
+      xored[i] = srcBytes[i] ^ keyBytes[i % keyBytes.length];
+    }
+    const streamCipher = xored.toString('base64');
+
+    // Optional VdoCipher Hardware DRM OTP generation if configured
+    let vdocipherOtp = null;
+    let vdocipherPlaybackInfo = null;
+    const vdoSecretRow = db.prepare("SELECT value FROM platform_settings WHERE key = 'vdocipher_api_secret'").get();
+    const vdoSecret = (vdoSecretRow?.value || process.env.VDOCIPHER_API_SECRET || '').trim();
+    const vdoId = (lesson.vdocipher_id || '').trim();
+    if (lesson.video_source === 'vdocipher' && vdoId && vdoSecret && !vdoId.startsWith('http')) {
+      try {
+        const otpRes = await fetch(`https://dev.vdocipher.com/api/videos/${encodeURIComponent(vdoId)}/otp`, {
+          method: 'POST',
+          headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json',
+            'Authorization': `Apisecret ${vdoSecret}`
+          },
+          body: JSON.stringify({
+            ttl: 3600,
+            annotate: JSON.stringify([
+              { type: 'rtext', text: wmText, alpha: '0.75', color: '0xFFFFFF', size: '15', interval: '4000' }
+            ])
+          })
+        });
+        if (otpRes.ok) {
+          const otpData = await otpRes.json();
+          vdocipherOtp = otpData.otp || null;
+          vdocipherPlaybackInfo = otpData.playbackInfo || null;
+        }
+      } catch (e) {}
+    }
+
+    res.json({
+      token,
+      video_url: lesson.video_url,
+      video_source: lesson.video_source || 'custom_shield',
+      vdocipher_id: lesson.vdocipher_id || null,
+      vdocipher_otp: vdocipherOtp,
+      vdocipher_playback_info: vdocipherPlaybackInfo,
+      stream_cipher: streamCipher,
+      expires_at: expiresAt,
+      watermark: wmText
+    });
   } catch (err) { console.error(err); res.status(500).json({ error: 'حدث خطأ' }); }
 });
 
@@ -294,11 +350,11 @@ router.post('/:id/progress', authMiddleware, (req, res) => {
 
 router.post('/', authMiddleware, teacherMiddleware, (req, res) => {
   try {
-    const { chapter_id, course_id, title, description, video_url, duration, order_num, max_views, is_free, pdf_url, prerequisite_exam_id, prerequisite_passing_score } = req.body;
+    const { chapter_id, course_id, title, description, video_url, video_source, vdocipher_id, duration, order_num, max_views, is_free, pdf_url, prerequisite_exam_id, prerequisite_passing_score } = req.body;
     const prereqId = prerequisite_exam_id ? parseInt(prerequisite_exam_id, 10) : null;
     const prereqScore = prerequisite_passing_score ? parseInt(prerequisite_passing_score, 10) : 60;
-    const result = db.prepare('INSERT INTO lessons (chapter_id, course_id, title, description, video_url, duration, order_num, max_views, is_free, pdf_url, prerequisite_exam_id, prerequisite_passing_score) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
-      .run(chapter_id, course_id, title, description, video_url, duration || 0, order_num || 0, max_views || 8, is_free ? 1 : 0, pdf_url || null, prereqId, prereqScore);
+    const result = db.prepare('INSERT INTO lessons (chapter_id, course_id, title, description, video_url, video_source, vdocipher_id, duration, order_num, max_views, is_free, pdf_url, prerequisite_exam_id, prerequisite_passing_score) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+      .run(chapter_id, course_id, title, description, video_url || '', video_source || 'custom_shield', vdocipher_id || null, duration || 0, order_num || 0, max_views || 8, is_free ? 1 : 0, pdf_url || null, prereqId, prereqScore);
     try { db.prepare('UPDATE courses SET updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(course_id); } catch (e) {}
     res.status(201).json(db.prepare('SELECT * FROM lessons WHERE id = ?').get(result.lastInsertRowid));
   } catch (err) { res.status(500).json({ error: 'حدث خطأ في إضافة الدرس' }); }
@@ -306,7 +362,7 @@ router.post('/', authMiddleware, teacherMiddleware, (req, res) => {
 
 router.put('/:id', authMiddleware, teacherMiddleware, (req, res) => {
   try {
-    const { title, description, video_url, duration, order_num, max_views, is_free, chapter_id, pdf_url, prerequisite_exam_id, prerequisite_passing_score } = req.body;
+    const { title, description, video_url, video_source, vdocipher_id, duration, order_num, max_views, is_free, chapter_id, pdf_url, prerequisite_exam_id, prerequisite_passing_score } = req.body;
     const existing = db.prepare('SELECT * FROM lessons WHERE id = ?').get(req.params.id);
     if (!existing) return res.status(404).json({ error: 'الدرس غير موجود' });
 
@@ -320,6 +376,7 @@ router.put('/:id', authMiddleware, teacherMiddleware, (req, res) => {
     db.prepare(`
       UPDATE lessons
       SET title=COALESCE(?,title), description=COALESCE(?,description), video_url=COALESCE(?,video_url),
+          video_source=COALESCE(?,video_source), vdocipher_id=?,
           duration=COALESCE(?,duration), order_num=COALESCE(?,order_num), max_views=COALESCE(?,max_views),
           is_free=COALESCE(?,is_free), chapter_id=COALESCE(?,chapter_id),
           pdf_url=?, prerequisite_exam_id=?, prerequisite_passing_score=?
@@ -328,6 +385,8 @@ router.put('/:id', authMiddleware, teacherMiddleware, (req, res) => {
       title,
       description,
       video_url,
+      video_source || existing.video_source || 'custom_shield',
+      vdocipher_id !== undefined ? (vdocipher_id || null) : existing.vdocipher_id,
       duration,
       order_num,
       max_views,

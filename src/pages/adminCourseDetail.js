@@ -2,8 +2,9 @@ import { renderNavbar, initNavbar } from '../components/navbar.js';
 import { api } from '../utils/api.js';
 import { showToast } from '../components/toast.js';
 import { showModal, confirmModal } from '../components/modal.js';
-import { esc } from '../utils/helpers.js';
+import { esc, normalizeImageUrl, extractGoogleDriveId } from '../utils/helpers.js';
 import { renderChemMarkdown } from '../utils/chemMarkdown.js';
+import { openImageCropperModal, dataUrlToFile } from '../utils/imageProcessor.js';
 
 export function renderAdminCourseDetail() {
   return `<div class="app-layout">
@@ -151,7 +152,18 @@ export async function initAdminCourseDetail(id) {
 
   function bindEvents(course, courseExams) {
     document.getElementById('editCourseSettingsBtn')?.addEventListener('click', () => {
-      showModal('إعدادات الكورس والمنتدى', `
+      showModal('إعدادات الكورس والمنتدى والصورة', `
+        <div class="form-group">
+          <label class="form-label">صورة غلاف الكورس (رابط Google Drive أو مباشر أو رفع وقص)</label>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <input type="text" class="form-input" id="acdThumb" value="${esc(course.thumbnail || '')}" placeholder="https://drive.google.com/... أو ارفع صورة" dir="ltr" style="flex:1;">
+            <label class="btn btn-secondary btn-sm" style="cursor:pointer;white-space:nowrap;">
+              <span class="material-symbols-rounded">upload_file</span> رفع وقص
+              <input type="file" id="acdThumbFile" accept="image/*" style="display:none;">
+            </label>
+          </div>
+          <img id="acdThumbPreview" src="${esc(normalizeImageUrl(course.thumbnail || ''))}" alt="معاينة" style="display:${course.thumbnail ? 'block' : 'none'};width:100%;aspect-ratio:16/10;object-fit:cover;border-radius:12px;margin-top:10px;border:1px solid var(--border-light);background:#064e3b;">
+        </div>
         <div class="form-group">
           <label class="form-label" style="display:flex;align-items:center;gap:8px;cursor:pointer;">
             <input type="checkbox" id="ecSequential" ${course.sequential_access ? 'checked' : ''}>
@@ -172,15 +184,54 @@ export async function initAdminCourseDetail(id) {
         </div>
         <button class="btn btn-primary btn-block" id="saveCourseSettingsBtn">حفظ الإعدادات</button>
       `);
+      const acdThumbInput = document.getElementById('acdThumb');
+      const acdThumbFile = document.getElementById('acdThumbFile');
+      const acdThumbPreview = document.getElementById('acdThumbPreview');
+      const syncPreview = (raw) => {
+        const norm = normalizeImageUrl(raw);
+        if (norm) {
+          if (extractGoogleDriveId(raw) && acdThumbInput.value.trim() !== norm) {
+            acdThumbInput.value = norm;
+            showToast('تم تحويل رابط Google Drive إلى رابط مباشر تلقائياً', 'info');
+          }
+          acdThumbPreview.src = norm;
+          acdThumbPreview.style.display = 'block';
+        } else {
+          acdThumbPreview.style.display = 'none';
+        }
+      };
+      acdThumbInput?.addEventListener('input', () => syncPreview(acdThumbInput.value.trim()));
+      acdThumbFile?.addEventListener('change', async (e) => {
+        const f = e.target.files?.[0];
+        if (!f) return;
+        try {
+          const cropped = await openImageCropperModal(f, { targetWidth: 960, targetHeight: 600 });
+          acdThumbFile.value = '';
+          if (!cropped) return;
+          acdThumbInput.value = cropped;
+          syncPreview(cropped);
+          try {
+            const uploaded = await api.uploadFile(dataUrlToFile(cropped, 'course_cover'));
+            if (uploaded?.url) {
+              acdThumbInput.value = uploaded.url;
+              syncPreview(uploaded.url);
+            }
+          } catch (_) {}
+          showToast('تم تجهيز صورة الكورس، اضغط حفظ الإعدادات', 'success');
+        } catch (err) {
+          showToast(err.message, 'error');
+        }
+      });
       document.getElementById('saveCourseSettingsBtn').addEventListener('click', async () => {
         try {
           await api.updateCourse(course.id, { 
+            thumbnail: normalizeImageUrl(acdThumbInput?.value.trim() || ''),
             sequential_access: document.getElementById('ecSequential').checked,
             allow_student_replies: document.getElementById('ecReplies').checked,
             allow_chem_lab: document.getElementById('ecLab').checked
           });
           showToast('تم تحديث الإعدادات بنجاح', 'success');
-          document.querySelector('.modal-overlay')?.remove();
+          document.querySelector('.modal-overlay:not(.cropper-submodal-overlay)')?.remove();
           loadCourse();
         } catch (err) { showToast(err.message, 'error'); }
       });
@@ -241,7 +292,25 @@ export async function initAdminCourseDetail(id) {
         const chapter = course.chapters.find(c => c.id == chId);
         showModal('إضافة درس جديد', `
           <div class="form-group"><label class="form-label">عنوان الدرس</label><input type="text" class="form-input" id="nlTitle" required></div>
-          <div class="form-group"><label class="form-label">رابط الفيديو (يوتيوب أو رابط مباشر)</label><input type="url" class="form-input" id="nlUrl" dir="ltr" required></div>
+          <div class="form-group">
+            <label class="form-label" style="display:flex;align-items:center;gap:6px;">
+              <span class="material-symbols-rounded" style="font-size:1.1rem;color:var(--primary);">shield_lock</span>
+              نظام تشغيل وحماية الفيديو (اختيار المشغل)
+            </label>
+            <select class="form-select" id="nlVideoSource">
+              <option value="custom_shield">مشغل كيمياوي المشفر (يخفي هوية يوتيوب بالكامل + شريط تحكم خاص + منع التحميل)</option>
+              <option value="vdocipher">مشغل VdoCipher / Bunny DRM الاحترافي (تشفير DRM كامل ضد IDM وتصوير الشاشة)</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label" id="nlUrlLabel">رابط الفيديو (يوتيوب أو Google Drive أو MP4 مباشر)</label>
+            <input type="text" class="form-input" id="nlUrl" dir="ltr" placeholder="https://www.youtube.com/watch?v=... أو رابط المشغل المشفر" required>
+          </div>
+          <div class="form-group" id="nlVdoGroup" style="display:none;background:rgba(16,185,129,0.06);border:1px solid rgba(16,185,129,0.25);padding:10px 12px;border-radius:10px;">
+            <label class="form-label" style="font-size:0.8rem;color:var(--primary);font-weight:800;">معرّف فيديو VdoCipher ID (أو رابط Bunny DRM Embed)</label>
+            <input type="text" class="form-input" id="nlVdoId" dir="ltr" placeholder="مثال: 4f8a9b2c... أو https://iframe.mediadelivery.net/embed/...">
+            <small style="display:block;margin-top:4px;font-size:0.74rem;color:var(--text-secondary);">عند استخدام VdoCipher أو Bunny DRM يتم تشفير البث بتقنية Widevine/FairPlay لمنع IDM وبرامج تصوير الشاشة نهائياً.</small>
+          </div>
           <div class="form-group"><label class="form-label">رابط مذكرة أو ملخص الدرس (PDF)</label><input type="url" class="form-input" id="nlPdf" placeholder="https://.../notes.pdf" dir="ltr"></div>
           <div class="form-group"><label class="form-label">الوصف</label><textarea class="form-input" id="nlDesc" rows="2"></textarea></div>
           <div style="display:flex;gap:12px">
@@ -253,14 +322,24 @@ export async function initAdminCourseDetail(id) {
           <div class="form-group" style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="nlFree"><label for="nlFree">درس مجاني (متاح للجميع)</label></div>
           <button class="btn btn-primary btn-block" id="saveLessonBtn">حفظ الدرس</button>
         `);
+        const nlSourceSel = document.getElementById('nlVideoSource');
+        const nlVdoGrp = document.getElementById('nlVdoGroup');
+        nlSourceSel?.addEventListener('change', () => {
+          if (nlVdoGrp) nlVdoGrp.style.display = nlSourceSel.value === 'vdocipher' ? 'block' : 'none';
+        });
         document.getElementById('saveLessonBtn').addEventListener('click', async () => {
           try {
             const prereqExamVal = document.getElementById('nlPrereqExam')?.value;
             const prereqScoreVal = parseInt(document.getElementById('nlPrereqScore')?.value) || 60;
+            const vSource = document.getElementById('nlVideoSource')?.value || 'custom_shield';
+            const vdoIdVal = document.getElementById('nlVdoId')?.value.trim() || null;
             await api.createLesson({
               chapter_id: parseInt(chId), course_id: parseInt(id),
               title: document.getElementById('nlTitle').value, description: document.getElementById('nlDesc').value,
-              video_url: document.getElementById('nlUrl').value, pdf_url: document.getElementById('nlPdf').value.trim() || null,
+              video_url: document.getElementById('nlUrl').value.trim() || vdoIdVal || '',
+              video_source: vSource,
+              vdocipher_id: vdoIdVal,
+              pdf_url: document.getElementById('nlPdf').value.trim() || null,
               duration: parseInt(document.getElementById('nlDur').value),
               order_num: parseInt(document.getElementById('nlOrder').value), max_views: parseInt(document.getElementById('nlMaxViews').value),
               is_free: document.getElementById('nlFree').checked,
@@ -285,7 +364,21 @@ export async function initAdminCourseDetail(id) {
         
         showModal('تعديل الدرس وامتحان المحاضرة', `
           <div class="form-group"><label class="form-label">عنوان الدرس</label><input type="text" class="form-input" id="elTitle" value="${esc(lesson.title)}" required></div>
-          <div class="form-group"><label class="form-label">رابط الفيديو</label><input type="url" class="form-input" id="elUrl" value="${lesson.video_url || ''}" dir="ltr" required></div>
+          <div class="form-group">
+            <label class="form-label" style="display:flex;align-items:center;gap:6px;">
+              <span class="material-symbols-rounded" style="font-size:1.1rem;color:var(--primary);">shield_lock</span>
+              نظام تشغيل وحماية الفيديو (اختيار المشغل)
+            </label>
+            <select class="form-select" id="elVideoSource">
+              <option value="custom_shield" ${(lesson.video_source || 'custom_shield') === 'custom_shield' ? 'selected' : ''}>مشغل كيمياوي المشفر (يخفي هوية يوتيوب بالكامل + شريط تحكم خاص + منع التحميل)</option>
+              <option value="vdocipher" ${lesson.video_source === 'vdocipher' ? 'selected' : ''}>مشغل VdoCipher / Bunny DRM الاحترافي (تشفير DRM كامل ضد IDM وتصوير الشاشة)</option>
+            </select>
+          </div>
+          <div class="form-group"><label class="form-label">رابط الفيديو</label><input type="text" class="form-input" id="elUrl" value="${esc(lesson.video_url || '')}" dir="ltr" required></div>
+          <div class="form-group" id="elVdoGroup" style="display:${lesson.video_source === 'vdocipher' ? 'block' : 'none'};background:rgba(16,185,129,0.06);border:1px solid rgba(16,185,129,0.25);padding:10px 12px;border-radius:10px;">
+            <label class="form-label" style="font-size:0.8rem;color:var(--primary);font-weight:800;">معرّف فيديو VdoCipher ID (أو رابط Bunny DRM Embed)</label>
+            <input type="text" class="form-input" id="elVdoId" value="${esc(lesson.vdocipher_id || '')}" dir="ltr" placeholder="مثال: 4f8a9b2c... أو https://iframe.mediadelivery.net/embed/...">
+          </div>
           <div class="form-group"><label class="form-label">رابط مذكرة أو ملخص الدرس (PDF)</label><input type="url" class="form-input" id="elPdf" value="${lesson.pdf_url || ''}" placeholder="https://.../notes.pdf" dir="ltr"></div>
           <div class="form-group"><label class="form-label">الوصف</label><textarea class="form-input" id="elDesc" rows="2">${esc(lesson.description || '')}</textarea></div>
           <div style="display:flex;gap:12px">
@@ -297,13 +390,23 @@ export async function initAdminCourseDetail(id) {
           <div class="form-group" style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="elFree" ${lesson.is_free ? 'checked' : ''}><label for="elFree">درس مجاني (متاح للجميع)</label></div>
           <button class="btn btn-primary btn-block" id="updateLessonBtn">تحديث الدرس</button>
         `);
+        const elSourceSel = document.getElementById('elVideoSource');
+        const elVdoGrp = document.getElementById('elVdoGroup');
+        elSourceSel?.addEventListener('change', () => {
+          if (elVdoGrp) elVdoGrp.style.display = elSourceSel.value === 'vdocipher' ? 'block' : 'none';
+        });
         document.getElementById('updateLessonBtn').addEventListener('click', async () => {
           try {
             const prereqExamVal = document.getElementById('elPrereqExam')?.value;
             const prereqScoreVal = parseInt(document.getElementById('elPrereqScore')?.value) || 60;
+            const vSource = document.getElementById('elVideoSource')?.value || 'custom_shield';
+            const vdoIdVal = document.getElementById('elVdoId')?.value.trim() || null;
             await api.updateLesson(lid, {
               title: document.getElementById('elTitle').value, description: document.getElementById('elDesc').value,
-              video_url: document.getElementById('elUrl').value, pdf_url: document.getElementById('elPdf').value.trim() || null,
+              video_url: document.getElementById('elUrl').value.trim() || vdoIdVal || '',
+              video_source: vSource,
+              vdocipher_id: vdoIdVal,
+              pdf_url: document.getElementById('elPdf').value.trim() || null,
               duration: parseInt(document.getElementById('elDur').value),
               order_num: parseInt(document.getElementById('elOrder').value), max_views: parseInt(document.getElementById('elMaxViews').value),
               is_free: document.getElementById('elFree').checked,

@@ -175,4 +175,78 @@ export function formatWhatsAppPhone(phone) {
   return `20${digits.replace(/^0+/, '')}`;
 }
 
+/**
+ * Extracts a Google Drive File ID from any Drive sharing/preview/uc/thumbnail URL
+ */
+export function extractGoogleDriveId(url) {
+  const s = String(url ?? '').trim();
+  if (!s) return null;
+  if (!/drive\.google\.com|docs\.google\.com|googleusercontent\.com/i.test(s)) return null;
+  const fileMatch = s.match(/\/file\/d\/([a-zA-Z0-9_-]{10,})/);
+  if (fileMatch) return fileMatch[1];
+  const dMatch = s.match(/\/d\/([a-zA-Z0-9_-]{10,})/);
+  if (dMatch) return dMatch[1];
+  const idMatch = s.match(/[?&]id=([a-zA-Z0-9_-]{10,})/);
+  if (idMatch) return idMatch[1];
+  return null;
+}
+
+/**
+ * Converts Google Drive sharing links or relative paths into a direct renderable image URL
+ * routed through our server-side caching proxy (/api/upload/gdrive/:fileId) to bypass ORB/CORP blocks.
+ */
+export function normalizeImageUrl(url) {
+  const s = String(url ?? '').trim();
+  if (!s) return '';
+  if (s.startsWith('data:image/')) return s;
+  if (s.startsWith('/api/upload/gdrive/')) return s;
+  const driveId = extractGoogleDriveId(s);
+  if (driveId) {
+    return `/api/upload/gdrive/${driveId}`;
+  }
+  return s;
+}
+
+/**
+ * Generates a clean SVG Data URI cover for a course when no custom thumbnail is uploaded,
+ * avoiding any old/unrelated fallback photos.
+ */
+export function generateCourseFallbackSvg(course = {}) {
+  const grade = String(course.grade || 'الثانوية العامة').replace(/[<>&"']/g, '');
+  const title = String(course.title || 'كورس الكيمياء').slice(0, 38).replace(/[<>&"']/g, '');
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 600" width="960" height="600">
+    <defs>
+      <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stop-color="#064e3b"/>
+        <stop offset="55%" stop-color="#047857"/>
+        <stop offset="100%" stop-color="#0B1F3A"/>
+      </linearGradient>
+      <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+        <path d="M 40 0 L 0 0 0 40" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="1"/>
+      </pattern>
+    </defs>
+    <rect width="960" height="600" fill="url(#bg)"/>
+    <rect width="960" height="600" fill="url(#grid)"/>
+    <circle cx="150" cy="120" r="180" fill="rgba(16,185,129,0.14)"/>
+    <circle cx="820" cy="480" r="220" fill="rgba(15,181,174,0.15)"/>
+    <g transform="translate(480, 225)" fill="none" stroke="#34d399" stroke-width="4">
+      <polygon points="0,-70 60,-35 60,35 0,70 -60,35 -60,-35" fill="rgba(6,78,59,0.55)"/>
+      <polygon points="0,-48 41,-24 41,24 0,48 -41,24 -41,-24" stroke="rgba(255,255,255,0.35)" stroke-width="2"/>
+      <circle cx="0" cy="-70" r="6" fill="#E0A526" stroke="none"/>
+      <circle cx="60" cy="-35" r="6" fill="#34d399" stroke="none"/>
+      <circle cx="60" cy="35" r="6" fill="#34d399" stroke="none"/>
+      <circle cx="0" cy="70" r="6" fill="#0FB5AE" stroke="none"/>
+      <circle cx="-60" cy="35" r="6" fill="#34d399" stroke="none"/>
+      <circle cx="-60" cy="-35" r="6" fill="#34d399" stroke="none"/>
+    </g>
+    <text x="480" y="236" text-anchor="middle" fill="#ffffff" font-family="Cairo, sans-serif" font-weight="900" font-size="30">H₂SO₄</text>
+    <rect x="370" y="330" width="220" height="38" rx="19" fill="rgba(224,165,38,0.2)" stroke="#E0A526" stroke-width="1.5"/>
+    <text x="480" y="355" text-anchor="middle" fill="#fcd34d" font-family="Cairo, sans-serif" font-weight="800" font-size="20">${grade}</text>
+    <text x="480" y="425" text-anchor="middle" fill="#ffffff" font-family="Cairo, sans-serif" font-weight="900" font-size="34">${title}</text>
+    <text x="480" y="475" text-anchor="middle" fill="#a7f3d0" font-family="Cairo, sans-serif" font-weight="700" font-size="22">منصة كيمياوي — د. زياد رمزي عياد</text>
+  </svg>`;
+  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+}
+
+
 

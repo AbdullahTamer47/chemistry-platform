@@ -116,4 +116,99 @@ router.post('/', authMiddleware, rateLimit(20, 60_000), (req, res) => {
   });
 });
 
+export function extractGoogleDriveId(url) {
+  const s = String(url ?? '').trim();
+  if (!s) return null;
+  if (!/drive\.google\.com|docs\.google\.com|googleusercontent\.com/i.test(s)) return null;
+  const fileMatch = s.match(/\/file\/d\/([a-zA-Z0-9_-]{10,})/);
+  if (fileMatch) return fileMatch[1];
+  const dMatch = s.match(/\/d\/([a-zA-Z0-9_-]{10,})/);
+  if (dMatch) return dMatch[1];
+  const idMatch = s.match(/[?&]id=([a-zA-Z0-9_-]{10,})/);
+  if (idMatch) return idMatch[1];
+  return null;
+}
+
+export function normalizeImageUrl(url) {
+  const s = String(url ?? '').trim();
+  if (!s) return null;
+  if (s.startsWith('data:image/')) return s;
+  if (s.startsWith('/api/upload/gdrive/')) return s;
+  const driveId = extractGoogleDriveId(s);
+  if (driveId) {
+    return `/api/upload/gdrive/${driveId}`;
+  }
+  return s;
+}
+
+// Server-side Google Drive Image Proxy + Persistent DB Cache (bypasses ORB/CORP and HTML viewer wrappers)
+router.get('/gdrive/:fileId', async (req, res) => {
+  try {
+    const fileId = String(req.params.fileId || '').replace(/[^a-zA-Z0-9_-]/g, '');
+    if (!fileId || fileId.length < 10) return res.status(400).end();
+
+    const cacheKey = `gdrive_${fileId}`;
+    const cached = db.prepare('SELECT mimetype, data FROM uploaded_files WHERE filename = ?').get(cacheKey);
+    if (cached && cached.data) {
+      const buf = Buffer.from(cached.data, 'base64');
+      res.setHeader('Content-Type', cached.mimetype || 'image/jpeg');
+      res.setHeader('Cache-Control', 'public, max-age=604800, immutable');
+      res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+      return res.send(buf);
+    }
+
+    const candidateUrls = [
+      `https://lh3.googleusercontent.com/d/${fileId}=w1200`,
+      `https://drive.google.com/thumbnail?id=${fileId}&sz=w1200`,
+      `https://drive.google.com/uc?export=download&id=${fileId}`
+    ];
+
+    for (const targetUrl of candidateUrls) {
+      try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 8000);
+        const upstream = await fetch(targetUrl, {
+          redirect: 'follow',
+          signal: controller.signal,
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+            'Accept': 'image/avif,image/webp,image/apng,image/*,*/*;q=0.8'
+          }
+        });
+        clearTimeout(timeout);
+
+        if (!upstream.ok) continue;
+        const contentType = (upstream.headers.get('content-type') || '').toLowerCase();
+        if (!contentType.startsWith('image/')) continue;
+
+        const arrayBuf = await upstream.arrayBuffer();
+        const buf = Buffer.from(arrayBuf);
+        if (buf.length < 64) continue;
+
+        // Cache in DB if <= 3MB so subsequent loads are instant and persisted in PostgreSQL
+        if (buf.length <= 3 * 1024 * 1024) {
+          try {
+            db.prepare('INSERT OR REPLACE INTO uploaded_files (filename, mimetype, data, size) VALUES (?, ?, ?, ?)')
+              .run(cacheKey, contentType.split(';')[0], buf.toString('base64'), buf.length);
+            if (typeof db.flushToPostgres === 'function') {
+              db.flushToPostgres().catch(() => {});
+            }
+          } catch (e) {}
+        }
+
+        res.setHeader('Content-Type', contentType.split(';')[0] || 'image/jpeg');
+        res.setHeader('Cache-Control', 'public, max-age=604800, immutable');
+        res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+        return res.send(buf);
+      } catch (e) {
+        // try next candidate
+      }
+    }
+
+    res.status(404).json({ error: 'تعذر جلب الصورة من Google Drive. تأكد من أن صلاحية الملف "أي شخص لديه الرابط" (Anyone with the link).' });
+  } catch (err) {
+    res.status(500).end();
+  }
+});
+
 export default router;

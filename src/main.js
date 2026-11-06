@@ -29,6 +29,7 @@ import {
 import { renderAdminCourseDetail, initAdminCourseDetail } from './pages/adminCourseDetail.js';
 import { renderAdminExamDetail, initAdminExamDetail } from './pages/adminExamDetail.js';
 import { renderNavbar, initNavbar } from './components/navbar.js';
+import { renderBedigitalFooter } from './components/bedigitalBrand.js';
 import { api } from './utils/api.js';
 import { isLoggedIn, isTeacher, requireAuth, requireTeacher, getUser } from './utils/auth.js';
 import { showToast } from './components/toast.js';
@@ -400,6 +401,13 @@ async function navigate() {
     const root = document.getElementById('app') || app;
     if (!root) return;
     root.innerHTML = route.render();
+    if (!root.querySelector('.bedigital-corporate-footer')) {
+      const mainContainer = root.querySelector('main.main-content') || root.querySelector('.landing') || root;
+      const footerHost = document.createElement('div');
+      footerHost.className = 'bedigital-footer-host';
+      footerHost.innerHTML = renderBedigitalFooter();
+      mainContainer.appendChild(footerHost);
+    }
     if (route.init) await route.init(myNavId);
   } catch (err) {
     if (navigationId === myNavId) {
@@ -466,4 +474,10 @@ if (localStorage.getItem('darkMode') === 'true') {
   document.documentElement.setAttribute('data-theme', 'dark');
 }
 
-console.log('كيمياوي - منصة د. زياد رمزي عياد للكيمياء');
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch(() => {});
+  });
+}
+
+console.log('كيمياوي - منصة د. زياد رمزي عياد للكيمياء | Powered by bedigital');
