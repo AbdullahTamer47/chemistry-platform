@@ -2732,6 +2732,39 @@ tbody tr:hover { background: var(--bg-hover); }
   box-shadow: 0 18px 36px rgba(5, 150, 105, 0.1);
 }
 
+/* ================================================================
+   Zero-Latency Anti-IDM & Video Downloader Extension Shield (0ms)
+   Hides floating download panels before a single frame is painted
+   ================================================================ */
+[id*="idm" i],
+[class*="idm" i],
+[id*="__idm" i],
+[class*="__idm" i],
+[id*="vdh" i],
+[class*="vdh" i],
+[id*="savefrom" i],
+[class*="savefrom" i],
+[id*="download_panel" i],
+[class*="download_panel" i],
+iframe[src*="idm" i],
+iframe[src*="ngpampappnmepgilojfohadhhmbhlaek" i],
+div[style*="z-index: 2147483647"]:not(#pdfShieldOverlay):not(.toast-container):not(.modal-overlay) {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+  width: 0 !important;
+  height: 0 !important;
+  max-width: 0 !important;
+  max-height: 0 !important;
+  overflow: hidden !important;
+  position: fixed !important;
+  left: -99999px !important;
+  top: -99999px !important;
+  z-index: -9999 !important;
+}
+
+
 
 
 

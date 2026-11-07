@@ -509,7 +509,7 @@ const migrations = [
   "ALTER TABLE courses ADD COLUMN sequential_access INTEGER DEFAULT 0;",
   "ALTER TABLE enrollments ADD COLUMN is_suspended INTEGER DEFAULT 0;",
   "ALTER TABLE enrollments ADD COLUMN code_id INTEGER;",
-  "ALTER TABLE lessons ADD COLUMN max_views INTEGER DEFAULT 8;",
+  "ALTER TABLE lessons ADD COLUMN max_views INTEGER DEFAULT 5;",
   "ALTER TABLE lesson_progress ADD COLUMN views_count INTEGER DEFAULT 0;",
   "ALTER TABLE lesson_progress ADD COLUMN extra_views INTEGER DEFAULT 0;",
   "ALTER TABLE exams ADD COLUMN chapter_id INTEGER REFERENCES chapters(id) ON DELETE CASCADE;",
@@ -524,9 +524,10 @@ for (const query of migrations) {
   try { db.exec(query); } catch (e) { /* ignore if column already exists */ }
 }
 
-// Reset legacy page-load view counts that were recorded before last_view_at tracking was introduced
+// Reset legacy page-load view counts that were recorded before last_view_at tracking was introduced, and standardize default max_views to 5
 try {
   db.exec("UPDATE lesson_progress SET views_count = 0 WHERE views_count > 0 AND last_view_at IS NULL;");
+  db.exec("UPDATE lessons SET max_views = 5 WHERE max_views = 8;");
 } catch (e) {}
 
 db.exec(`
@@ -716,7 +717,7 @@ db.exec(`
 
   CREATE TABLE IF NOT EXISTS security_violations (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
     course_id INTEGER REFERENCES courses(id) ON DELETE SET NULL,
     lesson_id INTEGER REFERENCES lessons(id) ON DELETE SET NULL,
     exam_id INTEGER REFERENCES exams(id) ON DELETE SET NULL,
@@ -726,12 +727,63 @@ db.exec(`
     details TEXT,
     device_info TEXT,
     ip_address TEXT,
+    suspect_name TEXT,
+    suspect_phone TEXT,
+    device_id TEXT,
+    request_path TEXT,
+    request_payload TEXT,
     is_resolved INTEGER DEFAULT 0,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
 
   CREATE INDEX IF NOT EXISTS idx_security_violations_user ON security_violations(user_id, created_at DESC);
+
+  CREATE TABLE IF NOT EXISTS banned_devices (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    device_id TEXT NOT NULL,
+    ip_address TEXT,
+    user_id INTEGER,
+    reason TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_banned_devices_did ON banned_devices(device_id);
 `);
+
+// Migrate existing security_violations table if user_id was NOT NULL so anonymous intrusion attempts can be logged
+try {
+  const svCols = db.prepare('PRAGMA table_info(security_violations)').all();
+  const uidCol = svCols.find(c => c.name === 'user_id');
+  if (uidCol && uidCol.notnull === 1) {
+    db.exec(`
+      CREATE TABLE security_violations_new (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        course_id INTEGER REFERENCES courses(id) ON DELETE SET NULL,
+        lesson_id INTEGER REFERENCES lessons(id) ON DELETE SET NULL,
+        exam_id INTEGER REFERENCES exams(id) ON DELETE SET NULL,
+        violation_type TEXT NOT NULL,
+        severity TEXT DEFAULT 'high',
+        source_title TEXT,
+        details TEXT,
+        device_info TEXT,
+        ip_address TEXT,
+        suspect_name TEXT,
+        suspect_phone TEXT,
+        device_id TEXT,
+        request_path TEXT,
+        request_payload TEXT,
+        is_resolved INTEGER DEFAULT 0,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
+      INSERT INTO security_violations_new (id, user_id, course_id, lesson_id, exam_id, violation_type, severity, source_title, details, device_info, ip_address, is_resolved, created_at)
+      SELECT id, user_id, course_id, lesson_id, exam_id, violation_type, severity, source_title, details, device_info, ip_address, is_resolved, created_at FROM security_violations;
+      DROP TABLE security_violations;
+      ALTER TABLE security_violations_new RENAME TO security_violations;
+      CREATE INDEX IF NOT EXISTS idx_security_violations_user ON security_violations(user_id, created_at DESC);
+    `);
+  }
+} catch (e) {}
 
 function addColumnIfMissing(table, column, def) {
   try {
@@ -739,6 +791,13 @@ function addColumnIfMissing(table, column, def) {
     if (!cols.some(c => c.name === column)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${def}`);
   } catch (e) {}
 }
+
+addColumnIfMissing('security_violations', 'suspect_name', 'TEXT');
+addColumnIfMissing('security_violations', 'suspect_phone', 'TEXT');
+addColumnIfMissing('security_violations', 'device_id', 'TEXT');
+addColumnIfMissing('security_violations', 'request_path', 'TEXT');
+addColumnIfMissing('security_violations', 'request_payload', 'TEXT');
+addColumnIfMissing('lesson_progress', 'extra_views_requested', 'INTEGER DEFAULT 0');
 
 addColumnIfMissing('enrollments', 'code_id', 'INTEGER');
 addColumnIfMissing('enrollments', 'payment_id', 'INTEGER');

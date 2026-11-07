@@ -427,9 +427,33 @@ async function navigate() {
     path = dest;
   }
 
+  // Log any unauthorized attempt to access /admin or sensitive URLs
+  if (path.startsWith('/admin') && (!isLoggedIn() || !isTeacher())) {
+    const u = getUser();
+    api.reportIntrusionAttempt({
+      violation_type: 'admin_intrusion',
+      source_title: 'محاولة فتح رابط لوحة تحكم الأدمن مباشرة',
+      details: `محاولة دخول غير مصرح به للرابط (${path}) ${u ? `بواسطة حساب الطالب: ${u.name} (${u.phone})` : 'بدون تسجيل دخول / زائر خارجي'}`,
+      request_path: path,
+      suspect_name: u?.name || null,
+      suspect_phone: u?.phone || null
+    }).catch(() => {});
+  }
+
   const route = routes[path] || matchDynamic(path);
 
   if (!route) {
+    if (/admin|config|env|backup|phpmyadmin|wp-|sql|shell/i.test(path)) {
+      const u = getUser();
+      api.reportIntrusionAttempt({
+        violation_type: 'hack_attempt',
+        source_title: 'محاولة فحص مسارات حساسة أو غير موجودة',
+        details: `محاولة الوصول لمسار مشبوه (${path})`,
+        request_path: path,
+        suspect_name: u?.name || null,
+        suspect_phone: u?.phone || null
+      }).catch(() => {});
+    }
     if (navigationId !== myNavId) return;
     app.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;min-height:100vh;text-align:center;flex-direction:column;gap:14px;padding:24px;">
       ${renderBrandErrorIllustration('404')}

@@ -48,7 +48,7 @@ function resolveUser(token) {
   }
 
   try {
-    const user = db.prepare('SELECT id, name, role, grade, phone FROM users WHERE id = ?').get(decoded.id);
+    const user = db.prepare('SELECT id, name, role, grade, phone, COALESCE(is_blocked, 0) as is_blocked FROM users WHERE id = ?').get(decoded.id);
     if (user) return user;
   } catch (err) {
     console.warn('[Auth] DB lookup warning on serverless:', err.message);
@@ -59,8 +59,70 @@ function resolveUser(token) {
     name: decoded.name || 'مستخدم المنصة',
     role: decoded.role,
     grade: decoded.grade || 'ثالثة ثانوي',
-    phone: decoded.phone || ''
+    phone: decoded.phone || '',
+    is_blocked: 0
   };
+}
+
+export function isDeviceOrUserBanned({ deviceId = '', userId = null } = {}) {
+  try {
+    if (userId) {
+      const u = db.prepare('SELECT role, COALESCE(is_blocked, 0) as is_blocked FROM users WHERE id = ?').get(userId);
+      if (u && (u.role === 'teacher' || u.role === 'admin')) return false;
+      if (u && Number(u.is_blocked) === 1) return true;
+      const bannedByUser = db.prepare('SELECT id FROM banned_devices WHERE user_id = ? LIMIT 1').get(userId);
+      if (bannedByUser) return true;
+    }
+    const cleanDid = String(deviceId || '').trim();
+    if (cleanDid && cleanDid.length >= 4) {
+      const bannedByDid = db.prepare('SELECT id FROM banned_devices WHERE device_id = ? LIMIT 1').get(cleanDid);
+      if (bannedByDid) return true;
+    }
+  } catch (_) {}
+  return false;
+}
+
+export function logSecurityIntrusion(req, {
+  user_id = null,
+  suspect_name = '',
+  suspect_phone = '',
+  violation_type = 'admin_intrusion',
+  severity = 'critical',
+  source_title = 'محاولة اختراق أو دخول غير مصرح',
+  details = '',
+  request_payload = ''
+} = {}) {
+  try {
+    const uid = user_id || req?.user?.id || null;
+    const sName = String(suspect_name || req?.user?.name || 'زائر / محاولة خارجية').slice(0, 120);
+    const sPhone = String(suspect_phone || req?.user?.phone || '').slice(0, 60);
+    const ua = String(req?.headers?.['user-agent'] || '').slice(0, 220);
+    const ip = String(req?.headers?.['x-forwarded-for'] || req?.ip || '').split(',')[0].trim();
+    const did = String(req?.headers?.['x-device-id'] || req?.body?.device_id || '').slice(0, 120);
+    const reqPath = String(req?.originalUrl || req?.url || '').slice(0, 200);
+    const payloadStr = String(request_payload || (req?.body ? JSON.stringify(req.body) : '')).slice(0, 500);
+
+    db.prepare(`
+      INSERT INTO security_violations
+        (user_id, violation_type, severity, source_title, details, device_info, ip_address, suspect_name, suspect_phone, device_id, request_path, request_payload)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(uid, violation_type, severity, source_title, details, ua, ip, sName, sPhone, did, reqPath, payloadStr);
+
+    if (uid) {
+      db.prepare('UPDATE users SET security_strikes = COALESCE(security_strikes, 0) + 1 WHERE id = ?').run(uid);
+    }
+
+    const teachers = db.prepare("SELECT id FROM users WHERE role IN ('teacher', 'admin')").all();
+    const msg = `رصد النظام ${source_title} — الاسم/البيانات: "${sName}" ${sPhone ? `(${sPhone})` : ''} | المسار: ${reqPath} | IP: ${ip || 'غير معروف'}.`;
+    for (const t of teachers) {
+      db.prepare('INSERT INTO notifications (user_id, title, message, type) VALUES (?, ?, ?, ?)').run(
+        t.id,
+        '🚨 إنذار أمني: محاولة اختراق / دخول غير مصرح',
+        msg,
+        'error'
+      );
+    }
+  } catch (e) {}
 }
 
 export function authMiddleware(req, res, next) {
@@ -71,6 +133,17 @@ export function authMiddleware(req, res, next) {
   try {
     const user = resolveUser(authHeader.split(' ')[1]);
     if (!user) return res.status(401).json({ error: 'جلسة غير صالحة - يرجى تسجيل الدخول مرة أخرى' });
+
+    const deviceId = String(req.headers['x-device-id'] || '').trim();
+    if (user.role !== 'teacher' && user.role !== 'admin') {
+      if (Number(user.is_blocked) === 1 || isDeviceOrUserBanned({ deviceId, userId: user.id })) {
+        return res.status(403).json({
+          error: 'تم حظر هذا الحساب وهذا الجهاز نهائياً بقرار من إدارة المنصة. لا يمكنك الدخول إلا بعد رفع الحظر من المعلم.',
+          is_blocked: true
+        });
+      }
+    }
+
     req.user = user;
     next();
   } catch (err) {
@@ -89,6 +162,11 @@ export function optionalAuth(req, res, next) {
 
 export function teacherMiddleware(req, res, next) {
   if (req.user.role !== 'teacher' && req.user.role !== 'admin') {
+    logSecurityIntrusion(req, {
+      violation_type: 'admin_intrusion',
+      source_title: 'محاولة دخول غير مصرح به للوحة وصلاحيات الأدمن',
+      details: `حاول المستخدم (${req.user.name} - ${req.user.phone}) الوصول إلى مسار الإدارة المحمي: ${req.method} ${req.originalUrl}`
+    });
     return res.status(403).json({ error: 'غير مصرح - الصلاحيات للمعلم فقط' });
   }
   next();
@@ -96,6 +174,11 @@ export function teacherMiddleware(req, res, next) {
 
 export function adminMiddleware(req, res, next) {
   if (req.user.role !== 'admin') {
+    logSecurityIntrusion(req, {
+      violation_type: 'admin_intrusion',
+      source_title: 'محاولة دخول غير مصرح به لصلاحيات المدير',
+      details: `حاول المستخدم (${req.user?.name || ''} - ${req.user?.phone || ''}) الوصول إلى: ${req.method} ${req.originalUrl}`
+    });
     return res.status(403).json({ error: 'غير مصرح - الصلاحيات للمدير فقط' });
   }
   next();

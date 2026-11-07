@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import bcrypt from 'bcryptjs';
 import db from '../db.js';
-import { generateToken, authMiddleware, rateLimit } from '../middleware/auth.js';
+import { generateToken, authMiddleware, rateLimit, isDeviceOrUserBanned, logSecurityIntrusion } from '../middleware/auth.js';
 
 const router = Router();
 
@@ -47,6 +47,20 @@ router.post('/register', registerLimiter, (req, res) => {
     const cleanPhone = normalizePhone(phone);
     const cleanParentPhone = normalizePhone(parent_phone);
     const cleanParentPhone2 = normalizePhone(parent_phone_secondary);
+    const activeDeviceId = device_id || req.headers['x-device-id'] || ('dev_' + Buffer.from(req.ip + (req.headers['user-agent'] || '')).toString('base64').slice(0, 20));
+
+    if (isDeviceOrUserBanned({ deviceId: activeDeviceId })) {
+      logSecurityIntrusion(req, {
+        suspect_name: String(name || '').slice(0, 80),
+        suspect_phone: cleanPhone,
+        violation_type: 'hack_attempt',
+        source_title: 'محاولة إنشاء حساب جديد من جهاز محظور نهائياً',
+        details: `حاول جهاز محظور إنشاء حساب جديد باسم "${name}" ورقم "${cleanPhone}"`
+      });
+      return res.status(403).json({
+        error: 'تم حظر هذا الجهاز نهائياً بقرار من إدارة المنصة. لا يمكنك إنشاء حساب جديد أو الدخول إلا بعد رفع الحظر من المعلم.'
+      });
+    }
 
     if (!/^01[0125][0-9]{8}$/.test(cleanPhone)) {
       return res.status(400).json({ error: 'رقم الهاتف غير صحيح (يجب أن يكون 11 رقماً يبدأ بـ 010 أو 011 أو 012 أو 015)' });
@@ -121,29 +135,74 @@ router.post('/register', registerLimiter, (req, res) => {
 // Login
 router.post('/login', loginLimiter, (req, res) => {
   try {
-    const { phone, password } = req.body;
+    const { phone, password, device_id, device_name } = req.body;
 
     if (!phone || !password) {
       return res.status(400).json({ error: 'رقم الهاتف وكلمة المرور مطلوبان' });
     }
 
     const cleanPhone = normalizePhone(phone);
+    const activeDeviceId = device_id || req.headers['x-device-id'] || ('dev_' + Buffer.from(req.ip + (req.headers['user-agent'] || '')).toString('base64').slice(0, 20));
     const user = db.prepare('SELECT * FROM users WHERE phone = ?').get(cleanPhone);
+
     if (!user) {
+      logSecurityIntrusion(req, {
+        suspect_name: 'محاولة دخول برقم غير مسجل',
+        suspect_phone: String(phone || '').slice(0, 60),
+        violation_type: 'auth_bruteforce',
+        source_title: 'محاولة تسجيل دخول ببيانات غير مسجلة',
+        details: `محاولة دخول برقم هاتف غير موجود (${phone}) من جهاز (${device_name || activeDeviceId})`,
+        request_payload: JSON.stringify({ phone, password_len: String(password).length, device_name })
+      });
       return res.status(401).json({ error: 'رقم الهاتف غير مسجل أو كلمة المرور غير صحيحة' });
+    }
+
+    // Check permanent student & device ban before password or after
+    if (user.role === 'student' && (Number(user.is_blocked) === 1 || isDeviceOrUserBanned({ deviceId: activeDeviceId, userId: user.id }))) {
+      try {
+        if (activeDeviceId) {
+          const existsBan = db.prepare('SELECT id FROM banned_devices WHERE device_id = ?').get(activeDeviceId);
+          if (!existsBan) {
+            const ip = String(req.headers['x-forwarded-for'] || req.ip || '').split(',')[0].trim();
+            db.prepare('INSERT INTO banned_devices (device_id, ip_address, user_id, reason) VALUES (?, ?, ?, ?)').run(
+              activeDeviceId, ip, user.id, 'جهاز مرتبط بطالب محظور حاول تسجيل الدخول'
+            );
+          }
+        }
+      } catch (_) {}
+      logSecurityIntrusion(req, {
+        user_id: user.id,
+        suspect_name: user.name,
+        suspect_phone: user.phone,
+        violation_type: 'hack_attempt',
+        source_title: 'محاولة دخول من طالب / جهاز محظور نهائياً',
+        details: `حاول الطالب المحظور (${user.name} - ${user.phone}) تسجيل الدخول من الجهاز (${activeDeviceId})`
+      });
+      return res.status(403).json({
+        error: 'تم حظر حسابك وهذا الجهاز نهائياً بقرار من إدارة المنصة. لا يمكنك الدخول إلا بعد رفع الحظر من المعلم.',
+        is_blocked: true
+      });
     }
 
     const isValid = bcrypt.compareSync(password, user.password);
     if (!isValid) {
+      const isTargetTeacher = user.role === 'teacher' || user.role === 'admin';
+      logSecurityIntrusion(req, {
+        user_id: isTargetTeacher ? null : user.id,
+        suspect_name: isTargetTeacher ? `محاولة اختراق حساب الأدمن (${user.name})` : user.name,
+        suspect_phone: cleanPhone,
+        violation_type: isTargetTeacher ? 'admin_intrusion' : 'auth_bruteforce',
+        source_title: isTargetTeacher ? '🚨 محاولة اختراق حساب المعلم / الأدمن بكلمة مرور خاطئة!' : 'محاولة تسجيل دخول فاشلة بكلمة مرور خاطئة',
+        details: `تم إدخال كلمة مرور خاطئة على الحساب (${user.name} - ${cleanPhone}) من الجهاز (${device_name || activeDeviceId})`,
+        request_payload: JSON.stringify({ phone: cleanPhone, attempted_password: String(password).slice(0, 40), device_name })
+      });
       return res.status(401).json({ error: 'رقم الهاتف أو كلمة المرور غير صحيحة' });
     }
 
     const { password: _, ...safeUser } = user;
 
     // Strict Device Fingerprinting (Maximum 2 Devices per Student — blocks 3rd device until teacher resets)
-    const { device_id, device_name } = req.body;
     if (user.role === 'student') {
-      const activeDeviceId = device_id || req.headers['x-device-id'] || ('dev_' + Buffer.from(req.ip + (req.headers['user-agent'] || '')).toString('base64').slice(0, 20));
       const devices = db.prepare('SELECT * FROM user_devices WHERE user_id = ?').all(user.id);
       const isRegistered = devices.some(d => d.device_id === activeDeviceId);
 

@@ -83,6 +83,18 @@ async function request(endpoint, options = {}) {
   }
 
   if (!res.ok) {
+    if (res.status === 403 && data?.is_blocked) {
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      const currentPath = window.location.pathname;
+      if (!currentPath.includes('/login')) {
+        if (typeof window.navigateTo === 'function') {
+          window.navigateTo('/login');
+        } else {
+          window.history.pushState(null, '', '/login');
+        }
+      }
+    }
     const errorMsg = (typeof data?.error === 'string' && data.error)
       || (typeof data?.message === 'string' && data.message)
       || (typeof data === 'string' && data)
@@ -263,7 +275,12 @@ export const api = {
 
   // Content Security & Anti-Leak Violation Reporting
   reportSecurityViolation: (body) => request('/security/report', { method: 'POST', body }),
-  getSecurityViolations: () => request('/security/violations'),
+  reportIntrusionAttempt: (body) => request('/security/intrusion', { method: 'POST', body }),
+  getSecurityViolations: (params = {}) => {
+    const qs = new URLSearchParams(params).toString();
+    return request(`/security/violations${qs ? `?${qs}` : ''}`);
+  },
   takeSecurityAction: (userId, action) => request(`/security/student/${userId}/action`, { method: 'POST', body: { action } }),
+  takeDeviceSecurityAction: (body) => request('/security/device/action', { method: 'POST', body }),
 };
 

@@ -90,7 +90,7 @@ export async function initAdminCourseDetail(id) {
                       <div style="font-size:0.75rem;color:var(--text-muted);margin-top:2px;">
                         ${item.item_type === 'exam'
                           ? `${item.duration_minutes} دقيقة · ${(item.exam_type === 'homework' || Number(item.max_attempts) <= 0) ? '<span style="color:var(--primary);font-weight:700;">واجب مفتوح (محاولات لا نهائية)</span>' : `${item.max_attempts} محاولات`}`
-                          : `${item.duration} دقيقة · المشاهدات: ${Number(item.max_views) === 0 ? '<span style="color:var(--primary);font-weight:700;">لا نهائي</span>' : `${item.max_views ?? 8} مرات`} ${item.is_free ? '· <span style="color:var(--success)">مجاني</span>' : ''}`
+                          : `${item.duration} دقيقة · المشاهدات: ${Number(item.max_views) === 0 ? '<span style="color:var(--primary);font-weight:700;">لا نهائي</span>' : `${item.max_views ?? 5} مرات`} ${item.is_free ? '· <span style="color:var(--success)">مجاني</span>' : ''}`
                         }
                       </div>
                     </div>
@@ -329,10 +329,10 @@ export async function initAdminCourseDetail(id) {
             <div class="form-group" style="flex:1;min-width:110px;"><label class="form-label">المدة (دقائق)</label><input type="number" class="form-input" id="nlDur" value="45"></div>
             <div class="form-group" style="flex:1;min-width:90px;"><label class="form-label">الترتيب</label><input type="number" class="form-input" id="nlOrder" value="${(chapter.items?.length || 0) + 1}"></div>
             <div class="form-group" style="flex:1.6;min-width:210px;">
-              <label class="form-label">عدد المشاهدات (0 = لا نهائي)</label>
+              <label class="form-label">عدد المشاهدات (الافتراضي: 5 · 0 = لا نهائي)</label>
               <div style="display:flex;gap:6px;align-items:center;">
                 <button type="button" class="btn btn-secondary btn-sm" id="nlViewsMinus" style="padding:0 10px;">-</button>
-                <input type="number" class="form-input" id="nlMaxViews" min="0" max="999" value="8" style="text-align:center;font-weight:800;">
+                <input type="number" class="form-input" id="nlMaxViews" min="0" max="999" value="5" style="text-align:center;font-weight:800;">
                 <button type="button" class="btn btn-secondary btn-sm" id="nlViewsPlus" style="padding:0 10px;">+</button>
                 <button type="button" class="btn btn-ghost btn-sm" id="nlViewsUnlimited" style="font-size:0.74rem;font-weight:800;color:var(--primary);border:1px solid rgba(16,185,129,0.3);white-space:nowrap;">لا نهائي</button>
               </div>
@@ -424,7 +424,7 @@ export async function initAdminCourseDetail(id) {
               vdocipher_id: vdoIdVal,
               pdf_url: document.getElementById('nlPdf').value.trim() || null,
               duration: parseInt(document.getElementById('nlDur').value),
-              order_num: lessonOrder, max_views: Number.isFinite(rawMaxViews) ? rawMaxViews : 8,
+              order_num: lessonOrder, max_views: Number.isFinite(rawMaxViews) ? rawMaxViews : 5,
               is_free: document.getElementById('nlFree').checked,
               prerequisite_exam_id: prereqExamVal ? parseInt(prereqExamVal) : null,
               prerequisite_passing_score: prereqScoreVal
@@ -444,7 +444,7 @@ export async function initAdminCourseDetail(id) {
         let lesson;
         course.chapters.forEach(ch => { const l = ch.items?.find(x => x.id == lid && x.item_type === 'lesson'); if(l) lesson = l; });
         if(!lesson) return;
-        const currentMaxViews = (lesson.max_views !== undefined && lesson.max_views !== null) ? lesson.max_views : 8;
+        const currentMaxViews = (lesson.max_views !== undefined && lesson.max_views !== null) ? lesson.max_views : 5;
         
         showModal('تعديل الدرس وامتحان المحاضرة', `
           <div class="form-group"><label class="form-label">عنوان الدرس</label><input type="text" class="form-input" id="elTitle" value="${esc(lesson.title)}" required></div>
@@ -535,7 +535,7 @@ export async function initAdminCourseDetail(id) {
               vdocipher_id: vdoIdVal,
               pdf_url: document.getElementById('elPdf').value.trim() || null,
               duration: parseInt(document.getElementById('elDur').value),
-              order_num: parseInt(document.getElementById('elOrder').value), max_views: Number.isFinite(rawMaxViews) ? rawMaxViews : 8,
+              order_num: parseInt(document.getElementById('elOrder').value), max_views: Number.isFinite(rawMaxViews) ? rawMaxViews : 5,
               is_free: document.getElementById('elFree').checked,
               prerequisite_exam_id: prereqExamVal ? parseInt(prereqExamVal) : null,
               prerequisite_passing_score: prereqScoreVal

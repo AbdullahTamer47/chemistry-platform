@@ -62,7 +62,7 @@ const VIEW_GRACE_HOURS = 6;
 
 function getViewQuota(userId, lesson) {
   const progress = db.prepare('SELECT views_count, extra_views, last_view_at FROM lesson_progress WHERE user_id = ? AND lesson_id = ?').get(userId, lesson.id);
-  const rawMax = lesson.max_views !== undefined && lesson.max_views !== null ? Number(lesson.max_views) : 8;
+  const rawMax = lesson.max_views !== undefined && lesson.max_views !== null ? Number(lesson.max_views) : 5;
   const unlimited = rawMax <= 0;
   const maxViews = unlimited ? 0 : rawMax;
   const extra = Number(progress?.extra_views || 0);
@@ -546,16 +546,24 @@ router.post('/:id/request-views', authMiddleware, (req, res) => {
   try {
     const lesson = db.prepare('SELECT l.id, l.title, c.title as course_title FROM lessons l LEFT JOIN courses c ON l.course_id = c.id WHERE l.id = ?').get(req.params.id);
     if (!lesson) return res.status(404).json({ error: 'الدرس غير موجود' });
+
+    const existingProg = db.prepare('SELECT id FROM lesson_progress WHERE user_id = ? AND lesson_id = ?').get(req.user.id, lesson.id);
+    if (existingProg) {
+      db.prepare('UPDATE lesson_progress SET extra_views_requested = 1 WHERE id = ?').run(existingProg.id);
+    } else {
+      db.prepare('INSERT INTO lesson_progress (user_id, lesson_id, views_count, extra_views_requested) VALUES (?, ?, 0, 1)').run(req.user.id, lesson.id);
+    }
+
     const recent = db.prepare("SELECT id FROM notifications WHERE title = ? AND message LIKE ? AND datetime(created_at) > datetime('now', '-6 hours') LIMIT 1")
       .get('طلب مشاهدات إضافية', `%#${req.user.id}#%${lesson.id}%`);
-    if (recent) return res.json({ message: 'تم إرسال طلبك بالفعل، سيتم مراجعته قريباً' });
+    if (recent) return res.json({ message: 'تم إرسال طلبك بالفعل لهذه المحاضرة، سيتم مراجعته قريباً' });
 
     const teachers = db.prepare("SELECT id FROM users WHERE role IN ('teacher', 'admin')").all();
-    const msg = `الطالب "${req.user.name}" (#${req.user.id}#) يطلب مشاهدات إضافية لمحاضرة "${lesson.title}" (رقم ${lesson.id}) — ${lesson.course_title || ''}. يمكنك زيادة المشاهدات من سجل الطلاب ← تقرير الطالب.`;
+    const msg = `الطالب "${req.user.name}" (#${req.user.id}#) يطلب مشاهدات إضافية لمحاضرة "${lesson.title}" (رقم ${lesson.id}) — ${lesson.course_title || ''}. يمكنك فتح مشاهدات لهذه المحاضرة تحديداً من سجل الطلاب ← تقرير الطالب.`;
     for (const t of teachers) {
       db.prepare('INSERT INTO notifications (user_id, title, message, type) VALUES (?, ?, ?, ?)').run(t.id, 'طلب مشاهدات إضافية', msg, 'info');
     }
-    res.json({ message: 'تم إرسال طلبك للمدرس، وسيتم إشعارك عند إضافة المشاهدات' });
+    res.json({ message: 'تم إرسال طلبك للمدرس لهذه المحاضرة، وسيتم إشعارك عند إضافة المشاهدات' });
   } catch (err) {
     res.status(500).json({ error: 'حدث خطأ في إرسال الطلب' });
   }
@@ -587,9 +595,9 @@ router.post('/', authMiddleware, teacherMiddleware, (req, res) => {
     const { chapter_id, course_id, title, description, video_url, video_source, vdocipher_id, duration, order_num, max_views, is_free, pdf_url, prerequisite_exam_id, prerequisite_passing_score } = req.body;
     const prereqId = prerequisite_exam_id ? parseInt(prerequisite_exam_id, 10) : null;
     const prereqScore = prerequisite_passing_score ? parseInt(prerequisite_passing_score, 10) : 60;
-    const parsedMaxViews = max_views !== undefined && max_views !== null && max_views !== '' ? parseInt(max_views, 10) : 8;
+    const parsedMaxViews = max_views !== undefined && max_views !== null && max_views !== '' ? parseInt(max_views, 10) : 5;
     const result = db.prepare('INSERT INTO lessons (chapter_id, course_id, title, description, video_url, video_source, vdocipher_id, duration, order_num, max_views, is_free, pdf_url, prerequisite_exam_id, prerequisite_passing_score) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
-      .run(chapter_id, course_id, title, description, video_url || '', video_source || 'custom_shield', vdocipher_id || null, duration || 0, order_num || 0, Number.isFinite(parsedMaxViews) ? parsedMaxViews : 8, is_free ? 1 : 0, pdf_url || null, prereqId, prereqScore);
+      .run(chapter_id, course_id, title, description, video_url || '', video_source || 'custom_shield', vdocipher_id || null, duration || 0, order_num || 0, Number.isFinite(parsedMaxViews) ? parsedMaxViews : 5, is_free ? 1 : 0, pdf_url || null, prereqId, prereqScore);
     try { db.prepare('UPDATE courses SET updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(course_id); } catch (e) {}
     res.status(201).json(db.prepare('SELECT * FROM lessons WHERE id = ?').get(result.lastInsertRowid));
   } catch (err) { res.status(500).json({ error: 'حدث خطأ في إضافة الدرس' }); }

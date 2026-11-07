@@ -17,6 +17,7 @@ import paymentRoutes from './routes/payments.js';
 import uploadRoutes from './routes/upload.js';
 import packageRoutes from './routes/packages.js';
 import securityRoutes from './routes/security.js';
+import { logSecurityIntrusion, optionalAuth } from './middleware/auth.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -78,6 +79,27 @@ app.use(async (req, res, next) => {
     return origJson(body);
   };
 
+  next();
+});
+
+// Active WAF & Intrusion Detection Middleware (Logs any SQLi, XSS, Path Traversal, or Tampering Attempts)
+const MALICIOUS_PATTERN = /(\bunion\s+select\b|\bdrop\s+table\b|\bdelete\s+from\s+users\b|'\s*or\s*'1'\s*=\s*'1|<script\b|javascript:\s*[a-z]|\.\.\/|\.\.\\|\/etc\/passwd|\.env\b)/i;
+app.use(optionalAuth, (req, res, next) => {
+  try {
+    if (req.path.includes('/upload')) return next();
+    const urlToScan = decodeURIComponent(req.originalUrl || req.url || '');
+    const bodyToScan = req.body ? JSON.stringify(req.body).slice(0, 1200) : '';
+    const combined = `${urlToScan} ${bodyToScan}`;
+    if (MALICIOUS_PATTERN.test(combined)) {
+      logSecurityIntrusion(req, {
+        violation_type: 'hack_attempt',
+        source_title: '🚨 محاولة اختراق وحقن أوامر خبيثة (SQLi / XSS / Traversal)',
+        details: `تم رصد وإحباط طلب مشبوه على المسار (${req.method} ${req.originalUrl})`,
+        request_payload: bodyToScan.slice(0, 400)
+      });
+      return res.status(403).json({ error: 'تم رصد محاولة غير مصرح بها وحجب الطلب أمنياً' });
+    }
+  } catch (_) {}
   next();
 });
 

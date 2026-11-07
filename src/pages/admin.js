@@ -819,49 +819,78 @@ export async function initAdminStudents() {
                   </div>`).join('') 
                 : '<div style="font-size:0.85rem;color:var(--text-muted)">لم يقم بأي امتحانات.</div>';
 
-              const lessonsHtml = details.lesson_progress && details.lesson_progress.length > 0
-                ? details.lesson_progress.map(l => {
-                    const isUnlimited = Number(l.max_views) <= 0;
-                    const allowedTotal = isUnlimited ? 'لا نهائي' : ((l.max_views || 8) + (l.extra_views || 0));
-                    const isExhausted = !isUnlimited && Number(l.views_count || 0) >= Number(allowedTotal);
-                    return `
-                      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;background:var(--bg-secondary);padding:10px 12px;border-radius:8px;margin-bottom:8px;border:1px solid ${isExhausted ? 'rgba(225,29,72,0.35)' : 'var(--border-light)'};">
-                        <div style="min-width:160px;flex:1;">
-                          <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
-                            <strong style="font-size:0.88rem">${escA(l.lesson_title)}</strong>
-                            ${l.completed ? '<span class="badge badge-success" style="font-size:0.65rem;padding:2px 6px">مكتمل</span>' : ''}
-                            ${isExhausted ? '<span class="badge badge-danger" style="font-size:0.65rem;padding:2px 6px">استنفد المشاهدات</span>' : ''}
-                          </div>
-                          <div style="font-size:0.74rem;color:var(--text-muted)">${escA(l.course_title)}</div>
-                        </div>
+              const allLessons = details.lesson_progress || [];
+              const uniqueCourses = [];
+              const seenCourseIds = new Set();
+              allLessons.forEach(l => {
+                if (l.course_id && !seenCourseIds.has(String(l.course_id))) {
+                  seenCourseIds.add(String(l.course_id));
+                  uniqueCourses.push({ id: l.course_id, title: l.course_title });
+                }
+              });
+
+              const renderFilteredLessonsHtml = (courseFilterId = '', searchQuery = '') => {
+                const q = searchQuery.trim().toLowerCase();
+                const filtered = allLessons.filter(l => {
+                  if (courseFilterId && String(l.course_id) !== String(courseFilterId)) return false;
+                  if (q && !String(l.lesson_title || '').toLowerCase().includes(q) && !String(l.course_title || '').toLowerCase().includes(q)) return false;
+                  return true;
+                });
+                if (filtered.length === 0) {
+                  return '<div style="font-size:0.85rem;color:var(--text-muted);text-align:center;padding:16px;">لا توجد محاضرات مطابقة للبحث أو التصنيف.</div>';
+                }
+                return filtered.map(l => {
+                  const isUnlimited = Number(l.max_views) <= 0;
+                  const baseMax = (l.max_views !== undefined && l.max_views !== null) ? Number(l.max_views) : 5;
+                  const allowedTotal = isUnlimited ? 'لا نهائي' : Math.max(1, baseMax + Number(l.extra_views || 0));
+                  const isExhausted = !isUnlimited && Number(l.views_count || 0) >= Number(allowedTotal);
+                  const isRequested = Number(l.extra_views_requested) === 1;
+                  return `
+                    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;background:${isRequested ? 'rgba(245,158,11,0.09)' : 'var(--bg-secondary)'};padding:10px 12px;border-radius:8px;margin-bottom:8px;border:1.5px solid ${isRequested ? 'var(--warning)' : isExhausted ? 'rgba(225,29,72,0.35)' : 'var(--border-light)'};">
+                      <div style="min-width:170px;flex:1;">
                         <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
-                          <span style="font-size:0.78rem;font-weight:800;color:var(--text-primary);background:var(--bg-card);padding:4px 10px;border-radius:6px;border:1px solid var(--border-light);">
-                            المستهلك: ${l.views_count || 0} / ${allowedTotal}
-                          </span>
-                          <button type="button" class="btn btn-secondary btn-sm st-lesson-view-btn" data-lid="${l.lesson_id}" data-act="adjust" data-delta="-1" style="padding:3px 8px;font-size:0.75rem;font-weight:800;" title="تقليل المشاهدات المسموحة (-1)">-1</button>
-                          <button type="button" class="btn btn-secondary btn-sm st-lesson-view-btn" data-lid="${l.lesson_id}" data-act="adjust" data-delta="1" style="padding:3px 8px;font-size:0.75rem;font-weight:800;" title="إضافة مشاهدة إضافية (+1)">+1</button>
-                          <button type="button" class="btn btn-secondary btn-sm st-lesson-view-btn" data-lid="${l.lesson_id}" data-act="adjust" data-delta="3" style="padding:3px 8px;font-size:0.75rem;font-weight:800;" title="إضافة 3 مشاهدات إضافية (+3)">+3</button>
-                          <button type="button" class="btn btn-primary btn-sm st-lesson-view-btn" data-lid="${l.lesson_id}" data-act="reset" style="padding:3px 10px;font-size:0.74rem;font-weight:800;" title="تصفير العداد وإعادة السماح بالمشاهدة">إعادة السماح</button>
+                          <strong style="font-size:0.88rem">${escA(l.lesson_title)}</strong>
+                          ${isRequested ? '<span class="badge badge-warning" style="font-size:0.68rem;padding:2px 8px;font-weight:900;">⚠️ الطالب يطلب مشاهدات لهذا الدرس</span>' : ''}
+                          ${l.completed ? '<span class="badge badge-success" style="font-size:0.65rem;padding:2px 6px">مكتمل</span>' : ''}
+                          ${isExhausted ? '<span class="badge badge-danger" style="font-size:0.65rem;padding:2px 6px">استنفد المشاهدات</span>' : ''}
                         </div>
-                      </div>`;
-                  }).join('')
-                : '<div style="font-size:0.85rem;color:var(--text-muted)">لم يقم بمشاهدة أي دروس.</div>';
+                        <div style="font-size:0.74rem;color:var(--text-muted)">${escA(l.course_title)}${l.chapter_title ? ` · ${escA(l.chapter_title)}` : ''}</div>
+                      </div>
+                      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+                        <span style="font-size:0.78rem;font-weight:800;color:var(--text-primary);background:var(--bg-card);padding:4px 10px;border-radius:6px;border:1px solid var(--border-light);">
+                          المستهلك: ${l.views_count || 0} / ${allowedTotal}
+                        </span>
+                        <button type="button" class="btn btn-secondary btn-sm st-lesson-view-btn" data-lid="${l.lesson_id}" data-act="adjust" data-delta="-1" style="padding:3px 8px;font-size:0.75rem;font-weight:800;" title="تقليل المشاهدات المسموحة (-1)">-1</button>
+                        <button type="button" class="btn btn-secondary btn-sm st-lesson-view-btn" data-lid="${l.lesson_id}" data-act="adjust" data-delta="1" style="padding:3px 8px;font-size:0.75rem;font-weight:800;" title="إضافة مشاهدة إضافية لهذا الدرس (+1)">+1</button>
+                        <button type="button" class="btn btn-secondary btn-sm st-lesson-view-btn" data-lid="${l.lesson_id}" data-act="adjust" data-delta="2" style="padding:3px 8px;font-size:0.75rem;font-weight:800;" title="إضافة مشاهدتين لهذا الدرس (+2)">+2</button>
+                        <button type="button" class="btn btn-primary btn-sm st-lesson-view-btn" data-lid="${l.lesson_id}" data-act="reset" style="padding:3px 10px;font-size:0.74rem;font-weight:800;" title="تصفير عداد هذا الدرس فقط وإعادة السماح (${baseMax} مرات)">تصفير هذا الدرس</button>
+                      </div>
+                    </div>`;
+                }).join('');
+              };
 
               document.querySelector('.modal-overlay')?.remove();
               showModal(`تقرير الطالب والتحكم بالمشاهدات: ${escA(s.name)}`, `
-                <div style="margin-bottom:20px;display:grid;grid-template-columns:1fr 1fr;gap:12px">
+                <div style="margin-bottom:16px;display:grid;grid-template-columns:1fr 1fr;gap:12px">
                   <div class="card" style="padding:12px"><div style="font-size:0.8rem;color:var(--text-muted)">متوسط درجاته</div><div style="font-size:1.4rem;font-weight:700;color:var(--primary)">${s.avg_score || 0}%</div></div>
-                  <div class="card" style="padding:12px"><div style="font-size:0.8rem;color:var(--text-muted)">عدد الكورسات</div><div style="font-size:1.4rem;font-weight:700;color:var(--accent)">${details.enrollments?.length || 0}</div></div>
+                  <div class="card" style="padding:12px"><div style="font-size:0.8rem;color:var(--text-muted)">عدد الكورسات المشترك بها</div><div style="font-size:1.4rem;font-weight:700;color:var(--accent)">${details.enrollments?.length || 0}</div></div>
                 </div>
-                <h4 style="font-weight:700;margin-bottom:12px;display:flex;align-items:center;gap:6px"><span class="material-symbols-rounded" style="color:var(--gold-600)">assignment</span> نتائج الامتحانات الأخيرة</h4>
-                <div style="max-height:180px;overflow-y:auto;margin-bottom:20px">${examsHtml}</div>
-                <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:12px;">
-                  <h4 style="font-weight:700;margin:0;display:flex;align-items:center;gap:6px"><span class="material-symbols-rounded" style="color:var(--info)">play_circle</span> التحكم في مشاهدات المحاضرات للطالب</h4>
-                  <button type="button" class="btn btn-primary btn-sm" id="resetAllStudentViewsBtn" style="gap:4px;font-size:0.75rem;font-weight:800;">
-                    <span class="material-symbols-rounded" style="font-size:1rem;">restart_alt</span> تصفير واستعادة جميع المشاهدات
-                  </button>
+                <h4 style="font-weight:700;margin-bottom:10px;display:flex;align-items:center;gap:6px"><span class="material-symbols-rounded" style="color:var(--gold-600)">assignment</span> نتائج الامتحانات الأخيرة</h4>
+                <div style="max-height:150px;overflow-y:auto;margin-bottom:18px">${examsHtml}</div>
+
+                <div style="margin-bottom:10px;">
+                  <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:8px;">
+                    <h4 style="font-weight:800;margin:0;display:flex;align-items:center;gap:6px"><span class="material-symbols-rounded" style="color:var(--info)">play_circle</span> التحكم في مشاهدات محاضرة أو درس محدد (الحد الافتراضي: 5 مرات)</h4>
+                  </div>
+                  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;">
+                    <select id="stReportCourseFilter" class="form-select" style="font-size:0.82rem;padding:7px 10px;">
+                      <option value="">كل كورسات الطالب (${uniqueCourses.length})</option>
+                      ${uniqueCourses.map(c => `<option value="${c.id}">${escA(c.title)}</option>`).join('')}
+                    </select>
+                    <input type="text" id="stReportLessonSearch" class="form-input" placeholder="ابحث باسم المحاضرة أو الفيديو..." style="font-size:0.82rem;padding:7px 10px;">
+                  </div>
                 </div>
-                <div style="max-height:240px;overflow-y:auto">${lessonsHtml}</div>
+                <div id="stReportLessonsContainer" style="max-height:260px;overflow-y:auto">${renderFilteredLessonsHtml()}</div>
                 <div style="display:flex;gap:10px;margin-top:20px;">
                   <button class="btn btn-secondary flex-1" onclick="document.querySelector('.modal-overlay')?.remove()">إغلاق</button>
                   <button class="btn btn-outline-danger" id="modalResetDeviceBtn" style="border:1px solid var(--error);color:var(--error);gap:6px;">
@@ -870,30 +899,34 @@ export async function initAdminStudents() {
                 </div>
               `);
 
-              document.getElementById('resetAllStudentViewsBtn')?.addEventListener('click', async () => {
-                try {
-                  const res = await api.resetStudentAllViews(s.id);
-                  showToast(res.message || 'تم تصفير جميع مشاهدات الطالب بنجاح', 'success');
-                  openStudentReportModal();
-                } catch (err) {
-                  showToast(err.message, 'error');
-                }
-              });
-
-              document.querySelectorAll('.st-lesson-view-btn').forEach(vBtn => {
-                vBtn.addEventListener('click', async () => {
-                  const lid = vBtn.dataset.lid;
-                  const act = vBtn.dataset.act;
-                  const delta = parseInt(vBtn.dataset.delta || '0', 10);
-                  try {
-                    const res = await api.adjustStudentLessonViews(s.id, lid, { action: act, delta });
-                    showToast(res.message || 'تم تحديث مشاهدات الطالب', 'success');
-                    openStudentReportModal();
-                  } catch (err) {
-                    showToast(err.message, 'error');
-                  }
+              const bindLessonViewButtons = () => {
+                document.querySelectorAll('#stReportLessonsContainer .st-lesson-view-btn').forEach(vBtn => {
+                  vBtn.addEventListener('click', async () => {
+                    const lid = vBtn.dataset.lid;
+                    const act = vBtn.dataset.act;
+                    const delta = parseInt(vBtn.dataset.delta || '0', 10);
+                    try {
+                      const res = await api.adjustStudentLessonViews(s.id, lid, { action: act, delta });
+                      showToast(res.message || 'تم تحديث مشاهدات المحاضرة المحددة بنجاح', 'success');
+                      openStudentReportModal();
+                    } catch (err) {
+                      showToast(err.message, 'error');
+                    }
+                  });
                 });
-              });
+              };
+              bindLessonViewButtons();
+
+              const courseFilterSel = document.getElementById('stReportCourseFilter');
+              const lessonSearchInp = document.getElementById('stReportLessonSearch');
+              const refreshLessonsList = () => {
+                const container = document.getElementById('stReportLessonsContainer');
+                if (!container) return;
+                container.innerHTML = renderFilteredLessonsHtml(courseFilterSel?.value || '', lessonSearchInp?.value || '');
+                bindLessonViewButtons();
+              };
+              courseFilterSel?.addEventListener('change', refreshLessonsList);
+              lessonSearchInp?.addEventListener('input', refreshLessonsList);
 
               document.getElementById('modalResetDeviceBtn')?.addEventListener('click', async () => {
                 const ok = await confirmModal('إعادة ضبط الأجهزة', `هل أنت متأكد من مسح الأجهزة المسجلة للطالب ${escA(s.name)}؟ سيمكنه ذلك من الدخول من أجهزة جديدة.`);
@@ -1527,7 +1560,10 @@ const VIOLATION_META = {
   idm_download: { label: 'برنامج تحميل (IDM / Sniffer)', icon: 'cloud_off', badge: 'badge-warning' },
   devtools: { label: 'أدوات فحص الكود (DevTools)', icon: 'code_off', badge: 'badge-warning' },
   pdf_leak: { label: 'تصوير / طباعة مذكرة PDF', icon: 'picture_as_pdf', badge: 'badge-info' },
-  exam_leak: { label: 'تصوير / نسخ امتحان', icon: 'quiz', badge: 'badge-info' }
+  exam_leak: { label: 'تصوير / نسخ امتحان', icon: 'quiz', badge: 'badge-info' },
+  admin_intrusion: { label: 'محاولة دخول للأدمن / صلاحيات المعلم', icon: 'admin_panel_settings', badge: 'badge-danger' },
+  auth_bruteforce: { label: 'محاولة دخول فاشلة / تخمين باسورد', icon: 'password', badge: 'badge-warning' },
+  hack_attempt: { label: 'محاولة اختراق أو تلاعب برمجي (WAF)', icon: 'bug_report', badge: 'badge-danger' }
 };
 
 export function renderAdminSecurity() {
@@ -1539,9 +1575,9 @@ export function renderAdminSecurity() {
         <div>
           <h1 class="page-title">
             <span class="material-symbols-rounded" style="color:#e11d48">gpp_maybe</span>
-            تقارير المخالفات وحماية المحتوى
+            تقارير المخالفات وحماية المحتوى والاختراق
           </h1>
-          <p class="page-subtitle">متابعة الطلاب الذين حاولوا التقاط صور للشاشة (Screenshot)، أو تسجيل الفيديو (Screen Record)، أو استخدام برامج التحميل (IDM)</p>
+          <p class="page-subtitle">رصد سري شامل لتصوير الشاشة، تسجيل الفيديو، برامج IDM، ومحاولات الاختراق أو الدخول غير المصرح به للوحة الأدمن</p>
         </div>
         <button class="btn btn-secondary btn-sm" id="refreshSecurityLogsBtn" style="gap:6px; font-weight:800;">
           <span class="material-symbols-rounded">refresh</span> تحديث السجلات
@@ -1549,8 +1585,25 @@ export function renderAdminSecurity() {
       </div>
 
       <!-- Summary Stats Grid -->
-      <div class="stats-grid" id="securityStatsGrid" style="margin-bottom:24px;">
+      <div class="stats-grid" id="securityStatsGrid" style="margin-bottom:20px;">
         <div class="loading-spinner"><div class="spinner"></div></div>
+      </div>
+
+      <!-- Global Category Filter Tabs (Filters BOTH Offending Students and Chronological Log) -->
+      <div class="card" style="padding:12px 16px; margin-bottom:20px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px;">
+        <div style="font-weight:800; font-size:0.88rem; display:flex; align-items:center; gap:6px; color:var(--text-primary);">
+          <span class="material-symbols-rounded" style="color:var(--primary);">filter_alt</span>
+          <span>تصنيف المخالفات والتقارير:</span>
+        </div>
+        <div class="tabs" id="secTypeTabs" style="margin:0; flex-wrap:wrap;">
+          <div class="tab active" data-vtype="all">الكل</div>
+          <div class="tab" data-vtype="screenshot">سكرين شوت</div>
+          <div class="tab" data-vtype="screen_record">تسجيل شاشة</div>
+          <div class="tab" data-vtype="idm_download">برامج تحميل IDM</div>
+          <div class="tab" data-vtype="pdf_leak">مذكرات PDF</div>
+          <div class="tab" data-vtype="exam_leak">امتحانات</div>
+          <div class="tab" data-vtype="intrusion">اختراق ودخول الأدمن</div>
+        </div>
       </div>
 
       <!-- Offending Students Card (سجل الطلاب المخالفين) -->
@@ -1558,30 +1611,22 @@ export function renderAdminSecurity() {
         <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">
           <h3 class="card-title" style="margin:0;display:flex;align-items:center;gap:8px;">
             <span class="material-symbols-rounded" style="color:#e11d48">person_alert</span>
-            قائمة الطلاب المخالفين وإجراءات الحظر الفوري
+            قائمة الطلاب المخالفين وإجراءات الحظر الأبدي (حساب + جهاز)
           </h3>
-          <span style="font-size:0.78rem;color:var(--text-muted);font-weight:700;">رصد سري فوري للمعلم — يمكنك حظر أو فك حظر أي طالب بضغطة واحدة</span>
+          <span style="font-size:0.78rem;color:var(--text-muted);font-weight:700;">حظر الطالب يحظر حسابه وجهازه للأبد حتى يقوم المعلم بفك الحظر</span>
         </div>
         <div id="securityOffendersList" style="margin-top:14px;">
           <div class="loading-spinner"><div class="spinner"></div></div>
         </div>
       </div>
 
-      <!-- Chronological Violation Events Log -->
+      <!-- Chronological Violation & Intrusion Events Log -->
       <div class="card">
         <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:14px;">
           <h3 class="card-title" style="margin:0;display:flex;align-items:center;gap:8px;">
             <span class="material-symbols-rounded" style="color:var(--primary)">history</span>
-            السجل الزمني التفصيلي للمخالفات المرصودة
+            السجل الزمني التفصيلي للمخالفات ومحاولات الدخول والاختراق (بكل البيانات)
           </h3>
-          <div class="tabs" id="secTypeTabs" style="margin:0;">
-            <div class="tab active" data-vtype="all">الكل</div>
-            <div class="tab" data-vtype="screenshot">سكرين شوت</div>
-            <div class="tab" data-vtype="screen_record">تسجيل شاشة</div>
-            <div class="tab" data-vtype="idm_download">برامج تحميل IDM</div>
-            <div class="tab" data-vtype="pdf_leak">مذكرات PDF</div>
-            <div class="tab" data-vtype="exam_leak">امتحانات</div>
-          </div>
         </div>
         <div id="securityTimelineList">
           <div class="loading-spinner"><div class="spinner"></div></div>
@@ -1603,7 +1648,7 @@ export async function initAdminSecurity() {
 
   async function loadSecurityData() {
     try {
-      const data = await api.getSecurityViolations({ type: currentFilter, limit: 150 });
+      const data = await api.getSecurityViolations({ type: currentFilter, limit: 200 });
       const st = data.stats || {};
       const offenders = data.offenders || [];
       const violations = data.violations || [];
@@ -1632,8 +1677,12 @@ export async function initAdminSecurity() {
             <div class="stat-info"><div class="stat-value">${(st.pdf_leaks || 0) + (st.exam_leaks || 0)}</div><div class="stat-label">مخالفات PDF وامتحانات</div></div>
           </div>
           <div class="stat-card">
+            <div class="stat-icon" style="background:rgba(245,158,11,0.15);color:#d97706;"><span class="material-symbols-rounded">admin_panel_settings</span></div>
+            <div class="stat-info"><div class="stat-value">${st.intrusions || 0}</div><div class="stat-label">اختراق ودخول للأدمن</div></div>
+          </div>
+          <div class="stat-card">
             <div class="stat-icon" style="background:rgba(220,38,38,0.16);color:#dc2626;"><span class="material-symbols-rounded">block</span></div>
-            <div class="stat-info"><div class="stat-value">${st.blocked_students || 0}</div><div class="stat-label">طلاب محظورون</div></div>
+            <div class="stat-info"><div class="stat-value">${st.blocked_students || 0} <small style="font-size:0.72rem;color:var(--text-muted);">(${st.banned_devices || 0} جهاز)</small></div><div class="stat-label">محظورون نهائياً (حساب + جهاز)</div></div>
           </div>
         `;
       }
@@ -1644,8 +1693,8 @@ export async function initAdminSecurity() {
           offEl.innerHTML = `
             <div class="empty-state" style="padding:32px;">
               <span class="material-symbols-rounded" style="color:var(--success);">verified_user</span>
-              <h3>سجل الأمان نظيف تماماً</h3>
-              <p>لم يتم رصد أي محاولات تصوير أو تسجيل شاشة أو تحميل غير مصرح به من الطلاب حتى الآن.</p>
+              <h3>لا يوجد طلاب مخالفون في هذا التصنيف</h3>
+              <p>لم يتم رصد أي مخالفات مطابقة للتصنيف المحدد حالياً.</p>
             </div>
           `;
         } else {
@@ -1670,8 +1719,8 @@ export async function initAdminSecurity() {
                     const parentWa = formatToIntlPhone(o.parent_phone || o.phone);
                     const waMsg = encodeURIComponent(
                       `تنبيه أمني هام من منصة د. زياد رمزي عياد للكيمياء بخصوص الطالب/ة: ${o.name}\n` +
-                      `تم رصد ${o.violations_count} محاولات لتصوير أو تسجيل شاشة المحاضرات المحمية (${o.screenshot_count || 0} سكرين شوت، ${o.record_count || 0} تسجيل شاشة، ${o.idm_count || 0} برنامج تحميل).\n` +
-                      `يرجى التنبيه المشدد على الطالب لأن النظام يقوم بحظر الحساب وإيقاف الاشتراكات تلقائياً عند تكرار المحاولة.`
+                      `تم رصد ${o.violations_count} محاولات مخالفة (${o.screenshot_count || 0} سكرين شوت، ${o.record_count || 0} تسجيل شاشة، ${o.idm_count || 0} برنامج تحميل).\n` +
+                      `يرجى التنبيه المشدد على الطالب لأن النظام يقوم بحظر الحساب والجهاز نهائياً عند تكرار المحاولة.`
                     );
                     return `
                       <tr>
@@ -1698,6 +1747,7 @@ export async function initAdminSecurity() {
                             ${o.record_count ? `<span class="badge badge-danger" title="تسجيل شاشة">🎥 ${o.record_count} تسجيل</span>` : ''}
                             ${o.idm_count ? `<span class="badge badge-danger" title="برامج تحميل IDM">⬇️ ${o.idm_count} تحميل</span>` : ''}
                             ${o.leak_count ? `<span class="badge badge-info" title="ملفات وامتحانات">📄 ${o.leak_count} ملفات</span>` : ''}
+                            ${o.intrusion_count ? `<span class="badge badge-danger" title="محاولات اختراق أو دخول للأدمن">🚨 ${o.intrusion_count} اختراق/أدمن</span>` : ''}
                           </div>
                         </td>
                         <td>
@@ -1708,19 +1758,19 @@ export async function initAdminSecurity() {
                         <td style="font-size:0.76rem;color:var(--text-secondary);">${o.last_violation_at ? new Date(o.last_violation_at).toLocaleString('ar-EG') : '-'}</td>
                         <td>
                           ${o.is_blocked
-                            ? '<span class="badge badge-danger" style="font-weight:900;">محظور وموقوف</span>'
+                            ? '<span class="badge badge-danger" style="font-weight:900;">محظور هو وجهازه للأبد</span>'
                             : '<span class="badge badge-warning" style="font-weight:800;">تحت المراقبة</span>'
                           }
                         </td>
                         <td>
                           <div style="display:flex;gap:6px;flex-wrap:wrap;">
                             ${o.is_blocked ? `
-                              <button type="button" class="btn btn-sm btn-primary sec-action-btn" data-uid="${o.id}" data-act="unblock" data-name="${escA(o.name)}" title="فك الحظر وتصفير الإنذارات">
-                                <span class="material-symbols-rounded" style="font-size:1rem;">lock_open</span> فك الحظر
+                              <button type="button" class="btn btn-sm btn-primary sec-action-btn" data-uid="${o.id}" data-act="unblock" data-name="${escA(o.name)}" title="فك الحظر عن الطالب وجميع أجهزته">
+                                <span class="material-symbols-rounded" style="font-size:1rem;">lock_open</span> فك الحظر (طالب + جهاز)
                               </button>
                             ` : `
-                              <button type="button" class="btn btn-sm sec-action-btn" data-uid="${o.id}" data-act="block" data-name="${escA(o.name)}" style="background:#e11d48;color:#fff;border:none;font-weight:800;" title="حظر الطالب وإيقاف اشتراكاته فوراً">
-                                <span class="material-symbols-rounded" style="font-size:1rem;">block</span> حظر الطالب
+                              <button type="button" class="btn btn-sm sec-action-btn" data-uid="${o.id}" data-act="block" data-name="${escA(o.name)}" style="background:#e11d48;color:#fff;border:none;font-weight:800;" title="حظر الطالب وجهازه للأبد وإيقاف اشتراكاته فوراً">
+                                <span class="material-symbols-rounded" style="font-size:1rem;">block</span> حظر الطالب وجهازه للأبد
                               </button>
                             `}
                             ${parentWa ? `
@@ -1746,11 +1796,11 @@ export async function initAdminSecurity() {
               const uid = btn.dataset.uid;
               const act = btn.dataset.act;
               const stName = btn.dataset.name;
-              const confirmTitle = act === 'block' ? 'تأكيد حظر الطالب' : act === 'unblock' ? 'فك حظر الطالب' : 'مسح سجل المخالفات';
+              const confirmTitle = act === 'block' ? 'تأكيد الحظر الأبدي للطالب وجهازه' : act === 'unblock' ? 'فك الحظر عن الطالب وجهازه' : 'مسح سجل المخالفات';
               const confirmDesc = act === 'block'
-                ? `هل أنت متأكد من حظر الطالب "${stName}" وإيقاف جميع اشتراكاته فوراً؟`
+                ? `هل أنت متأكد من حظر الطالب "${stName}" وجهازه للأبد وإيقاف جميع اشتراكاته فوراً؟ لن يتمكن من الدخول أو إنشاء حساب جديد من نفس الجهاز حتى تقوم أنت بفك الحظر.`
                 : act === 'unblock'
-                ? `هل تريد فك الحظر عن الطالب "${stName}" وإعادة تفعيل اشتراكاته وتصفير إنذاراته؟`
+                ? `هل تريد فك الحظر عن الطالب "${stName}" وأجهزته وإعادة تفعيل اشتراكاته؟`
                 : `هل تريد مسح سجل المخالفات والإنذارات الخاصة بالطالب "${stName}"؟`;
 
               const ok = await confirmModal(confirmTitle, confirmDesc);
@@ -1776,34 +1826,70 @@ export async function initAdminSecurity() {
             <div style="display:flex;flex-direction:column;gap:10px;">
               ${violations.map(v => {
                 const meta = VIOLATION_META[v.violation_type] || VIOLATION_META.screenshot;
+                const isDeviceBanned = Number(v.is_device_banned) === 1;
                 return `
-                  <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;padding:12px 16px;background:var(--bg-secondary);border-radius:12px;border-right:4px solid #e11d48;">
-                    <div style="display:flex;align-items:center;gap:12px;min-width:0;flex:1;">
+                  <div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px;padding:14px 16px;background:var(--bg-secondary);border-radius:12px;border-right:4px solid #e11d48;">
+                    <div style="display:flex;align-items:flex-start;gap:12px;min-width:0;flex:1;">
                       <div style="width:40px;height:40px;border-radius:10px;background:rgba(225,29,72,0.12);color:#e11d48;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
                         <span class="material-symbols-rounded">${meta.icon}</span>
                       </div>
-                      <div style="min-width:0;">
+                      <div style="min-width:0;flex:1;">
                         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
                           <strong style="font-size:0.9rem;color:var(--text-primary);">${escA(v.student_name)}</strong>
-                          <span dir="ltr" style="font-size:0.76rem;color:var(--text-muted);">${escA(v.student_phone)}</span>
+                          <span dir="ltr" style="font-size:0.76rem;color:var(--text-muted);font-weight:700;">${escA(v.student_phone)}</span>
                           <span class="badge ${meta.badge}" style="font-size:0.7rem;">${meta.label}</span>
-                          ${v.is_blocked ? '<span class="badge badge-danger" style="font-size:0.68rem;">محظور</span>' : ''}
+                          ${v.is_blocked ? '<span class="badge badge-danger" style="font-size:0.68rem;">الحساب محظور</span>' : ''}
+                          ${isDeviceBanned ? '<span class="badge badge-danger" style="font-size:0.68rem;">الجهاز محظور للأبد</span>' : ''}
                         </div>
-                        <div style="font-size:0.82rem;color:var(--text-secondary);margin-top:3px;">
-                          المحتوى: <strong>${escA(v.source_title || v.lesson_title || v.course_title || 'محتوى محمي')}</strong>
+                        <div style="font-size:0.82rem;color:var(--text-secondary);margin-top:4px;line-height:1.5;">
+                          المصدر: <strong>${escA(v.source_title || v.lesson_title || v.course_title || 'النظام الأمني')}</strong>
                           ${v.details ? ` — <span style="color:var(--text-muted);">${escA(v.details)}</span>` : ''}
                         </div>
+                        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:6px;font-size:0.72rem;color:var(--text-muted);font-family:monospace;" dir="ltr">
+                          ${v.ip_address ? `<span style="background:var(--bg-card);padding:2px 8px;border-radius:6px;border:1px solid var(--border-light);">IP: ${escA(v.ip_address)}</span>` : ''}
+                          ${v.device_id ? `<span style="background:var(--bg-card);padding:2px 8px;border-radius:6px;border:1px solid var(--border-light);">Device: ${escA(v.device_id)}</span>` : ''}
+                          ${v.request_path ? `<span style="background:var(--bg-card);padding:2px 8px;border-radius:6px;border:1px solid var(--border-light);color:#e11d48;">Path: ${escA(v.request_path)}</span>` : ''}
+                        </div>
+                        ${v.request_payload ? `
+                          <div dir="ltr" style="margin-top:6px;font-size:0.72rem;font-family:monospace;background:rgba(0,0,0,0.06);padding:6px 10px;border-radius:6px;color:var(--text-secondary);word-break:break-all;">
+                            البيانات المُدخلة: ${escA(v.request_payload)}
+                          </div>
+                        ` : ''}
                       </div>
                     </div>
-                    <div style="font-size:0.75rem;color:var(--text-muted);font-weight:700;display:flex;align-items:center;gap:4px;">
-                      <span class="material-symbols-rounded" style="font-size:0.95rem;">schedule</span>
-                      ${new Date(v.created_at).toLocaleString('ar-EG')}
+                    <div style="display:flex;flex-direction:column;align-items:flex-end;gap:8px;">
+                      <div style="font-size:0.75rem;color:var(--text-muted);font-weight:700;display:flex;align-items:center;gap:4px;">
+                        <span class="material-symbols-rounded" style="font-size:0.95rem;">schedule</span>
+                        ${new Date(v.created_at).toLocaleString('ar-EG')}
+                      </div>
+                      ${v.device_id ? `
+                        <button type="button" class="btn btn-sm ${isDeviceBanned ? 'btn-primary' : 'btn-ghost'} sec-device-ban-btn" data-dev="${escA(v.device_id)}" data-ip="${escA(v.ip_address || '')}" data-uid="${v.user_id || ''}" data-act="${isDeviceBanned ? 'unblock' : 'block'}" style="${isDeviceBanned ? '' : 'color:#e11d48;border:1px solid rgba(225,29,72,0.35);'}font-size:0.72rem;padding:3px 10px;font-weight:800;">
+                          <span class="material-symbols-rounded" style="font-size:0.95rem;">${isDeviceBanned ? 'lock_open' : 'phonelink_erase'}</span>
+                          ${isDeviceBanned ? 'فك حظر الجهاز' : 'حظر هذا الجهاز للأبد'}
+                        </button>
+                      ` : ''}
                     </div>
                   </div>
                 `;
               }).join('')}
             </div>
           `;
+
+          timeEl.querySelectorAll('.sec-device-ban-btn').forEach(btn => {
+            btn.addEventListener('click', async () => {
+              const device_id = btn.dataset.dev;
+              const ip_address = btn.dataset.ip;
+              const user_id = btn.dataset.uid ? Number(btn.dataset.uid) : null;
+              const action = btn.dataset.act;
+              try {
+                const res = await api.takeDeviceSecurityAction({ device_id, ip_address, user_id, action });
+                showToast(res.message, 'success');
+                loadSecurityData();
+              } catch (err) {
+                showToast(err.message, 'error');
+              }
+            });
+          });
         }
       }
     } catch (err) {
@@ -1812,13 +1898,13 @@ export async function initAdminSecurity() {
   }
 
   document.getElementById('refreshSecurityLogsBtn')?.addEventListener('click', loadSecurityData);
-  document.querySelectorAll('#secTypeTabs .tab').forEach(tab => {
-    tab.addEventListener('click', () => {
-      document.querySelectorAll('#secTypeTabs .tab').forEach(t => t.classList.remove('active'));
-      tab.classList.add('active');
-      currentFilter = tab.dataset.vtype || 'all';
-      loadSecurityData();
-    });
+  document.getElementById('secTypeTabs')?.addEventListener('click', (e) => {
+    const tab = e.target.closest('.tab');
+    if (!tab) return;
+    document.querySelectorAll('#secTypeTabs .tab').forEach(t => t.classList.remove('active'));
+    tab.classList.add('active');
+    currentFilter = tab.dataset.vtype || 'all';
+    loadSecurityData();
   });
 
   loadSecurityData();

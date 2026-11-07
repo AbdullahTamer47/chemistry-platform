@@ -361,6 +361,48 @@ await test('عدم استهلاك المشاهدات عند فتح/إعادة ت
   assert.equal(lCheck.data.views.used, 0);
 });
 
+await test('رصد محاولات اختراق الأدمن، تصنيف المخالفات، والحظر الأبدي للجهاز والطالب', async () => {
+  // 1. Student tries to access teacher-only endpoint -> logged as admin_intrusion
+  const unauthAdmin = await apiReq('/security/violations', { token: studentToken });
+  assert.equal(unauthAdmin.status, 403);
+
+  // 2. Frontend /admin direct URL intrusion report
+  const feIntrusion = await apiReq('/security/intrusion', {
+    method: 'POST',
+    body: {
+      violation_type: 'admin_intrusion',
+      source_title: 'محاولة فتح رابط لوحة تحكم الأدمن مباشرة',
+      details: 'محاولة دخول غير مصرح به للرابط (/admin)',
+      request_path: '/admin',
+      suspect_name: 'زائر مشبوه',
+      suspect_phone: '01099999999'
+    }
+  });
+  assert.equal(feIntrusion.status, 200);
+
+  // 3. Filter security violations by type=intrusion
+  const intrusionLogs = await apiReq('/security/violations?type=intrusion', { token: teacherToken });
+  assert.equal(intrusionLogs.status, 200);
+  assert.ok(intrusionLogs.data.stats.intrusions >= 2);
+  assert.ok(intrusionLogs.data.violations.length >= 2);
+  assert.ok(intrusionLogs.data.violations.every(v => ['admin_intrusion', 'auth_bruteforce', 'hack_attempt'].includes(v.violation_type)));
+
+  // 4. Ban device forever -> verify device is blocked, then unban
+  const banDev = await apiReq('/security/device/action', {
+    method: 'POST',
+    token: teacherToken,
+    body: { device_id: 'dev_test_hacker_99', action: 'block' }
+  });
+  assert.equal(banDev.status, 200);
+
+  const unbanDev = await apiReq('/security/device/action', {
+    method: 'POST',
+    token: teacherToken,
+    body: { device_id: 'dev_test_hacker_99', action: 'unblock' }
+  });
+  assert.equal(unbanDev.status, 200);
+});
+
 server.close();
 try {
   db.pragma('wal_checkpoint(TRUNCATE)');

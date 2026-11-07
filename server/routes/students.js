@@ -461,7 +461,31 @@ router.get('/:id', authMiddleware, teacherMiddleware, (req, res) => {
     if (!student) return res.status(404).json({ error: 'الطالب غير موجود' });
     student.enrollments = db.prepare('SELECT e.*, c.title as course_title FROM enrollments e JOIN courses c ON e.course_id = c.id WHERE e.user_id = ?').all(student.id);
     student.exam_attempts = db.prepare('SELECT ea.*, ex.title as exam_title FROM exam_attempts ea JOIN exams ex ON ea.exam_id = ex.id WHERE ea.user_id = ? ORDER BY ea.completed_at DESC LIMIT 20').all(student.id);
-    student.lesson_progress = db.prepare('SELECT lp.*, l.title as lesson_title, l.max_views, c.title as course_title FROM lesson_progress lp JOIN lessons l ON lp.lesson_id = l.id JOIN courses c ON l.course_id = c.id WHERE lp.user_id = ? ORDER BY lp.id DESC LIMIT 50').all(student.id);
+    // Return all lessons from courses the student is enrolled in (or has watched/requested), so teacher can pick any specific lecture/video
+    student.lesson_progress = db.prepare(`
+      SELECT l.id as lesson_id,
+             l.title as lesson_title,
+             COALESCE(l.max_views, 5) as max_views,
+             c.id as course_id,
+             c.title as course_title,
+             ch.title as chapter_title,
+             COALESCE(lp.views_count, 0) as views_count,
+             COALESCE(lp.extra_views, 0) as extra_views,
+             COALESCE(lp.extra_views_requested, 0) as extra_views_requested,
+             COALESCE(lp.completed, 0) as completed
+      FROM lessons l
+      JOIN courses c ON l.course_id = c.id
+      LEFT JOIN chapters ch ON l.chapter_id = ch.id
+      LEFT JOIN lesson_progress lp ON lp.lesson_id = l.id AND lp.user_id = ?
+      WHERE c.id IN (SELECT course_id FROM enrollments WHERE user_id = ?)
+         OR lp.id IS NOT NULL
+         OR c.is_free = 1
+      ORDER BY COALESCE(lp.extra_views_requested, 0) DESC,
+               COALESCE(lp.views_count, 0) DESC,
+               c.id DESC,
+               l.order_num ASC
+      LIMIT 120
+    `).all(student.id, student.id);
     res.json(student);
   } catch (err) { res.status(500).json({ error: 'حدث خطأ' }); }
 });
@@ -478,24 +502,26 @@ router.post('/:id/lessons/:lessonId/views', authMiddleware, teacherMiddleware, (
 
     const existing = db.prepare('SELECT * FROM lesson_progress WHERE user_id = ? AND lesson_id = ?').get(userId, lessonId);
     if (!existing) {
-      db.prepare('INSERT INTO lesson_progress (user_id, lesson_id, views_count, extra_views) VALUES (?, ?, 0, 0)').run(userId, lessonId);
+      db.prepare('INSERT INTO lesson_progress (user_id, lesson_id, views_count, extra_views, extra_views_requested) VALUES (?, ?, 0, 0, 0)').run(userId, lessonId);
     }
 
     if (action === 'reset') {
-      db.prepare('UPDATE lesson_progress SET views_count = 0, last_view_at = NULL WHERE user_id = ? AND lesson_id = ?').run(userId, lessonId);
+      db.prepare('UPDATE lesson_progress SET views_count = 0, last_view_at = NULL, extra_views_requested = 0 WHERE user_id = ? AND lesson_id = ?').run(userId, lessonId);
     } else if (action === 'adjust') {
       const d = parseInt(delta, 10) || 0;
-      db.prepare('UPDATE lesson_progress SET extra_views = COALESCE(extra_views, 0) + ? WHERE user_id = ? AND lesson_id = ?').run(d, userId, lessonId);
+      db.prepare('UPDATE lesson_progress SET extra_views = COALESCE(extra_views, 0) + ?, extra_views_requested = 0 WHERE user_id = ? AND lesson_id = ?').run(d, userId, lessonId);
     } else if (action === 'set_allowed') {
-      const targetAllowed = Math.max(1, parseInt(allowed, 10) || 8);
-      const baseMax = Number(lesson.max_views) > 0 ? Number(lesson.max_views) : 8;
+      const targetAllowed = Math.max(1, parseInt(allowed, 10) || 5);
+      const baseMax = Number(lesson.max_views) > 0 ? Number(lesson.max_views) : 5;
       const newExtra = targetAllowed - baseMax;
-      db.prepare('UPDATE lesson_progress SET extra_views = ? WHERE user_id = ? AND lesson_id = ?').run(newExtra, userId, lessonId);
+      db.prepare('UPDATE lesson_progress SET extra_views = ?, extra_views_requested = 0 WHERE user_id = ? AND lesson_id = ?').run(newExtra, userId, lessonId);
     }
 
     const updated = db.prepare('SELECT lp.*, l.max_views FROM lesson_progress lp JOIN lessons l ON lp.lesson_id = l.id WHERE lp.user_id = ? AND lp.lesson_id = ?').get(userId, lessonId);
     res.json({
-      message: action === 'reset' ? 'تم تصفير المشاهدات المستهلكة وإعادة السماح للطالب' : 'تم تعديل عدد المشاهدات المسموحة للطالب بنجاح',
+      message: action === 'reset'
+        ? `تم تصفير المشاهدات المستهلكة لمحاضرة "${lesson.title}" فقط وإعادة السماح للطالب`
+        : `تم تحديث المشاهدات المسموحة لمحاضرة "${lesson.title}" بنجاح`,
       extra_views: updated?.extra_views || 0,
       views_count: updated?.views_count || 0,
       progress: updated

@@ -221,8 +221,8 @@ export async function initLesson(id) {
 
               <!-- Transparent Click & Gesture Shield (Blocks all direct iframe hover/clicks, right-clicks, and IDM hooks) -->
               <div id="playerClickShield" style="position:absolute; inset:0; z-index:16; cursor:pointer; display:flex; align-items:center; justify-content:center;">
-                <!-- Sleek Cinema Pause Overlay -->
-                <div id="playerPauseMask" style="position:absolute; inset:0; background:radial-gradient(circle at center, rgba(6,78,59,0.84) 0%, rgba(3,9,20,0.96) 100%); backdrop-filter:blur(6px); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px; color:#fff; transition:opacity 0.18s ease;">
+                <!-- Sleek 100% Opaque Cinema Pause Overlay (Hides paused video frames from screenshots) -->
+                <div id="playerPauseMask" style="position:absolute; inset:0; background:radial-gradient(circle at center, #064e3b 0%, #030914 100%); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px; color:#fff; transition:none;">
                   <div style="position:relative; width:82px; height:82px; border-radius:24px; background:linear-gradient(135deg, #059669 0%, #047857 100%); border:2px solid rgba(224,165,38,0.65); color:#fff; display:flex; align-items:center; justify-content:center; box-shadow:0 0 0 12px rgba(16,185,129,0.15), 0 16px 36px rgba(0,0,0,0.6); transform:rotate(0deg);">
                     <span class="material-symbols-rounded" id="centerPlayIcon" style="font-size:3.1rem;">play_arrow</span>
                     <span style="position:absolute; top:-5px; right:-5px; width:12px; height:12px; background:#E0A526; transform:rotate(45deg); border:2px solid #030914;"></span>
@@ -236,6 +236,9 @@ export async function initLesson(id) {
                   </div>
                 </div>
               </div>
+
+              <!-- 0ms Hardware-Style Pitch Black Curtain (Covers frame before OS Snipping Tool / Game Bar freezes pixels) -->
+              <div id="instantBlackCurtain" style="position:absolute; inset:0; background:#000000; z-index:28; display:none; pointer-events:none;"></div>
               
               <!-- Anti-leak Instant-Jumping Watermark Badge (Zero transition animation) -->
               <div id="watermark" class="video-watermark" style="transition: none !important; z-index:18; pointer-events:none;">
@@ -323,7 +326,7 @@ export async function initLesson(id) {
               <span class="material-symbols-rounded" style="font-size:1rem; color:var(--primary);">visibility</span>
               ${(lesson.views?.unlimited || Number(lesson.max_views) <= 0)
                 ? 'المشاهدات المتاحة: <strong style="color:var(--primary);">غير محدودة (لا نهائي)</strong>'
-                : `المشاهدات المتبقية: <strong>${lesson.views ? lesson.views.remaining : Math.max(0, ((lesson.max_views || 8) + (lesson.progress?.extra_views || 0)) - (lesson.progress?.views_count || 0))}</strong> من ${lesson.views ? lesson.views.allowed : ((lesson.max_views || 8) + (lesson.progress?.extra_views || 0))}`
+                : `المشاهدات المتبقية: <strong>${lesson.views ? lesson.views.remaining : Math.max(0, ((lesson.max_views || 5) + (lesson.progress?.extra_views || 0)) - (lesson.progress?.views_count || 0))}</strong> من ${lesson.views ? lesson.views.allowed : ((lesson.max_views || 5) + (lesson.progress?.extra_views || 0))}`
               }
             </span>
           </div>
@@ -601,6 +604,10 @@ export async function initLesson(id) {
             if (pauseMask) {
               pauseMask.style.opacity = playing ? '0' : '1';
               pauseMask.style.pointerEvents = playing ? 'none' : 'auto';
+            }
+            if (vc && document.getElementById('antiCaptureShield')?.style.display === 'none') {
+              vc.style.transition = 'none';
+              vc.style.opacity = playing ? '1' : '0';
             }
             showPlayerChrome();
           };
@@ -930,6 +937,7 @@ export async function initLesson(id) {
     // =========================================================================
     const videoBox = document.getElementById('videoBox');
     const vcEl = document.getElementById('videoContainer');
+    const curtainEl = document.getElementById('instantBlackCurtain');
     const shield = document.getElementById('antiCaptureShield');
     const shieldTitle = document.getElementById('antiCaptureTitle');
     const shieldDesc = document.getElementById('antiCaptureDesc');
@@ -939,8 +947,11 @@ export async function initLesson(id) {
 
     videoBox?.addEventListener('contextmenu', e => e.preventDefault());
 
+    let isTogglingFullscreen = false;
     if (fsBtn && videoBox) {
       fsBtn.addEventListener('click', () => {
+        isTogglingFullscreen = true;
+        setTimeout(() => { isTogglingFullscreen = false; }, 1600);
         if (!document.fullscreenElement) {
           videoBox.requestFullscreen?.().catch(() => {});
         } else {
@@ -948,6 +959,8 @@ export async function initLesson(id) {
         }
       });
       document.addEventListener('fullscreenchange', () => {
+        isTogglingFullscreen = true;
+        setTimeout(() => { isTogglingFullscreen = false; }, 800);
         if (fsIcon) {
           fsIcon.textContent = document.fullscreenElement ? 'fullscreen_exit' : 'fullscreen';
         }
@@ -955,8 +968,9 @@ export async function initLesson(id) {
     }
 
     let isPermanentlyBlocked = false;
+    let isSecurityLocked = false;
     let lastReportTime = 0;
-    let metaDimTimeout = null;
+    let lastModKeyPressAt = 0;
 
     const silentReportToTeacher = (violationType, detailsText) => {
       const now = Date.now();
@@ -972,36 +986,42 @@ export async function initLesson(id) {
         if (rep?.is_blocked) {
           isPermanentlyBlocked = true;
           if (vcEl) vcEl.innerHTML = '';
+          if (curtainEl) curtainEl.style.display = 'block';
           if (shield) shield.style.display = 'flex';
-          if (shieldTitle) shieldTitle.textContent = '🚫 الحساب موقوف حالياً';
+          if (shieldTitle) shieldTitle.textContent = '🚫 تم إيقاف الحساب والجهاز نهائياً';
           if (shieldDesc) shieldDesc.textContent = rep.message || 'يرجى التواصل مع إدارة المنصة.';
           if (resumeBtn) {
             resumeBtn.disabled = true;
             resumeBtn.style.background = '#e11d48';
-            resumeBtn.textContent = 'تواصل مع إدارة المنصة';
+            resumeBtn.textContent = 'الحساب والجهاز محظور';
           }
         }
       }).catch(() => {});
     };
 
+    // <0.1ms Synchronous Pitch-Black Curtain (Executes before OS Snipping Tool or Game Bar freezes screen pixels)
     const instantBlackoutFrame = () => {
+      if (curtainEl) {
+        curtainEl.style.display = 'block';
+      }
       if (vcEl) {
         vcEl.style.transition = 'none';
         vcEl.style.visibility = 'hidden';
         vcEl.style.opacity = '0';
         vcEl.style.filter = 'brightness(0)';
       }
-      if (shield) {
-        shield.style.display = 'flex';
-      }
       pauseProtectedVideo();
     };
 
     const restoreFrameVisibility = () => {
       if (isPermanentlyBlocked) return;
+      isSecurityLocked = false;
+      if (curtainEl) {
+        curtainEl.style.display = 'none';
+      }
       if (vcEl) {
         vcEl.style.visibility = 'visible';
-        vcEl.style.opacity = '1';
+        vcEl.style.opacity = isProtectedVideoPlaying() ? '1' : '0';
         vcEl.style.filter = 'none';
       }
       if (shield) {
@@ -1009,9 +1029,13 @@ export async function initLesson(id) {
       }
     };
 
-    const triggerSecurityLockout = (violationType, customTitle, customDesc) => {
+    const triggerSecurityLockout = (violationType, customTitle, customDesc, shouldReport = true) => {
       if (isPermanentlyBlocked) return;
+      isSecurityLocked = true;
       instantBlackoutFrame();
+      if (shield) {
+        shield.style.display = 'flex';
+      }
       if (shieldTitle && customTitle) shieldTitle.textContent = customTitle;
       if (shieldDesc && customDesc) shieldDesc.textContent = customDesc;
       if (resumeBtn) {
@@ -1020,12 +1044,15 @@ export async function initLesson(id) {
         resumeBtn.style.cursor = 'pointer';
         resumeBtn.textContent = 'متابعة المشاهدة الآن';
       }
-      silentReportToTeacher(violationType, customTitle || violationType);
+      if (shouldReport) {
+        silentReportToTeacher(violationType, customTitle || violationType);
+      }
     };
 
     resumeBtn?.addEventListener('click', (e) => {
       e.stopPropagation();
       if (isPermanentlyBlocked) return;
+      window.focus();
       restoreFrameVisibility();
     });
 
@@ -1041,40 +1068,41 @@ export async function initLesson(id) {
       };
     }
 
-    // Smart Keydown Protection:
-    // - Lone Meta (Win) key only silently dims opacity while held (in case Win+Shift+S follows) and restores immediately on release without pausing or showing any modal!
-    // - Actual screenshot/devtools combos trigger instant pause + silent report + 1-click resume.
+    // Zero-Latency Pre-emptive Keydown Protection:
+    // 1. Immediately blacks out to #000000 and pauses on the 1st key (Meta / Win / Alt / PrintScreen) at <0.1ms.
+    // 2. Triggers full lockout + silent teacher report on the 2nd key (Win+Shift or Win+Alt) BEFORE Windows swallows 'S' or 'R'!
     const onPreemptiveKeyDown = (e) => {
       const k = e.key || '';
       const code = e.code || '';
+      const keyCode = e.keyCode || e.which || 0;
 
-      if ((k === 'Meta' || k === 'OS' || k === 'Super' || code === 'MetaLeft' || code === 'MetaRight') && !e.shiftKey && !e.altKey) {
-        if (vcEl && shield?.style.display === 'none') {
-          vcEl.style.transition = 'none';
-          vcEl.style.opacity = '0';
-          if (metaDimTimeout) clearTimeout(metaDimTimeout);
-          metaDimTimeout = setTimeout(() => {
-            if (vcEl && shield?.style.display === 'none') vcEl.style.opacity = '1';
-          }, 1200);
-        }
-        return;
+      const isMeta = e.metaKey || k === 'Meta' || k === 'OS' || k === 'Super' || code.startsWith('Meta');
+      const isAlt = e.altKey || k === 'Alt' || code.startsWith('Alt');
+      const isPrtSc = k === 'PrintScreen' || code === 'PrintScreen' || keyCode === 44;
+
+      if (isMeta || isAlt || isPrtSc) {
+        lastModKeyPressAt = Date.now();
+        instantBlackoutFrame();
       }
 
       if (
-        k === 'PrintScreen' ||
-        code === 'PrintScreen' ||
-        (e.metaKey && e.shiftKey && (k === 'S' || k === 's' || k === '3' || k === '4' || k === '5')) ||
-        (e.metaKey && e.altKey && (k === 'R' || k === 'r' || k === 'G' || k === 'g')) ||
-        (e.altKey && (k === 'F9' || k === 'F10' || k === 'PrintScreen')) ||
+        isPrtSc ||
+        (isMeta && (e.shiftKey || k === 'Shift' || code.startsWith('Shift'))) ||
+        (isMeta && (e.altKey || k === 'Alt' || code.startsWith('Alt'))) ||
+        (isMeta && (k === 'g' || k === 'G' || k === 'r' || k === 'R' || k === 's' || k === 'S' || k === '3' || k === '4' || k === '5')) ||
+        (isAlt && (k === 'F9' || k === 'F10' || k === 'PrintScreen' || k === 'r' || k === 'R' || k === 'z' || k === 'Z')) ||
         (e.ctrlKey && e.shiftKey && (k === 'S' || k === 's' || k === 'E' || k === 'e' || k === 'R' || k === 'r'))
       ) {
         e.preventDefault();
         e.stopPropagation();
         navigator.clipboard?.writeText?.('محتوى محمي — منصة كيمياوي').catch(() => {});
+        const isRecord = (isMeta && (e.altKey || k === 'Alt' || k === 'g' || k === 'G' || k === 'r' || k === 'R')) || (isAlt && (k === 'F9' || k === 'F10' || k === 'r' || k === 'R'));
         triggerSecurityLockout(
-          (e.metaKey && e.altKey) || (e.altKey && k === 'F9') ? 'screen_record' : 'screenshot',
+          isRecord ? 'screen_record' : 'screenshot',
           'تم إيقاف البث مؤقتاً لحماية المحتوى',
-          'لا يُسمح بالتقاط صور للشاشة أو تسجيل الفيديو أثناء مشاهدة المحاضرة.'
+          isRecord
+            ? 'تم رصد محاولة تشغيل مسجل الشاشة (Screen Recorder) — لا يُسمح بتسجيل المحاضرات.'
+            : 'لا يُسمح بالتقاط صور للشاشة (Screenshot) أثناء مشاهدة المحاضرة.'
         );
         return;
       }
@@ -1095,25 +1123,52 @@ export async function initLesson(id) {
     };
 
     const onPreemptiveKeyUp = (e) => {
-      if (e.key === 'Meta' || e.key === 'OS' || e.key === 'Super' || e.code === 'MetaLeft' || e.code === 'MetaRight') {
-        if (metaDimTimeout) clearTimeout(metaDimTimeout);
-        if (vcEl && shield?.style.display === 'none') {
-          vcEl.style.opacity = '1';
-        }
-        return;
-      }
-      if (e.key === 'PrintScreen' || e.code === 'PrintScreen') {
+      const k = e.key || '';
+      const code = e.code || '';
+      const keyCode = e.keyCode || e.which || 0;
+      if (k === 'PrintScreen' || code === 'PrintScreen' || keyCode === 44) {
         navigator.clipboard?.writeText?.('محتوى محمي — منصة كيمياوي').catch(() => {});
         triggerSecurityLockout(
           'screenshot',
           'تم إيقاف البث مؤقتاً لحماية المحتوى',
           'لا يُسمح بالتقاط صور للشاشة أثناء مشاهدة المحاضرة.'
         );
+        return;
+      }
+      // If user only tapped lone Win or Alt without triggering lockout and window is still focused, restore smoothly
+      if (!isSecurityLocked && document.hasFocus() && !e.metaKey && !e.altKey) {
+        restoreFrameVisibility();
+      }
+    };
+
+    // Instant Blur & Visibility Protection (Catches Snipping Tool overlay, Xbox Game Bar Win+G, OBS, or external recorder taking focus)
+    const onWindowBlur = () => {
+      if (isTogglingFullscreen) return;
+      if (document.activeElement && document.activeElement.tagName === 'IFRAME') {
+        setTimeout(() => { try { window.focus(); } catch (_) {} }, 25);
+        return;
+      }
+      const wasPlaying = isProtectedVideoPlaying();
+      const recentModKey = (Date.now() - lastModKeyPressAt) < 4000;
+      instantBlackoutFrame();
+      triggerSecurityLockout(
+        recentModKey ? 'screenshot' : 'screen_record',
+        'تم إيقاف البث مؤقتاً لحماية المحتوى',
+        'تم إخفاء الفيديو تلقائياً لمنع التصوير أو التسجيل الخارجي — اضغط متابعة المشاهدة عند العودة للنافذة.',
+        Boolean(recentModKey || wasPlaying)
+      );
+    };
+
+    const onVisibilityChange = () => {
+      if (document.hidden) {
+        instantBlackoutFrame();
       }
     };
 
     window.addEventListener('keydown', onPreemptiveKeyDown, { capture: true });
     window.addEventListener('keyup', onPreemptiveKeyUp, { capture: true });
+    window.addEventListener('blur', onWindowBlur);
+    document.addEventListener('visibilitychange', onVisibilityChange);
 
     // Silent Anti-IDM & Floating Video Downloader Sweeper (Removes injected downloader toolbars & reports silently without interrupting the student)
     const sweepDownloaderNodes = (rootDoc = document) => {
@@ -1191,6 +1246,8 @@ export async function initLesson(id) {
     const cleanupLessonListeners = () => {
       window.removeEventListener('keydown', onPreemptiveKeyDown, { capture: true });
       window.removeEventListener('keyup', onPreemptiveKeyUp, { capture: true });
+      window.removeEventListener('blur', onWindowBlur);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
       idmObserver.disconnect();
       clearInterval(idmSweepInterval);
       clearInterval(viewCommitTimer);

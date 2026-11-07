@@ -86,7 +86,7 @@ export async function openProtectedPdfModal(lessonId, lessonTitle = 'مذكرة 
         </div>
 
         <!-- Protected Viewport -->
-        <div class="pdf-shield-viewport" id="pdfShieldViewport">
+        <div class="pdf-shield-viewport" id="pdfShieldViewport" style="background:#000000;">
           <iframe
             src="${esc(viewerSrc)}"
             title="${esc(lessonTitle)}"
@@ -95,8 +95,15 @@ export async function openProtectedPdfModal(lessonId, lessonTitle = 'مذكرة 
             referrerpolicy="no-referrer"
           ></iframe>
 
-          <!-- Top-right & top-bar blocker to block Google Drive pop-out button and browser PDF toolbar -->
+          <!-- Top-right & top-left solid corner shields to completely cover & disable Google Drive pop-out icon [↗] and PDF toolbar buttons -->
           <div class="pdf-shield-top-blocker" title="محمي بنظام كيمياوي"></div>
+          <div style="position:absolute; top:0; right:0; width:84px; height:76px; z-index:26; background:#1f2937; border-bottom-left-radius:14px; display:flex; align-items:center; justify-content:center; color:#34d399; pointer-events:auto; user-select:none; box-shadow:0 4px 12px rgba(0,0,0,0.4);" title="ملف محمي ومشفر">
+            <span class="material-symbols-rounded" style="font-size:1.35rem;">lock</span>
+          </div>
+          <div style="position:absolute; top:0; left:0; width:84px; height:76px; z-index:26; background:transparent; pointer-events:auto; user-select:none;"></div>
+
+          <!-- 0ms Pitch-Black Hardware Curtain (Executes before Snipping Tool or Game Bar freezes screen pixels) -->
+          <div id="pdfInstantBlackCurtain" style="position:absolute; inset:0; background:#000000; z-index:28; display:none; pointer-events:none;"></div>
 
           <!-- Layer 1: Diagonal Tiled Watermark Grid -->
           ${buildTiledWatermarkGridHtml(wmText, 24)}
@@ -107,7 +114,7 @@ export async function openProtectedPdfModal(lessonId, lessonTitle = 'مذكرة 
           </div>
 
           <!-- Layer 3: Anti-Screenshot / Focus Loss Blackout Shield -->
-          <div id="pdfAntiCaptureShield" class="video-anti-capture-shield" style="display:none; z-index:30;">
+          <div id="pdfAntiCaptureShield" class="video-anti-capture-shield" style="display:none; z-index:30; background:#000000;">
             <span class="material-symbols-rounded" style="font-size:3.2rem; color:#f59e0b;">security</span>
             <h4 style="margin:8px 0 4px; font-weight:900;">تم إخفاء الملف مؤقتاً لحماية المحتوى من التصوير أو النسخ</h4>
             <p style="font-size:0.86rem; opacity:0.88; margin:0 0 14px;">يُمنع استخدام أدوات لقطة الشاشة أو الطباعة أو الخروج من نافذة الملف أثناء المذاكرة</p>
@@ -120,6 +127,7 @@ export async function openProtectedPdfModal(lessonId, lessonTitle = 'مذكرة 
     document.body.appendChild(modal);
 
     const jumpWm = document.getElementById('pdfJumpingWatermark');
+    const curtainEl = document.getElementById('pdfInstantBlackCurtain');
     const shield = document.getElementById('pdfAntiCaptureShield');
     const resumeBtn = document.getElementById('pdfResumeViewBtn');
     const pdfIframe = modal.querySelector('.pdf-shield-iframe');
@@ -138,13 +146,22 @@ export async function openProtectedPdfModal(lessonId, lessonTitle = 'مذكرة 
     const wmTimer = setInterval(moveWm, 3200);
 
     let lastPdfReport = 0;
+    let isSecurityLocked = false;
+    let isTogglingFullscreen = false;
+    let lastModKeyPressAt = 0;
 
-    const triggerBlackout = (reportViolation = false, reasonText = 'محاولة تصوير أو نسخ المذكرة المحمية') => {
+    const instantPdfCurtainBlackout = () => {
+      if (curtainEl) curtainEl.style.display = 'block';
       if (pdfIframe) {
         pdfIframe.style.transition = 'none';
         pdfIframe.style.visibility = 'hidden';
         pdfIframe.style.opacity = '0';
       }
+    };
+
+    const triggerBlackout = (reportViolation = false, reasonText = 'محاولة تصوير أو نسخ المذكرة المحمية') => {
+      isSecurityLocked = true;
+      instantPdfCurtainBlackout();
       if (shield) shield.style.display = 'flex';
       if (resumeBtn) {
         resumeBtn.disabled = false;
@@ -165,6 +182,9 @@ export async function openProtectedPdfModal(lessonId, lessonTitle = 'مذكرة 
 
     const clearBlackout = (e) => {
       e?.stopPropagation?.();
+      isSecurityLocked = false;
+      window.focus();
+      if (curtainEl) curtainEl.style.display = 'none';
       if (pdfIframe) {
         pdfIframe.style.visibility = 'visible';
         pdfIframe.style.opacity = '1';
@@ -176,41 +196,84 @@ export async function openProtectedPdfModal(lessonId, lessonTitle = 'مذكرة 
     shield?.addEventListener('click', clearBlackout);
 
     const onKeyDown = (e) => {
-      if (e.key === 'Escape' && !document.fullscreenElement) {
+      const k = e.key || '';
+      const code = e.code || '';
+      const keyCode = e.keyCode || e.which || 0;
+
+      if (k === 'Escape' && !document.fullscreenElement) {
         closeViewer();
         return;
       }
-      // Only trigger on actual screenshot/print/devtools shortcuts (never on lone Win/Meta key press or Fullscreen!)
+
+      const isMeta = e.metaKey || k === 'Meta' || k === 'OS' || k === 'Super' || code.startsWith('Meta');
+      const isAlt = e.altKey || k === 'Alt' || code.startsWith('Alt');
+      const isPrtSc = k === 'PrintScreen' || code === 'PrintScreen' || keyCode === 44;
+
+      // <0.1ms synchronous blackout on 1st key (Meta / Alt / PrintScreen) before OS freezes pixels
+      if (isMeta || isAlt || isPrtSc) {
+        lastModKeyPressAt = Date.now();
+        instantPdfCurtainBlackout();
+      }
+
+      // Full lockout + silent teacher report on 2nd key (Win+Shift or Win+Alt) before Windows swallows 'S' or 'R'
       if (
-        e.key === 'PrintScreen' ||
-        e.code === 'PrintScreen' ||
-        e.key === 'F12' ||
-        (e.metaKey && e.shiftKey && ['s', 'S', '3', '4', '5'].includes(e.key)) ||
-        (e.ctrlKey && e.shiftKey && ['i', 'I', 'c', 'C', 'j', 'J', 's', 'S'].includes(e.key)) ||
-        (e.ctrlKey && ['p', 'P', 's', 'S', 'u', 'U'].includes(e.key))
+        isPrtSc ||
+        k === 'F12' ||
+        (isMeta && (e.shiftKey || k === 'Shift' || code.startsWith('Shift'))) ||
+        (isMeta && (e.altKey || k === 'Alt' || code.startsWith('Alt'))) ||
+        (isMeta && ['s', 'S', 'r', 'R', 'g', 'G', '3', '4', '5'].includes(k)) ||
+        (isAlt && ['F9', 'F10', 'PrintScreen', 'r', 'R'].includes(k)) ||
+        (e.ctrlKey && e.shiftKey && ['i', 'I', 'c', 'C', 'j', 'J', 's', 'S', 'e', 'E', 'r', 'R'].includes(k)) ||
+        (e.ctrlKey && ['p', 'P', 's', 'S', 'u', 'U'].includes(k))
       ) {
         e.preventDefault();
         e.stopPropagation();
         triggerBlackout(true, 'محاولة تصوير أو طباعة أو حفظ ملف PDF محمي');
         navigator.clipboard?.writeText?.('').catch(() => {});
-        showToast('غير مسموح بطباعة أو تصوير الملفات المحمية', 'warning');
       }
     };
 
     const onKeyUp = (e) => {
-      if (e.key === 'PrintScreen' || e.code === 'PrintScreen') {
+      const k = e.key || '';
+      const code = e.code || '';
+      const keyCode = e.keyCode || e.which || 0;
+      if (k === 'PrintScreen' || code === 'PrintScreen' || keyCode === 44) {
         triggerBlackout(true, 'محاولة التقاط صورة للمذكرة (PrintScreen)');
         navigator.clipboard?.writeText?.('').catch(() => {});
+        return;
+      }
+      if (!isSecurityLocked && document.hasFocus() && !e.metaKey && !e.altKey) {
+        clearBlackout();
+      }
+    };
+
+    const onPdfBlur = () => {
+      if (isTogglingFullscreen) return;
+      if (document.activeElement === pdfIframe || document.activeElement?.tagName === 'IFRAME') {
+        setTimeout(() => { try { window.focus(); } catch (_) {} }, 25);
+        return;
+      }
+      const recentMod = (Date.now() - lastModKeyPressAt) < 4000;
+      triggerBlackout(recentMod, 'محاولة تصوير أو تسجيل شاشة المذكرة المحمية');
+    };
+
+    const onPdfVisibility = () => {
+      if (document.hidden) {
+        instantPdfCurtainBlackout();
       }
     };
 
     window.addEventListener('keydown', onKeyDown, true);
     window.addEventListener('keyup', onKeyUp, true);
+    window.addEventListener('blur', onPdfBlur);
+    document.addEventListener('visibilitychange', onPdfVisibility);
 
     const fsBtn = document.getElementById('pdfShieldFullscreenBtn');
     fsBtn?.addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();
+      isTogglingFullscreen = true;
+      setTimeout(() => { isTogglingFullscreen = false; }, 1600);
       if (!document.fullscreenElement) {
         card?.requestFullscreen?.().catch(() => {});
       } else {
@@ -222,6 +285,8 @@ export async function openProtectedPdfModal(lessonId, lessonTitle = 'مذكرة 
       clearInterval(wmTimer);
       window.removeEventListener('keydown', onKeyDown, true);
       window.removeEventListener('keyup', onKeyUp, true);
+      window.removeEventListener('blur', onPdfBlur);
+      document.removeEventListener('visibilitychange', onPdfVisibility);
       if (document.fullscreenElement) {
         document.exitFullscreen?.().catch(() => {});
       }
