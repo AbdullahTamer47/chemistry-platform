@@ -309,6 +309,7 @@ if (!db) {
             rawDbRef = nextDb;
             localVersion = Number(fullRows[0].version) || remoteVersion;
             isDirty = false;
+            try { applySchemaMigrations(); } catch (e) {}
             try { oldDb.close(); } catch (e) {}
           }
         }
@@ -750,13 +751,22 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_banned_devices_did ON banned_devices(device_id);
 `);
 
-// Migrate existing security_violations table if user_id was NOT NULL so anonymous intrusion attempts can be logged
-try {
-  const svCols = db.prepare('PRAGMA table_info(security_violations)').all();
-  const uidCol = svCols.find(c => c.name === 'user_id');
-  if (uidCol && uidCol.notnull === 1) {
+let schemaMigrated = false;
+
+function addColumnIfMissing(table, column, def) {
+  try {
+    const cols = db.prepare(`PRAGMA table_info(${table})`).all();
+    if (!cols.some(c => c.name === column)) {
+      db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${def}`);
+      schemaMigrated = true;
+    }
+  } catch (e) {}
+}
+
+function applySchemaMigrations() {
+  try {
     db.exec(`
-      CREATE TABLE security_violations_new (
+      CREATE TABLE IF NOT EXISTS security_violations (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
         course_id INTEGER REFERENCES courses(id) ON DELETE SET NULL,
@@ -776,69 +786,104 @@ try {
         is_resolved INTEGER DEFAULT 0,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
       );
-      INSERT INTO security_violations_new (id, user_id, course_id, lesson_id, exam_id, violation_type, severity, source_title, details, device_info, ip_address, is_resolved, created_at)
-      SELECT id, user_id, course_id, lesson_id, exam_id, violation_type, severity, source_title, details, device_info, ip_address, is_resolved, created_at FROM security_violations;
-      DROP TABLE security_violations;
-      ALTER TABLE security_violations_new RENAME TO security_violations;
       CREATE INDEX IF NOT EXISTS idx_security_violations_user ON security_violations(user_id, created_at DESC);
+      CREATE TABLE IF NOT EXISTS banned_devices (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        device_id TEXT NOT NULL,
+        ip_address TEXT,
+        user_id INTEGER,
+        reason TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
+      CREATE INDEX IF NOT EXISTS idx_banned_devices_did ON banned_devices(device_id);
     `);
-  }
-} catch (e) {}
-
-function addColumnIfMissing(table, column, def) {
-  try {
-    const cols = db.prepare(`PRAGMA table_info(${table})`).all();
-    if (!cols.some(c => c.name === column)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${def}`);
   } catch (e) {}
+
+  try {
+    const svCols = db.prepare('PRAGMA table_info(security_violations)').all();
+    const uidCol = svCols.find(c => c.name === 'user_id');
+    if (uidCol && uidCol.notnull === 1) {
+      db.exec(`
+        CREATE TABLE security_violations_new (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+          course_id INTEGER REFERENCES courses(id) ON DELETE SET NULL,
+          lesson_id INTEGER REFERENCES lessons(id) ON DELETE SET NULL,
+          exam_id INTEGER REFERENCES exams(id) ON DELETE SET NULL,
+          violation_type TEXT NOT NULL,
+          severity TEXT DEFAULT 'high',
+          source_title TEXT,
+          details TEXT,
+          device_info TEXT,
+          ip_address TEXT,
+          suspect_name TEXT,
+          suspect_phone TEXT,
+          device_id TEXT,
+          request_path TEXT,
+          request_payload TEXT,
+          is_resolved INTEGER DEFAULT 0,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+        INSERT INTO security_violations_new (id, user_id, course_id, lesson_id, exam_id, violation_type, severity, source_title, details, device_info, ip_address, is_resolved, created_at)
+        SELECT id, user_id, course_id, lesson_id, exam_id, violation_type, severity, source_title, details, device_info, ip_address, is_resolved, created_at FROM security_violations;
+        DROP TABLE security_violations;
+        ALTER TABLE security_violations_new RENAME TO security_violations;
+        CREATE INDEX IF NOT EXISTS idx_security_violations_user ON security_violations(user_id, created_at DESC);
+      `);
+      schemaMigrated = true;
+    }
+  } catch (e) {}
+
+  addColumnIfMissing('security_violations', 'suspect_name', 'TEXT');
+  addColumnIfMissing('security_violations', 'suspect_phone', 'TEXT');
+  addColumnIfMissing('security_violations', 'device_id', 'TEXT');
+  addColumnIfMissing('security_violations', 'request_path', 'TEXT');
+  addColumnIfMissing('security_violations', 'request_payload', 'TEXT');
+  addColumnIfMissing('lesson_progress', 'extra_views_requested', 'INTEGER DEFAULT 0');
+
+  addColumnIfMissing('enrollments', 'code_id', 'INTEGER');
+  addColumnIfMissing('enrollments', 'payment_id', 'INTEGER');
+  addColumnIfMissing('exam_attempts', 'question_ids', 'TEXT');
+  addColumnIfMissing('exam_attempts', 'pedagogical_feedback', 'TEXT');
+  addColumnIfMissing('questions', 'concept_key', 'TEXT');
+  addColumnIfMissing('questions', 'explanation_image', 'TEXT');
+  addColumnIfMissing('questions', 'bloom_level', "TEXT DEFAULT 'فهم وتطبيق'");
+  addColumnIfMissing('exam_attempts', 'essay_grades', 'TEXT');
+  addColumnIfMissing('exam_attempts', 'teacher_feedback', 'TEXT');
+  addColumnIfMissing('exam_attempts', 'is_graded', 'INTEGER DEFAULT 1');
+  addColumnIfMissing('exam_attempts', 'late', 'INTEGER DEFAULT 0');
+  addColumnIfMissing('lessons', 'pdf_url', 'TEXT');
+  addColumnIfMissing('lessons', 'prerequisite_exam_id', 'INTEGER');
+  addColumnIfMissing('lessons', 'prerequisite_passing_score', 'INTEGER DEFAULT 60');
+  addColumnIfMissing('lessons', 'video_source', "TEXT DEFAULT 'custom_shield'");
+  addColumnIfMissing('lessons', 'vdocipher_id', 'TEXT');
+  addColumnIfMissing('exams', 'start_time', 'DATETIME');
+  addColumnIfMissing('exams', 'end_time', 'DATETIME');
+  addColumnIfMissing('exams', 'exam_type', "TEXT DEFAULT 'exam'");
+  addColumnIfMissing('exams', 'has_certificate', 'INTEGER DEFAULT 0');
+  addColumnIfMissing('exam_sessions', 'is_locked', 'INTEGER DEFAULT 0');
+  addColumnIfMissing('exam_sessions', 'lock_reason', 'TEXT');
+  addColumnIfMissing('exam_sessions', 'retake_requested', 'INTEGER DEFAULT 0');
+  addColumnIfMissing('exam_sessions', 'retake_reason', 'TEXT');
+  addColumnIfMissing('exam_sessions', 'updated_at', 'DATETIME');
+  addColumnIfMissing('enrollments', 'expires_at', 'DATETIME');
+  addColumnIfMissing('users', 'parent_phone_secondary', 'TEXT');
+  addColumnIfMissing('users', 'study_track', "TEXT DEFAULT 'عام'");
+  addColumnIfMissing('users', 'is_blocked', 'INTEGER DEFAULT 0');
+  addColumnIfMissing('users', 'security_strikes', 'INTEGER DEFAULT 0');
+  addColumnIfMissing('courses', 'course_type', "TEXT DEFAULT 'monthly'");
+  addColumnIfMissing('courses', 'duration_days', 'INTEGER DEFAULT 30');
+  addColumnIfMissing('courses', 'original_price', 'REAL DEFAULT 0');
+  addColumnIfMissing('courses', 'badge_text', 'TEXT');
+  addColumnIfMissing('courses', 'updated_at', 'DATETIME');
+  addColumnIfMissing('courses', 'allow_chem_lab', 'INTEGER DEFAULT 0');
+  addColumnIfMissing('courses', 'target_grades', 'TEXT');
+  addColumnIfMissing('courses', 'study_tracks', "TEXT DEFAULT 'عام,لغات'");
+  addColumnIfMissing('activation_codes', 'code_purpose', "TEXT DEFAULT 'course'");
+  addColumnIfMissing('activation_codes', 'wallet_amount', 'REAL DEFAULT 0');
 }
 
-addColumnIfMissing('security_violations', 'suspect_name', 'TEXT');
-addColumnIfMissing('security_violations', 'suspect_phone', 'TEXT');
-addColumnIfMissing('security_violations', 'device_id', 'TEXT');
-addColumnIfMissing('security_violations', 'request_path', 'TEXT');
-addColumnIfMissing('security_violations', 'request_payload', 'TEXT');
-addColumnIfMissing('lesson_progress', 'extra_views_requested', 'INTEGER DEFAULT 0');
-
-addColumnIfMissing('enrollments', 'code_id', 'INTEGER');
-addColumnIfMissing('enrollments', 'payment_id', 'INTEGER');
-addColumnIfMissing('exam_attempts', 'question_ids', 'TEXT');
-addColumnIfMissing('exam_attempts', 'pedagogical_feedback', 'TEXT');
-addColumnIfMissing('questions', 'concept_key', 'TEXT');
-addColumnIfMissing('questions', 'explanation_image', 'TEXT');
-addColumnIfMissing('questions', 'bloom_level', "TEXT DEFAULT 'فهم وتطبيق'");
-addColumnIfMissing('exam_attempts', 'essay_grades', 'TEXT');
-addColumnIfMissing('exam_attempts', 'teacher_feedback', 'TEXT');
-addColumnIfMissing('exam_attempts', 'is_graded', 'INTEGER DEFAULT 1');
-addColumnIfMissing('exam_attempts', 'late', 'INTEGER DEFAULT 0');
-addColumnIfMissing('lessons', 'pdf_url', 'TEXT');
-addColumnIfMissing('lessons', 'prerequisite_exam_id', 'INTEGER');
-addColumnIfMissing('lessons', 'prerequisite_passing_score', 'INTEGER DEFAULT 60');
-addColumnIfMissing('lessons', 'video_source', "TEXT DEFAULT 'custom_shield'");
-addColumnIfMissing('lessons', 'vdocipher_id', 'TEXT');
-addColumnIfMissing('exams', 'start_time', 'DATETIME');
-addColumnIfMissing('exams', 'end_time', 'DATETIME');
-addColumnIfMissing('exams', 'exam_type', "TEXT DEFAULT 'exam'");
-addColumnIfMissing('exams', 'has_certificate', 'INTEGER DEFAULT 0');
-addColumnIfMissing('exam_sessions', 'is_locked', 'INTEGER DEFAULT 0');
-addColumnIfMissing('exam_sessions', 'lock_reason', 'TEXT');
-addColumnIfMissing('exam_sessions', 'retake_requested', 'INTEGER DEFAULT 0');
-addColumnIfMissing('exam_sessions', 'retake_reason', 'TEXT');
-addColumnIfMissing('exam_sessions', 'updated_at', 'DATETIME');
-addColumnIfMissing('enrollments', 'expires_at', 'DATETIME');
-addColumnIfMissing('users', 'parent_phone_secondary', 'TEXT');
-addColumnIfMissing('users', 'study_track', "TEXT DEFAULT 'عام'");
-addColumnIfMissing('users', 'is_blocked', 'INTEGER DEFAULT 0');
-addColumnIfMissing('users', 'security_strikes', 'INTEGER DEFAULT 0');
-addColumnIfMissing('courses', 'course_type', "TEXT DEFAULT 'monthly'");
-addColumnIfMissing('courses', 'duration_days', 'INTEGER DEFAULT 30');
-addColumnIfMissing('courses', 'original_price', 'REAL DEFAULT 0');
-addColumnIfMissing('courses', 'badge_text', 'TEXT');
-addColumnIfMissing('courses', 'updated_at', 'DATETIME');
-addColumnIfMissing('courses', 'allow_chem_lab', 'INTEGER DEFAULT 0');
-addColumnIfMissing('courses', 'target_grades', 'TEXT');
-addColumnIfMissing('courses', 'study_tracks', "TEXT DEFAULT 'عام,لغات'");
-addColumnIfMissing('activation_codes', 'code_purpose', "TEXT DEFAULT 'course'");
-addColumnIfMissing('activation_codes', 'wallet_amount', 'REAL DEFAULT 0');
+applySchemaMigrations();
 
 // Seed default settings if empty
 const seedSetting = (key, defaultVal) => {
@@ -1072,8 +1117,8 @@ for (const idx of indexes) {
 
 isBootstrapping = false;
 
-// If connected to PostgreSQL and this was the initial bootstrap or fake data was purged, persist snapshot immediately
-if (pgSql && (!loadedFromPg || purgedFakeData)) {
+// If connected to PostgreSQL and this was the initial bootstrap, fake data was purged, or schema migrated, persist snapshot immediately
+if (pgSql && (!loadedFromPg || purgedFakeData || schemaMigrated)) {
   await db.flushToPostgres(true);
 }
 

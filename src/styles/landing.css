@@ -2352,12 +2352,174 @@ html:not([data-theme="dark"]) .theme-toggle-pill .moon-icon {
 }
 @media (max-width: 1024px) {
   .hero-sakr-content { padding-bottom: 0; }
-  .hero-sakr-visual, .hero-sakr-circle-wrap { min-height: 460px; height: 460px; }
-  .hero-sakr-circle { width: 390px; height: 390px; }
-  .hero-sakr-teacher-img { height: 460px; }
+  .hero-sakr-visual, .hero-sakr-circle-wrap { min-height: 440px; height: 440px; }
+  .hero-sakr-circle { width: 370px; height: 370px; }
+  .hero-sakr-teacher-img { height: 440px; }
 }
-@media (max-width: 640px) {
-  .hero-sakr-visual, .hero-sakr-circle-wrap { min-height: 380px; height: 380px; }
-  .hero-sakr-circle { width: 310px; height: 310px; bottom: 20px; }
-  .hero-sakr-teacher-img { height: 380px; }
+@media (max-width: 768px) {
+  .landing-header {
+    width: calc(100% - 16px) !important;
+    max-width: calc(100% - 16px) !important;
+    top: 8px !important;
+    border-radius: 14px !important;
+    padding: 0 10px !important;
+    height: 58px !important;
+  }
+  .landing-header.scrolled {
+    padding: 0 10px !important;
+  }
+  .header-login-btn {
+    display: none !important;
+  }
+  .section-container {
+    padding: 0 14px !important;
+  }
+  .hero-sakr-style {
+    padding: 86px 0 16px !important;
+    min-height: auto !important;
+  }
+  .hero-sakr-container {
+    padding: 14px 16px 0 !important;
+    gap: 24px !important;
+  }
+  .hero-sakr-badge {
+    font-size: 0.76rem !important;
+    padding: 6px 12px !important;
+    line-height: 1.45;
+    text-align: center;
+  }
+  .hero-sakr-title {
+    font-size: 1.72rem !important;
+    line-height: 1.35 !important;
+  }
+  .hero-sakr-subtitle {
+    font-size: 0.92rem !important;
+    line-height: 1.7 !important;
+  }
+  .hero-sakr-actions {
+    width: 100%;
+    flex-direction: column;
+    gap: 10px !important;
+  }
+  .btn-sakr-hero-white,
+  .btn-sakr-hero-trans {
+    width: 100% !important;
+    justify-content: center !important;
+    font-size: 0.96rem !important;
+    padding: 12px 20px !important;
+  }
+  .hero-sakr-pills {
+    gap: 8px !important;
+  }
+  .hero-sakr-pill {
+    font-size: 0.76rem !important;
+    padding: 6px 12px !important;
+  }
+  .hero-sakr-visual,
+  .hero-sakr-circle-wrap {
+    min-height: 300px !important;
+    height: 300px !important;
+  }
+  .hero-sakr-circle {
+    width: 250px !important;
+    height: 250px !important;
+    bottom: 14px !important;
+  }
+  .hero-sakr-teacher-img {
+    height: 300px !important;
+  }
+  .methodology-section,
+  .teacher-masterclass-section,
+  .sakr-why-section,
+  .grades-section,
+  .cta-section {
+    padding: 48px 0 !important;
+  }
+  .section-title {
+    font-size: 1.42rem !important;
+    flex-wrap: wrap;
+    line-height: 1.35;
+  }
+  .section-subtitle {
+    font-size: 0.88rem !important;
+    margin: 8px 0 28px !important;
+  }
+  .methodology-img-wrap {
+    height: 215px !important;
+  }
+  .methodology-content {
+    padding: 18px 16px !important;
+  }
+  .methodology-content h3 {
+    font-size: 1.08rem !important;
+  }
+  .masterclass-title {
+    font-size: 1.48rem !important;
+    text-align: center;
+  }
+  .teacher-tag-pill {
+    margin: 0 auto;
+  }
+  .masterclass-quote-box {
+    padding: 20px 18px 18px !important;
+    border-radius: 18px !important;
+  }
+  .quote-body {
+    font-size: 0.96rem !important;
+  }
+  .masterclass-feature-row {
+    padding: 14px !important;
+    gap: 12px !important;
+  }
+  .teacher-portrait-frame {
+    max-width: 100% !important;
+  }
+  .teacher-portrait-img {
+    height: 320px !important;
+  }
+  .masterclass-badge {
+    font-size: 0.72rem !important;
+    padding: 6px 10px !important;
+  }
+  .masterclass-badge.top-right {
+    top: 12px !important;
+    right: 8px !important;
+  }
+  .masterclass-badge.bottom-left {
+    bottom: 58px !important;
+    left: 8px !important;
+  }
+  .masterclass-badge.bottom-right {
+    bottom: 12px !important;
+    right: 8px !important;
+  }
+  .sakr-why-grid {
+    grid-template-columns: 1fr !important;
+    gap: 14px !important;
+  }
+  .sakr-why-card {
+    padding: 18px 16px !important;
+    min-height: auto !important;
+  }
+  .grades-grid,
+  .features-grid,
+  .testimonials-grid,
+  .steps-grid {
+    grid-template-columns: 1fr !important;
+    gap: 18px !important;
+  }
+  .grade-card {
+    padding: 26px 18px !important;
+  }
+  .cta-card {
+    padding: 36px 18px !important;
+    border-radius: 20px !important;
+  }
+  .cta-card h2 {
+    font-size: 1.45rem !important;
+  }
+  .cta-card p {
+    font-size: 0.92rem !important;
+    margin-bottom: 22px !important;
+  }
 }

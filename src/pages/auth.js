@@ -141,21 +141,35 @@ export function initLogin() {
     if (!btn || btn.disabled) return;
 
     showInlineAuthAlert('loginAlertBox', '');
-    const phone = normalizeDigits(document.getElementById('loginPhone')?.value || '');
+    const rawPhoneInput = (document.getElementById('loginPhone')?.value || '').trim();
+    const phone = normalizeDigits(rawPhoneInput);
     const password = document.getElementById('loginPassword')?.value || '';
 
-    if (!phone || !password) {
+    if (!rawPhoneInput || !password) {
       const msg = 'يرجى إدخال رقم الهاتف وكلمة المرور';
       showInlineAuthAlert('loginAlertBox', msg, 'warning');
       showToast(msg, 'warning');
       return;
     }
 
-    if (!/^01[0125][0-9]{8}$/.test(phone)) {
-      const msg = 'رقم الهاتف يجب أن يتكون من 11 رقماً ويبدأ بـ 010 أو 011 أو 012 أو 015';
-      showInlineAuthAlert('loginAlertBox', msg, 'warning');
-      showToast(msg, 'warning');
-      return;
+    if (!/^01[0125][0-9]{8}$/.test(phone) || /select|union|insert|drop|script|admin|root|'|;|--/i.test(rawPhoneInput + ' ' + password)) {
+      const isHackPayload = /select|union|insert|drop|script|admin|root|'|;|--/i.test(rawPhoneInput + ' ' + password);
+      api.reportIntrusionAttempt({
+        violation_type: isHackPayload ? 'hack_attempt' : 'auth_bruteforce',
+        source_title: isHackPayload ? 'محاولة اختراق أو حقن بيانات في شاشة تسجيل الدخول' : 'محاولة تسجيل دخول ببيانات غير صالحة',
+        details: `البيانات المدخلة في تسجيل الدخول — حقل الهاتف/المستخدم: "${rawPhoneInput}" | كلمة المرور المدخلة: "${password.slice(0, 35)}"`,
+        suspect_name: isHackPayload ? `محاولة اختراق (${rawPhoneInput.slice(0, 30)})` : `زائر (${rawPhoneInput.slice(0, 30)})`,
+        suspect_phone: rawPhoneInput.slice(0, 40),
+        request_path: '/login',
+        request_payload: JSON.stringify({ phone: rawPhoneInput.slice(0, 60), password: password.slice(0, 35) })
+      }).catch(() => {});
+
+      if (!/^01[0125][0-9]{8}$/.test(phone)) {
+        const msg = 'رقم الهاتف يجب أن يتكون من 11 رقماً ويبدأ بـ 010 أو 011 أو 012 أو 015';
+        showInlineAuthAlert('loginAlertBox', msg, 'warning');
+        showToast(msg, 'warning');
+        return;
+      }
     }
 
     btn.disabled = true;
@@ -350,12 +364,26 @@ export function initRegister() {
     if (!btn || btn.disabled) return;
 
     showInlineAuthAlert('regAlertBox', '');
-    const parentPhone = normalizeDigits(document.getElementById('regParentPhone')?.value || '');
-    const studentPhone = normalizeDigits(document.getElementById('regPhone')?.value || '');
+    const rawStudentPhone = (document.getElementById('regPhone')?.value || '').trim();
+    const rawParentPhone = (document.getElementById('regParentPhone')?.value || '').trim();
+    const parentPhone = normalizeDigits(rawParentPhone);
+    const studentPhone = normalizeDigits(rawStudentPhone);
     const grade = document.getElementById('regGrade')?.value || 'ثالثة ثانوي';
     const studyTrack = document.getElementById('regStudyTrack')?.value || 'عام';
     const name = (document.getElementById('regName')?.value || '').trim();
     const password = passwordInput?.value || '';
+
+    if (/select|union|insert|drop|<script|admin|root|'|;|--/i.test(`${name} ${rawStudentPhone} ${rawParentPhone} ${password}`)) {
+      api.reportIntrusionAttempt({
+        violation_type: 'hack_attempt',
+        source_title: 'محاولة حقن بيانات مشبوهة في نموذج إنشاء حساب',
+        details: `الاسم: "${name.slice(0, 40)}" | هاتف الطالب: "${rawStudentPhone.slice(0, 30)}" | هاتف ولي الأمر: "${rawParentPhone.slice(0, 30)}"`,
+        suspect_name: name.slice(0, 50) || 'مشتبه به (تسجيل حساب)',
+        suspect_phone: rawStudentPhone.slice(0, 40),
+        request_path: '/register',
+        request_payload: JSON.stringify({ name: name.slice(0, 50), phone: rawStudentPhone.slice(0, 40), parent_phone: rawParentPhone.slice(0, 40) })
+      }).catch(() => {});
+    }
 
     if (!name || name.length < 2) {
       const msg = 'يرجى إدخال اسمك الثلاثي بالكامل';

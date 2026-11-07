@@ -175,8 +175,11 @@ router.get('/violations', authMiddleware, teacherMiddleware, (req, res) => {
       ? allViolations.filter(v => matchesSecurityFilter(v.violation_type, typeFilter))
       : allViolations;
 
-    const allOffenders = db.prepare(`
+    const studentOffenders = db.prepare(`
       SELECT u.id, u.name, u.phone, u.parent_phone, u.grade,
+             0 as is_external,
+             MAX(sv.device_id) as device_id,
+             MAX(sv.ip_address) as ip_address,
              COALESCE(u.study_track, 'عام') as study_track,
              COALESCE(u.security_strikes, 0) as security_strikes,
              COALESCE(u.is_blocked, 0) as is_blocked,
@@ -186,9 +189,11 @@ router.get('/violations', authMiddleware, teacherMiddleware, (req, res) => {
              SUM(CASE WHEN sv.violation_type = 'screen_record' THEN 1 ELSE 0 END) as record_count,
              SUM(CASE WHEN sv.violation_type IN ('idm_download', 'devtools') THEN 1 ELSE 0 END) as download_count,
              SUM(CASE WHEN sv.violation_type IN ('idm_download', 'devtools') THEN 1 ELSE 0 END) as idm_count,
+             SUM(CASE WHEN sv.violation_type = 'pdf_leak' THEN 1 ELSE 0 END) as pdf_leak_count,
+             SUM(CASE WHEN sv.violation_type = 'exam_leak' THEN 1 ELSE 0 END) as exam_leak_count,
              SUM(CASE WHEN sv.violation_type IN ('pdf_leak', 'exam_leak') THEN 1 ELSE 0 END) as doc_leak_count,
              SUM(CASE WHEN sv.violation_type IN ('pdf_leak', 'exam_leak') THEN 1 ELSE 0 END) as leak_count,
-             SUM(CASE WHEN sv.violation_type IN ('admin_intrusion', 'auth_bruteforce', 'hack_attempt') THEN 1 ELSE 0 END) as intrusion_count,
+             SUM(CASE WHEN sv.violation_type IN ('admin_intrusion', 'auth_bruteforce', 'hack_attempt', 'devtools') THEN 1 ELSE 0 END) as intrusion_count,
              MAX(sv.created_at) as last_violation_at
       FROM users u
       JOIN security_violations sv ON sv.user_id = u.id
@@ -197,15 +202,53 @@ router.get('/violations', authMiddleware, teacherMiddleware, (req, res) => {
       ORDER BY total_violations DESC, last_violation_at DESC
     `).all();
 
+    const externalOffendersRaw = db.prepare(`
+      SELECT NULL as id,
+             1 as is_external,
+             COALESCE(NULLIF(sv.suspect_name, ''), 'زائر / محاولة خارجية') as name,
+             COALESCE(NULLIF(sv.suspect_phone, ''), NULLIF(sv.ip_address, ''), '-') as phone,
+             '' as parent_phone,
+             'خارجي / غير مسجل' as grade,
+             'خارجي' as study_track,
+             MAX(sv.device_id) as device_id,
+             MAX(sv.ip_address) as ip_address,
+             COUNT(sv.id) as security_strikes,
+             COUNT(sv.id) as total_violations,
+             COUNT(sv.id) as violations_count,
+             SUM(CASE WHEN sv.violation_type = 'screenshot' THEN 1 ELSE 0 END) as screenshot_count,
+             SUM(CASE WHEN sv.violation_type = 'screen_record' THEN 1 ELSE 0 END) as record_count,
+             SUM(CASE WHEN sv.violation_type IN ('idm_download', 'devtools') THEN 1 ELSE 0 END) as download_count,
+             SUM(CASE WHEN sv.violation_type IN ('idm_download', 'devtools') THEN 1 ELSE 0 END) as idm_count,
+             SUM(CASE WHEN sv.violation_type = 'pdf_leak' THEN 1 ELSE 0 END) as pdf_leak_count,
+             SUM(CASE WHEN sv.violation_type = 'exam_leak' THEN 1 ELSE 0 END) as exam_leak_count,
+             SUM(CASE WHEN sv.violation_type IN ('pdf_leak', 'exam_leak') THEN 1 ELSE 0 END) as doc_leak_count,
+             SUM(CASE WHEN sv.violation_type IN ('pdf_leak', 'exam_leak') THEN 1 ELSE 0 END) as leak_count,
+             SUM(CASE WHEN sv.violation_type IN ('admin_intrusion', 'auth_bruteforce', 'hack_attempt', 'devtools') THEN 1 ELSE 0 END) as intrusion_count,
+             MAX(sv.created_at) as last_violation_at
+      FROM security_violations sv
+      WHERE sv.user_id IS NULL
+      GROUP BY COALESCE(NULLIF(sv.device_id, ''), NULLIF(sv.ip_address, ''), NULLIF(sv.suspect_phone, ''), CAST(sv.id AS TEXT))
+      ORDER BY total_violations DESC, last_violation_at DESC
+    `).all();
+
+    const externalOffenders = externalOffendersRaw.map(ext => {
+      const targetKey = ext.device_id || (ext.ip_address ? `ip_ban_${ext.ip_address}` : '');
+      return {
+        ...ext,
+        is_blocked: targetKey && bannedDeviceSet.has(targetKey) ? 1 : 0
+      };
+    });
+
+    const allOffenders = [...studentOffenders, ...externalOffenders];
+
     const offenders = typeFilter && typeFilter !== 'all'
       ? allOffenders.filter(o => {
           if (typeFilter === 'screenshot') return Number(o.screenshot_count) > 0;
           if (typeFilter === 'screen_record') return Number(o.record_count) > 0;
           if (typeFilter === 'idm_download') return Number(o.idm_count) > 0;
-          if (typeFilter === 'pdf_leak' || typeFilter === 'exam_leak') {
-            return allViolations.some(v => Number(v.user_id) === Number(o.id) && v.violation_type === typeFilter);
-          }
-          if (typeFilter === 'intrusion') return Number(o.intrusion_count) > 0 || Number(o.idm_count) > 0;
+          if (typeFilter === 'pdf_leak') return Number(o.pdf_leak_count) > 0;
+          if (typeFilter === 'exam_leak') return Number(o.exam_leak_count) > 0;
+          if (typeFilter === 'intrusion') return Number(o.intrusion_count) > 0;
           return true;
         })
       : allOffenders;

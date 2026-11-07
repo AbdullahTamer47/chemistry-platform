@@ -6,6 +6,7 @@ import { confirmModal } from '../components/modal.js';
 import { esc, sanitize, safeUrl, formatTime, getShortStudentName, getInitials } from '../utils/helpers.js';
 import { renderChemMarkdown } from '../utils/chemMarkdown.js';
 import { openProtectedPdfModal } from '../components/pdfShieldViewer.js';
+import { mountHardwareDrmShield, attachMobileAndDesktopAntiCapture } from '../utils/drmShield.js';
 
 export function renderLesson(id) {
   return `
@@ -210,10 +211,10 @@ export async function initLesson(id) {
                 </div>
               </div>
 
-              <!-- Subtle Forensic Watermark Grid -->
-              <div id="videoWatermarkMatrix" style="position:absolute; inset:0; z-index:15; pointer-events:none; overflow:hidden; display:grid; grid-template-columns:repeat(3, 1fr); grid-template-rows:repeat(3, 1fr); place-items:center; opacity:0.11; user-select:none;">
-                ${Array.from({ length: 9 }).map(() => `
-                  <div style="transform:rotate(-24deg); color:#ffffff; font-weight:900; font-size:0.74rem; white-space:nowrap; text-shadow:0 1px 3px rgba(0,0,0,0.9); font-family:monospace;" dir="ltr">
+              <!-- High-Resilience Forensic Watermark Matrix (Desktop & Mobile) -->
+              <div id="videoWatermarkMatrix" style="position:absolute; inset:0; z-index:15; pointer-events:none; overflow:hidden; display:grid; grid-template-columns:repeat(3, 1fr); grid-template-rows:repeat(4, 1fr); place-items:center; opacity:0.22; user-select:none;">
+                ${Array.from({ length: 12 }).map((_, idx) => `
+                  <div style="transform:rotate(${idx % 2 === 0 ? '-22deg' : '-16deg'}); color:#ffffff; font-weight:900; font-size:0.74rem; white-space:nowrap; text-shadow:0 1px 4px rgba(0,0,0,0.95), 0 0 8px rgba(0,0,0,0.85); font-family:monospace;" dir="ltr">
                     ${esc(shortName)} • ${esc(user.phone || '')}
                   </div>
                 `).join('')}
@@ -660,6 +661,11 @@ export async function initLesson(id) {
               },
               onStateChange: (ev) => {
                 if (ev.data === YT.PlayerState.PLAYING) {
+                  if (document.getElementById('antiCaptureShield')?.style.display === 'flex' || document.hidden || !document.hasFocus()) {
+                    try { ev.target.pauseVideo(); } catch (_) {}
+                    syncUiState(false);
+                    return;
+                  }
                   const d = ev.target.getDuration();
                   if (d && d > 0) durationSec = Math.floor(d);
                   const chosenQ = qualitySelect?.value;
@@ -676,12 +682,16 @@ export async function initLesson(id) {
 
           const togglePlay = () => {
             try {
+              if (document.getElementById('antiCaptureShield')?.style.display === 'flex' || document.hidden) {
+                return;
+              }
               if (!ytPlayer || typeof ytPlayer.getPlayerState !== 'function') return;
               const st = ytPlayer.getPlayerState();
               if (st === YT.PlayerState.PLAYING) {
                 ytPlayer.pauseVideo();
                 syncUiState(false);
               } else {
+                window.focus();
                 ytPlayer.playVideo();
                 syncUiState(true);
               }
@@ -1000,12 +1010,16 @@ export async function initLesson(id) {
     };
 
     // <0.1ms Synchronous Pitch-Black Curtain (Executes before OS Snipping Tool or Game Bar freezes screen pixels)
+    let recordCooldownTimer = null;
+    let recordCooldownRemaining = 0;
+
     const instantBlackoutFrame = () => {
       if (curtainEl) {
         curtainEl.style.display = 'block';
       }
       if (vcEl) {
         vcEl.style.transition = 'none';
+        vcEl.style.display = 'none';
         vcEl.style.visibility = 'hidden';
         vcEl.style.opacity = '0';
         vcEl.style.filter = 'brightness(0)';
@@ -1014,12 +1028,16 @@ export async function initLesson(id) {
     };
 
     const restoreFrameVisibility = () => {
-      if (isPermanentlyBlocked) return;
+      if (isPermanentlyBlocked || recordCooldownRemaining > 0) return;
+      if (!document.hasFocus() || document.hidden) {
+        window.focus();
+      }
       isSecurityLocked = false;
       if (curtainEl) {
         curtainEl.style.display = 'none';
       }
       if (vcEl) {
+        vcEl.style.display = 'block';
         vcEl.style.visibility = 'visible';
         vcEl.style.opacity = isProtectedVideoPlaying() ? '1' : '0';
         vcEl.style.filter = 'none';
@@ -1029,7 +1047,7 @@ export async function initLesson(id) {
       }
     };
 
-    const triggerSecurityLockout = (violationType, customTitle, customDesc, shouldReport = true) => {
+    const triggerSecurityLockout = (violationType, customTitle, customDesc, shouldReport = true, enforceCooldownSec = 0) => {
       if (isPermanentlyBlocked) return;
       isSecurityLocked = true;
       instantBlackoutFrame();
@@ -1038,12 +1056,37 @@ export async function initLesson(id) {
       }
       if (shieldTitle && customTitle) shieldTitle.textContent = customTitle;
       if (shieldDesc && customDesc) shieldDesc.textContent = customDesc;
-      if (resumeBtn) {
+
+      const waitSec = enforceCooldownSec || (violationType === 'screen_record' ? 8 : 0);
+      if (resumeBtn && waitSec > 0) {
+        if (recordCooldownTimer) clearInterval(recordCooldownTimer);
+        recordCooldownRemaining = waitSec;
+        resumeBtn.disabled = true;
+        resumeBtn.style.opacity = '0.6';
+        resumeBtn.style.cursor = 'not-allowed';
+        resumeBtn.textContent = `يرجى إغلاق أداة التسجيل أولاً (${recordCooldownRemaining} ث)...`;
+        recordCooldownTimer = setInterval(() => {
+          recordCooldownRemaining = Math.max(0, recordCooldownRemaining - 1);
+          if (recordCooldownRemaining <= 0) {
+            clearInterval(recordCooldownTimer);
+            recordCooldownTimer = null;
+            if (!isPermanentlyBlocked && resumeBtn) {
+              resumeBtn.disabled = false;
+              resumeBtn.style.opacity = '1';
+              resumeBtn.style.cursor = 'pointer';
+              resumeBtn.textContent = 'تحققت من إغلاق التسجيل — متابعة المشاهدة الآن';
+            }
+          } else if (!isPermanentlyBlocked && resumeBtn) {
+            resumeBtn.textContent = `يرجى إغلاق أداة التسجيل أولاً (${recordCooldownRemaining} ث)...`;
+          }
+        }, 1000);
+      } else if (resumeBtn && recordCooldownRemaining <= 0) {
         resumeBtn.disabled = false;
         resumeBtn.style.opacity = '1';
         resumeBtn.style.cursor = 'pointer';
         resumeBtn.textContent = 'متابعة المشاهدة الآن';
       }
+
       if (shouldReport) {
         silentReportToTeacher(violationType, customTitle || violationType);
       }
@@ -1051,10 +1094,49 @@ export async function initLesson(id) {
 
     resumeBtn?.addEventListener('click', (e) => {
       e.stopPropagation();
-      if (isPermanentlyBlocked) return;
+      if (isPermanentlyBlocked || recordCooldownRemaining > 0) return;
       window.focus();
       restoreFrameVisibility();
     });
+
+    // Mount Hardware DRM Shield (W3C EME Widevine / PlayReady / FairPlay / ClearKey) inside #videoBox
+    // Activates Android Chrome FLAG_SECURE (SurfaceView.setSecure) and Windows DWM Hardware Overlay Protection
+    const unmountHardwareDrm = videoBox ? await mountHardwareDrmShield(videoBox) : () => {};
+
+    // Attach Mobile & Desktop Multi-Touch Screenshot, Shade Pull-Down, and Compositor Freeze Sensors
+    const detachMobileAntiCapture = attachMobileAndDesktopAntiCapture({
+      isActiveGuard: () => Boolean(document.getElementById('videoBox')),
+      isPlayingGuard: () => isProtectedVideoPlaying(),
+      onInstantBlackout: () => instantBlackoutFrame(),
+      onTriggerViolation: (reasonText, vType, enforceLock) => {
+        triggerSecurityLockout(
+          vType || 'screenshot',
+          'تم إيقاف البث مؤقتاً لحماية المحتوى',
+          'غير مسموح بالتقاط صور للشاشة أو تشغيل مسجل الشاشة على الهاتف أو الكمبيوتر أثناء مشاهدة المحاضرة.',
+          true,
+          enforceLock ? 6 : 0
+        );
+      }
+    });
+
+    // Continuous 120ms Hardware Focus & Visibility Watchdog (Prevents background/OBS/GameBar recording while unfocused)
+    const focusWatchdogInterval = setInterval(() => {
+      if (isTogglingFullscreen || isPermanentlyBlocked) return;
+      if ((document.hidden || !document.hasFocus()) && isProtectedVideoPlaying()) {
+        if (document.activeElement && document.activeElement.tagName === 'IFRAME') {
+          try { window.focus(); } catch (_) {}
+          return;
+        }
+        instantBlackoutFrame();
+        triggerSecurityLockout(
+          'screen_record',
+          'تم إيقاف البث مؤقتاً لحماية المحتوى',
+          'يتوقف الفيديو تلقائياً عند خروجك من نافذة المحاضرة أو فتح أي أداة خارجية لمنع التسجيل.',
+          true,
+          6
+        );
+      }
+    }, 120);
 
     // Block Browser Screen Capture APIs (getDisplayMedia)
     if (navigator.mediaDevices && typeof navigator.mediaDevices.getDisplayMedia === 'function') {
@@ -1251,7 +1333,11 @@ export async function initLesson(id) {
       idmObserver.disconnect();
       clearInterval(idmSweepInterval);
       clearInterval(viewCommitTimer);
+      clearInterval(focusWatchdogInterval);
+      if (recordCooldownTimer) clearInterval(recordCooldownTimer);
       if (wmInterval) clearInterval(wmInterval);
+      try { unmountHardwareDrm(); } catch (_) {}
+      try { detachMobileAntiCapture(); } catch (_) {}
     };
     window.addEventListener('popstate', cleanupLessonListeners, { once: true });
 

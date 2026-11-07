@@ -96,25 +96,25 @@ export function renderCourses() {
     <div class="${wrapperClass}" style="min-height: 100vh;">
       ${headerHtml}
       <main class="${containerClass}" style="${mainStyle}">
-        <div class="page-header" style="display:flex; flex-direction: column; gap:16px; margin-bottom: 24px;">
-          <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:16px;">
-            <div>
+        <div class="page-header courses-page-header" style="display:flex; flex-direction: column; gap:14px; margin-bottom: 24px; align-items:stretch;">
+          <div class="courses-page-top-row" style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:14px; width:100%;">
+            <div style="min-width:0; flex:1;">
               <h1 class="page-title"><span class="material-symbols-rounded" style="color:var(--primary)">school</span> الكورسات والمحاضرات</h1>
               <p class="page-subtitle">جميع الكورسات المتاحة على المنصة مع ترشيح تلقائي لكورسات مرحلتك الدراسية</p>
             </div>
             
-            <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
-              <div class="search-wrapper" style="max-width: 300px; width: 100%;">
+            <div class="courses-search-box" style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; width:min(100%, 320px);">
+              <div class="search-wrapper" style="width: 100%; max-width: 100%;">
                 <span class="material-symbols-rounded search-icon">search</span>
-                <input type="text" class="form-input" id="courseSearch" placeholder="ابحث عن كورس...">
+                <input type="text" class="form-input" id="courseSearch" placeholder="ابحث عن كورس، مرحلة، أو Chemistry...">
               </div>
             </div>
           </div>
 
           <!-- DURATION / BUNDLE SCOPE + TRACK FILTER PILLS -->
-          <div class="filter-pills" style="display:flex; gap:8px; flex-wrap:wrap; align-items:center; justify-content:space-between; padding:12px 16px; background:var(--bg-secondary); border-radius:12px; border:1px solid var(--border-light);">
-            <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
-              <span style="font-size:0.85rem; font-weight:800; color:var(--text-primary); margin-left:4px; display:flex; align-items:center; gap:4px; flex-shrink:0;">
+          <div class="courses-filter-box" style="display:flex; gap:10px; flex-wrap:wrap; align-items:center; justify-content:space-between; padding:12px 14px; background:var(--bg-secondary); border-radius:14px; border:1px solid var(--border-light); width:100%;">
+            <div class="courses-filter-group">
+              <span class="courses-filter-label">
                 <span class="material-symbols-rounded" style="font-size:1.1rem; color:var(--primary);">tune</span> نوع الكورس:
               </span>
               <button type="button" class="btn btn-sm type-filter-btn btn-primary" data-type="all" style="border-radius:20px; font-weight:700;">الكل</button>
@@ -124,8 +124,8 @@ export function renderCourses() {
               <button type="button" class="btn btn-sm type-filter-btn btn-outline" data-type="annual" style="border-radius:20px; font-weight:700;">منهج السنة الكامل</button>
             </div>
 
-            <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap;">
-              <span style="font-size:0.82rem; font-weight:800; color:var(--text-primary); display:flex; align-items:center; gap:4px;">
+            <div class="courses-filter-group">
+              <span class="courses-filter-label">
                 <span class="material-symbols-rounded" style="font-size:1.05rem; color:var(--primary);">translate</span> الشعبة:
               </span>
               <button type="button" class="btn btn-sm track-filter-btn btn-primary" data-track="" style="border-radius:20px; font-weight:700;">الكل</button>
@@ -135,7 +135,7 @@ export function renderCourses() {
           </div>
 
           <!-- SEQUENTIAL GRADE & STAGE TABS -->
-          <div class="tabs" id="gradeTabs" style="margin:0;">
+          <div class="tabs courses-grade-tabs" id="gradeTabs" style="margin:0; width:100%;">
             <div class="tab active" data-grade="" data-stage="">جميع المراحل</div>
             <div class="tab" data-grade="" data-stage="primary">المرحلة الابتدائية</div>
             <div class="tab" data-grade="" data-stage="prep">المرحلة الإعدادية</div>

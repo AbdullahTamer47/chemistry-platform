@@ -2764,6 +2764,122 @@ div[style*="z-index: 2147483647"]:not(#pdfShieldOverlay):not(.toast-container):n
   z-index: -9999 !important;
 }
 
+/* ================================================================
+   COMPREHENSIVE MOBILE & ADMIN & VIDEO PLAYER RESPONSIVENESS
+   ================================================================ */
+@media (max-width: 768px) {
+  .app-topbar {
+    padding: 10px 12px !important;
+    border-radius: 14px !important;
+    margin-bottom: 16px !important;
+  }
+  .app-topbar-inner {
+    gap: 10px !important;
+  }
+  .app-topbar-search {
+    min-width: 100% !important;
+    max-width: 100% !important;
+    order: 2;
+  }
+  .app-topbar-actions {
+    width: 100%;
+    justify-content: space-between;
+    order: 1;
+  }
+  .you-are-here-banner {
+    padding: 12px 14px !important;
+    gap: 10px !important;
+    border-radius: 14px !important;
+  }
+  .lesson-curriculum-sidebar {
+    position: static !important;
+    max-height: none !important;
+    padding: 12px !important;
+  }
+  #kimyawyPlayerControls {
+    height: auto !important;
+    padding: 8px 10px !important;
+    flex-wrap: wrap !important;
+    justify-content: space-between !important;
+    gap: 6px !important;
+  }
+  #kpProgressRange {
+    order: -1;
+    flex: 1 1 100% !important;
+    width: 100% !important;
+    margin-bottom: 2px !important;
+  }
+  #kpTimeDisplay {
+    font-size: 0.68rem !important;
+    min-width: 74px !important;
+    padding: 3px 5px !important;
+  }
+  #kpQualitySelect,
+  #kpSpeedSelect {
+    font-size: 0.68rem !important;
+    padding: 3px 5px !important;
+  }
+  #kpRewindBtn,
+  #kpForwardBtn,
+  #kpMuteBtn,
+  #customFullscreenBtn {
+    height: 30px !important;
+    min-width: 30px !important;
+    padding: 0 6px !important;
+  }
+  #playerPauseMask > div:first-child {
+    width: 58px !important;
+    height: 58px !important;
+    border-radius: 16px !important;
+  }
+  #playerPauseMask #centerPlayIcon {
+    font-size: 2.2rem !important;
+  }
+  #playerPauseMask {
+    gap: 8px !important;
+    padding: 10px !important;
+  }
+  #videoWatermarkMatrix div {
+    font-size: 0.62rem !important;
+  }
+  /* Force inline 2-column and 3-column grids inside Admin pages & Modals to stack cleanly on mobile */
+  [style*="grid-template-columns: 1fr 1fr"],
+  [style*="grid-template-columns:1fr 1fr"],
+  [style*="grid-template-columns: 2fr 1fr"],
+  [style*="grid-template-columns:2fr 1fr"],
+  [style*="grid-template-columns: 1fr 2fr"],
+  [style*="grid-template-columns:1fr 2fr"],
+  [style*="grid-template-columns: repeat(3"],
+  [style*="grid-template-columns:repeat(3"] {
+    grid-template-columns: 1fr !important;
+  }
+  .pdf-shield-modal-overlay {
+    padding: 6px !important;
+  }
+  .pdf-shield-modal-card {
+    width: 100vw !important;
+    height: 94vh !important;
+    border-radius: 14px !important;
+  }
+  .pdf-shield-header {
+    padding: 10px 12px !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .stats-grid {
+    grid-template-columns: 1fr !important;
+    gap: 10px !important;
+  }
+  .stat-card {
+    padding: 14px 16px !important;
+  }
+  .page-header > div {
+    width: 100%;
+  }
+}
+
+
 
 
 

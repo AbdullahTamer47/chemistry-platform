@@ -1729,17 +1729,17 @@ export async function initAdminSecurity() {
                             <div class="sidebar-user-avatar" style="width:36px;height:36px;">${getInitials(o.name)}</div>
                             <div>
                               <div style="font-weight:800;color:var(--text-primary);">${escA(o.name)}</div>
-                              <div style="font-size:0.72rem;color:var(--text-muted);">ID: #${o.id}</div>
+                              <div style="font-size:0.72rem;color:var(--text-muted);">${o.is_external ? `جهاز خارجي: ${escA(o.device_id || o.ip_address || '-')}` : `ID: #${o.id}`}</div>
                             </div>
                           </div>
                         </td>
                         <td>
                           <div dir="ltr" style="font-weight:700;font-size:0.82rem;">${escA(o.phone)}</div>
-                          <div dir="ltr" style="font-size:0.72rem;color:var(--text-muted);">ولي الأمر: ${escA(o.parent_phone || '-')}</div>
+                          <div dir="ltr" style="font-size:0.72rem;color:var(--text-muted);">${o.is_external ? `IP: ${escA(o.ip_address || '-')}` : `ولي الأمر: ${escA(o.parent_phone || '-')}`}</div>
                         </td>
                         <td>
                           <span style="font-size:0.8rem;font-weight:700;">${escA(o.grade || '-')}</span>
-                          <span class="badge badge-info" style="font-size:0.65rem;">${escA(o.study_track || 'عام')}</span>
+                          <span class="badge ${o.is_external ? 'badge-danger' : 'badge-info'}" style="font-size:0.65rem;">${escA(o.study_track || 'عام')}</span>
                         </td>
                         <td>
                           <div style="display:flex;gap:6px;flex-wrap:wrap;">
@@ -1764,7 +1764,12 @@ export async function initAdminSecurity() {
                         </td>
                         <td>
                           <div style="display:flex;gap:6px;flex-wrap:wrap;">
-                            ${o.is_blocked ? `
+                            ${o.is_external ? `
+                              <button type="button" class="btn btn-sm ${o.is_blocked ? 'btn-primary' : ''} sec-ext-ban-btn" data-dev="${escA(o.device_id || (o.ip_address ? `ip_ban_${o.ip_address}` : 'ext_ban'))}" data-ip="${escA(o.ip_address || '')}" data-act="${o.is_blocked ? 'unblock' : 'block'}" style="${o.is_blocked ? '' : 'background:#e11d48;color:#fff;border:none;'}font-weight:800;">
+                                <span class="material-symbols-rounded" style="font-size:1rem;">${o.is_blocked ? 'lock_open' : 'block'}</span>
+                                ${o.is_blocked ? 'فك حظر الجهاز' : 'حظر هذا الجهاز للأبد'}
+                              </button>
+                            ` : o.is_blocked ? `
                               <button type="button" class="btn btn-sm btn-primary sec-action-btn" data-uid="${o.id}" data-act="unblock" data-name="${escA(o.name)}" title="فك الحظر عن الطالب وجميع أجهزته">
                                 <span class="material-symbols-rounded" style="font-size:1rem;">lock_open</span> فك الحظر (طالب + جهاز)
                               </button>
@@ -1773,14 +1778,16 @@ export async function initAdminSecurity() {
                                 <span class="material-symbols-rounded" style="font-size:1rem;">block</span> حظر الطالب وجهازه للأبد
                               </button>
                             `}
-                            ${parentWa ? `
+                            ${!o.is_external && parentWa ? `
                               <a href="https://wa.me/${parentWa}?text=${waMsg}" target="_blank" rel="noopener" class="btn btn-sm btn-ghost" style="color:#16a34a;border:1px solid rgba(22,163,74,0.3);" title="إرسال تحذير أمني لولي الأمر عبر واتساب">
                                 <span class="material-symbols-rounded" style="font-size:1.05rem;">chat</span> واتساب ولي الأمر
                               </a>
                             ` : ''}
-                            <button type="button" class="btn btn-sm btn-ghost sec-action-btn" data-uid="${o.id}" data-act="clear" data-name="${escA(o.name)}" style="color:var(--text-muted);" title="مسح سجل مخالفات الطالب">
-                              <span class="material-symbols-rounded" style="font-size:1.05rem;">delete_sweep</span>
-                            </button>
+                            ${!o.is_external ? `
+                              <button type="button" class="btn btn-sm btn-ghost sec-action-btn" data-uid="${o.id}" data-act="clear" data-name="${escA(o.name)}" style="color:var(--text-muted);" title="مسح سجل مخالفات الطالب">
+                                <span class="material-symbols-rounded" style="font-size:1.05rem;">delete_sweep</span>
+                              </button>
+                            ` : ''}
                           </div>
                         </td>
                       </tr>
@@ -1790,6 +1797,21 @@ export async function initAdminSecurity() {
               </table>
             </div>
           `;
+
+          offEl.querySelectorAll('.sec-ext-ban-btn').forEach(btn => {
+            btn.addEventListener('click', async () => {
+              const device_id = btn.dataset.dev;
+              const ip_address = btn.dataset.ip;
+              const action = btn.dataset.act;
+              try {
+                const res = await api.takeDeviceSecurityAction({ device_id, ip_address, user_id: null, action });
+                showToast(res.message, 'success');
+                loadSecurityData();
+              } catch (err) {
+                showToast(err.message, 'error');
+              }
+            });
+          });
 
           offEl.querySelectorAll('.sec-action-btn').forEach(btn => {
             btn.addEventListener('click', async () => {

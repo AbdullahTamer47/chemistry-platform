@@ -2,6 +2,7 @@ import { api } from '../utils/api.js';
 import { getUser, isTeacher } from '../utils/auth.js';
 import { esc, getShortStudentName } from '../utils/helpers.js';
 import { showToast } from './toast.js';
+import { mountHardwareDrmShield, attachMobileAndDesktopAntiCapture } from '../utils/drmShield.js';
 
 function getStudentWatermarkText() {
   const user = getUser() || {};
@@ -263,6 +264,15 @@ export async function openProtectedPdfModal(lessonId, lessonTitle = 'مذكرة 
       }
     };
 
+    const pdfViewportEl = document.getElementById('pdfShieldViewport');
+    const unmountPdfDrm = pdfViewportEl ? await mountHardwareDrmShield(pdfViewportEl) : () => {};
+    const detachPdfMobileCapture = attachMobileAndDesktopAntiCapture({
+      isActiveGuard: () => Boolean(document.getElementById('kimyawyPdfShieldModal')),
+      isPlayingGuard: () => !isSecurityLocked,
+      onInstantBlackout: () => instantPdfCurtainBlackout(),
+      onTriggerViolation: (reasonText) => triggerBlackout(true, reasonText || 'محاولة تصوير أو تسجيل شاشة المذكرة على الهاتف')
+    });
+
     window.addEventListener('keydown', onKeyDown, true);
     window.addEventListener('keyup', onKeyUp, true);
     window.addEventListener('blur', onPdfBlur);
@@ -287,6 +297,8 @@ export async function openProtectedPdfModal(lessonId, lessonTitle = 'مذكرة 
       window.removeEventListener('keyup', onKeyUp, true);
       window.removeEventListener('blur', onPdfBlur);
       document.removeEventListener('visibilitychange', onPdfVisibility);
+      try { unmountPdfDrm(); } catch (_) {}
+      try { detachPdfMobileCapture(); } catch (_) {}
       if (document.fullscreenElement) {
         document.exitFullscreen?.().catch(() => {});
       }
