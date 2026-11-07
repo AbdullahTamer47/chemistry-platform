@@ -34,33 +34,38 @@ export async function mountHardwareDrmShield(containerEl) {
 
   let destroyed = false;
   let shakaPlayer = null;
-  let drmVideo = containerEl.querySelector('.kimyawy-eme-drm-layer');
+  let drmVideo = null;
 
-  if (!drmVideo) {
-    drmVideo = document.createElement('video');
-    drmVideo.className = 'kimyawy-eme-drm-layer';
-    drmVideo.muted = true;
-    drmVideo.defaultMuted = true;
-    drmVideo.loop = true;
-    drmVideo.playsInline = true;
-    drmVideo.setAttribute('playsinline', '');
-    drmVideo.setAttribute('webkit-playsinline', '');
-    drmVideo.setAttribute(' muted', '');
-    drmVideo.setAttribute('disablePictureInPicture', '');
-    drmVideo.setAttribute('controlsList', 'nodownload nofullscreen noremoteplayback');
-    drmVideo.style.cssText = [
-      'position:absolute',
-      'inset:0',
-      'width:100%',
-      'height:100%',
-      'object-fit:cover',
-      'opacity:0.012',
-      'pointer-events:none',
-      'z-index:17',
-      'user-select:none',
-      '-webkit-user-select:none'
-    ].join(';');
-    containerEl.appendChild(drmVideo);
+  try {
+    drmVideo = containerEl.querySelector('.kimyawy-eme-drm-layer');
+    if (!drmVideo) {
+      drmVideo = document.createElement('video');
+      drmVideo.className = 'kimyawy-eme-drm-layer';
+      drmVideo.muted = true;
+      drmVideo.defaultMuted = true;
+      drmVideo.loop = true;
+      drmVideo.playsInline = true;
+      drmVideo.setAttribute('playsinline', '');
+      drmVideo.setAttribute('webkit-playsinline', '');
+      drmVideo.setAttribute('muted', '');
+      drmVideo.setAttribute('disablePictureInPicture', '');
+      drmVideo.setAttribute('controlsList', 'nodownload nofullscreen noremoteplayback');
+      drmVideo.style.cssText = [
+        'position:absolute',
+        'inset:0',
+        'width:100%',
+        'height:100%',
+        'object-fit:cover',
+        'opacity:0.012',
+        'pointer-events:none',
+        'z-index:17',
+        'user-select:none',
+        '-webkit-user-select:none'
+      ].join(';');
+      containerEl.appendChild(drmVideo);
+    }
+  } catch (_) {
+    return () => {};
   }
 
   // 1. Immediate W3C EME KeySystem negotiation (Widevine -> PlayReady -> FairPlay -> ClearKey)
@@ -359,3 +364,4 @@ export function attachMobileAndDesktopAntiCapture({
     }
   };
 }
+
