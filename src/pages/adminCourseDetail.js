@@ -88,7 +88,10 @@ export async function initAdminCourseDetail(id) {
                         ` : ''}
                       </div>
                       <div style="font-size:0.75rem;color:var(--text-muted);margin-top:2px;">
-                        ${item.item_type === 'exam' ? `${item.duration_minutes} دقيقة · ${item.max_attempts} محاولات` : `${item.duration} دقيقة ${item.is_free ? '· <span style="color:var(--success)">مجاني</span>' : ''}`}
+                        ${item.item_type === 'exam'
+                          ? `${item.duration_minutes} دقيقة · ${(item.exam_type === 'homework' || Number(item.max_attempts) <= 0) ? '<span style="color:var(--primary);font-weight:700;">واجب مفتوح (محاولات لا نهائية)</span>' : `${item.max_attempts} محاولات`}`
+                          : `${item.duration} دقيقة · المشاهدات: ${Number(item.max_views) === 0 ? '<span style="color:var(--primary);font-weight:700;">لا نهائي</span>' : `${item.max_views ?? 8} مرات`} ${item.is_free ? '· <span style="color:var(--success)">مجاني</span>' : ''}`
+                        }
                       </div>
                     </div>
                     <div style="display:flex;gap:6px">
@@ -322,10 +325,18 @@ export async function initAdminCourseDetail(id) {
             </div>
           </div>
           <div class="form-group"><label class="form-label">الوصف</label><textarea class="form-input" id="nlDesc" rows="2"></textarea></div>
-          <div style="display:flex;gap:12px">
-            <div class="form-group" style="flex:1"><label class="form-label">المدة (دقائق)</label><input type="number" class="form-input" id="nlDur" value="45"></div>
-            <div class="form-group" style="flex:1"><label class="form-label">الترتيب</label><input type="number" class="form-input" id="nlOrder" value="${(chapter.items?.length || 0) + 1}"></div>
-            <div class="form-group" style="flex:1"><label class="form-label">المشاهدات المسموحة</label><input type="number" class="form-input" id="nlMaxViews" value="8"></div>
+          <div style="display:flex;gap:12px;flex-wrap:wrap;">
+            <div class="form-group" style="flex:1;min-width:110px;"><label class="form-label">المدة (دقائق)</label><input type="number" class="form-input" id="nlDur" value="45"></div>
+            <div class="form-group" style="flex:1;min-width:90px;"><label class="form-label">الترتيب</label><input type="number" class="form-input" id="nlOrder" value="${(chapter.items?.length || 0) + 1}"></div>
+            <div class="form-group" style="flex:1.6;min-width:210px;">
+              <label class="form-label">عدد المشاهدات (0 = لا نهائي)</label>
+              <div style="display:flex;gap:6px;align-items:center;">
+                <button type="button" class="btn btn-secondary btn-sm" id="nlViewsMinus" style="padding:0 10px;">-</button>
+                <input type="number" class="form-input" id="nlMaxViews" min="0" max="999" value="8" style="text-align:center;font-weight:800;">
+                <button type="button" class="btn btn-secondary btn-sm" id="nlViewsPlus" style="padding:0 10px;">+</button>
+                <button type="button" class="btn btn-ghost btn-sm" id="nlViewsUnlimited" style="font-size:0.74rem;font-weight:800;color:var(--primary);border:1px solid rgba(16,185,129,0.3);white-space:nowrap;">لا نهائي</button>
+              </div>
+            </div>
           </div>
           ${renderPrereqExamSelectHtml(courseExams, null, 60, 'nl')}
           <div style="background:rgba(16,185,129,0.06);border:1px solid rgba(16,185,129,0.25);border-radius:10px;padding:10px 14px;margin-bottom:14px;">
@@ -346,6 +357,17 @@ export async function initAdminCourseDetail(id) {
         `);
         const nlSourceSel = document.getElementById('nlVideoSource');
         const nlVdoGrp = document.getElementById('nlVdoGroup');
+        const nlMaxViewsInp = document.getElementById('nlMaxViews');
+        document.getElementById('nlViewsMinus')?.addEventListener('click', () => {
+          if (nlMaxViewsInp) nlMaxViewsInp.value = String(Math.max(0, (parseInt(nlMaxViewsInp.value, 10) || 0) - 1));
+        });
+        document.getElementById('nlViewsPlus')?.addEventListener('click', () => {
+          if (nlMaxViewsInp) nlMaxViewsInp.value = String((parseInt(nlMaxViewsInp.value, 10) || 0) + 1);
+        });
+        document.getElementById('nlViewsUnlimited')?.addEventListener('click', () => {
+          if (nlMaxViewsInp) nlMaxViewsInp.value = '0';
+          showToast('تم ضبط مشاهدات المحاضرة على: لا نهائي (0)', 'info');
+        });
         nlSourceSel?.addEventListener('change', () => {
           if (nlVdoGrp) nlVdoGrp.style.display = nlSourceSel.value === 'vdocipher' ? 'block' : 'none';
         });
@@ -374,6 +396,7 @@ export async function initAdminCourseDetail(id) {
             const vSource = document.getElementById('nlVideoSource')?.value || 'custom_shield';
             const vdoIdVal = document.getElementById('nlVdoId')?.value.trim() || null;
             const lessonOrder = parseInt(document.getElementById('nlOrder').value) || 1;
+            const rawMaxViews = parseInt(document.getElementById('nlMaxViews').value, 10);
 
             if (document.getElementById('nlCreateQuickQuiz')?.checked) {
               const qqTitle = document.getElementById('nlQuickQuizTitle')?.value.trim() || `تطبيق: ${document.getElementById('nlTitle').value}`;
@@ -401,7 +424,7 @@ export async function initAdminCourseDetail(id) {
               vdocipher_id: vdoIdVal,
               pdf_url: document.getElementById('nlPdf').value.trim() || null,
               duration: parseInt(document.getElementById('nlDur').value),
-              order_num: lessonOrder, max_views: parseInt(document.getElementById('nlMaxViews').value),
+              order_num: lessonOrder, max_views: Number.isFinite(rawMaxViews) ? rawMaxViews : 8,
               is_free: document.getElementById('nlFree').checked,
               prerequisite_exam_id: prereqExamVal ? parseInt(prereqExamVal) : null,
               prerequisite_passing_score: prereqScoreVal
@@ -421,6 +444,7 @@ export async function initAdminCourseDetail(id) {
         let lesson;
         course.chapters.forEach(ch => { const l = ch.items?.find(x => x.id == lid && x.item_type === 'lesson'); if(l) lesson = l; });
         if(!lesson) return;
+        const currentMaxViews = (lesson.max_views !== undefined && lesson.max_views !== null) ? lesson.max_views : 8;
         
         showModal('تعديل الدرس وامتحان المحاضرة', `
           <div class="form-group"><label class="form-label">عنوان الدرس</label><input type="text" class="form-input" id="elTitle" value="${esc(lesson.title)}" required></div>
@@ -450,10 +474,18 @@ export async function initAdminCourseDetail(id) {
             </div>
           </div>
           <div class="form-group"><label class="form-label">الوصف</label><textarea class="form-input" id="elDesc" rows="2">${esc(lesson.description || '')}</textarea></div>
-          <div style="display:flex;gap:12px">
-            <div class="form-group" style="flex:1"><label class="form-label">المدة (دقائق)</label><input type="number" class="form-input" id="elDur" value="${lesson.duration}"></div>
-            <div class="form-group" style="flex:1"><label class="form-label">الترتيب</label><input type="number" class="form-input" id="elOrder" value="${lesson.order_num}"></div>
-            <div class="form-group" style="flex:1"><label class="form-label">المشاهدات المسموحة</label><input type="number" class="form-input" id="elMaxViews" value="${lesson.max_views || 8}"></div>
+          <div style="display:flex;gap:12px;flex-wrap:wrap;">
+            <div class="form-group" style="flex:1;min-width:110px;"><label class="form-label">المدة (دقائق)</label><input type="number" class="form-input" id="elDur" value="${lesson.duration}"></div>
+            <div class="form-group" style="flex:1;min-width:90px;"><label class="form-label">الترتيب</label><input type="number" class="form-input" id="elOrder" value="${lesson.order_num}"></div>
+            <div class="form-group" style="flex:1.6;min-width:210px;">
+              <label class="form-label">عدد المشاهدات (0 = لا نهائي)</label>
+              <div style="display:flex;gap:6px;align-items:center;">
+                <button type="button" class="btn btn-secondary btn-sm" id="elViewsMinus" style="padding:0 10px;">-</button>
+                <input type="number" class="form-input" id="elMaxViews" min="0" max="999" value="${currentMaxViews}" style="text-align:center;font-weight:800;">
+                <button type="button" class="btn btn-secondary btn-sm" id="elViewsPlus" style="padding:0 10px;">+</button>
+                <button type="button" class="btn btn-ghost btn-sm" id="elViewsUnlimited" style="font-size:0.74rem;font-weight:800;color:var(--primary);border:1px solid rgba(16,185,129,0.3);white-space:nowrap;">لا نهائي</button>
+              </div>
+            </div>
           </div>
           ${renderPrereqExamSelectHtml(courseExams, lesson.prerequisite_exam_id, lesson.prerequisite_passing_score || 60, 'el')}
           <div class="form-group" style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="elFree" ${lesson.is_free ? 'checked' : ''}><label for="elFree">درس مجاني (متاح للجميع)</label></div>
@@ -461,6 +493,17 @@ export async function initAdminCourseDetail(id) {
         `);
         const elSourceSel = document.getElementById('elVideoSource');
         const elVdoGrp = document.getElementById('elVdoGroup');
+        const elMaxViewsInp = document.getElementById('elMaxViews');
+        document.getElementById('elViewsMinus')?.addEventListener('click', () => {
+          if (elMaxViewsInp) elMaxViewsInp.value = String(Math.max(0, (parseInt(elMaxViewsInp.value, 10) || 0) - 1));
+        });
+        document.getElementById('elViewsPlus')?.addEventListener('click', () => {
+          if (elMaxViewsInp) elMaxViewsInp.value = String((parseInt(elMaxViewsInp.value, 10) || 0) + 1);
+        });
+        document.getElementById('elViewsUnlimited')?.addEventListener('click', () => {
+          if (elMaxViewsInp) elMaxViewsInp.value = '0';
+          showToast('تم ضبط مشاهدات المحاضرة على: لا نهائي (0)', 'info');
+        });
         elSourceSel?.addEventListener('change', () => {
           if (elVdoGrp) elVdoGrp.style.display = elSourceSel.value === 'vdocipher' ? 'block' : 'none';
         });
@@ -484,6 +527,7 @@ export async function initAdminCourseDetail(id) {
             const prereqScoreVal = parseInt(document.getElementById('elPrereqScore')?.value) || 60;
             const vSource = document.getElementById('elVideoSource')?.value || 'custom_shield';
             const vdoIdVal = document.getElementById('elVdoId')?.value.trim() || null;
+            const rawMaxViews = parseInt(document.getElementById('elMaxViews').value, 10);
             await api.updateLesson(lid, {
               title: document.getElementById('elTitle').value, description: document.getElementById('elDesc').value,
               video_url: document.getElementById('elUrl').value.trim() || vdoIdVal || '',
@@ -491,7 +535,7 @@ export async function initAdminCourseDetail(id) {
               vdocipher_id: vdoIdVal,
               pdf_url: document.getElementById('elPdf').value.trim() || null,
               duration: parseInt(document.getElementById('elDur').value),
-              order_num: parseInt(document.getElementById('elOrder').value), max_views: parseInt(document.getElementById('elMaxViews').value),
+              order_num: parseInt(document.getElementById('elOrder').value), max_views: Number.isFinite(rawMaxViews) ? rawMaxViews : 8,
               is_free: document.getElementById('elFree').checked,
               prerequisite_exam_id: prereqExamVal ? parseInt(prereqExamVal) : null,
               prerequisite_passing_score: prereqScoreVal

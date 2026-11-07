@@ -303,6 +303,64 @@ await test('تسجيل مخالفات الأمان (سكرين شوت / تسجي
   assert.equal(unblockRes.data.is_blocked, 0);
 });
 
+// 10. Fair View Counting (6h Grace Window) & Teacher View Controls
+await test('عدم استهلاك المشاهدات عند فتح/إعادة تحميل المتصفح والتحكم الكامل للمدرس في المشاهدات', async () => {
+  // Get a lesson from course 1
+  const courseRes = await apiReq('/courses/1', { token: studentToken });
+  assert.equal(courseRes.status, 200);
+  const firstLesson = courseRes.data.chapters[0].items.find(it => it.item_type === 'lesson');
+  assert.ok(firstLesson);
+
+  // Requesting video-token 3 times (simulating closing/reopening Chrome) must NOT consume any views
+  const tok1 = await apiReq(`/lessons/${firstLesson.id}/video-token`, { method: 'POST', token: studentToken });
+  const tok2 = await apiReq(`/lessons/${firstLesson.id}/video-token`, { method: 'POST', token: studentToken });
+  const tok3 = await apiReq(`/lessons/${firstLesson.id}/video-token`, { method: 'POST', token: studentToken });
+  assert.equal(tok1.status, 200);
+  assert.equal(tok2.status, 200);
+  assert.equal(tok3.status, 200);
+  assert.equal(tok3.data.views_used, 0);
+
+  // Committing view after actual playback increments views_used to 1
+  const com1 = await apiReq(`/lessons/${firstLesson.id}/view-commit`, {
+    method: 'POST',
+    token: studentToken,
+    body: { token: tok3.data.token }
+  });
+  assert.equal(com1.status, 200);
+  assert.equal(com1.data.views_used, 1);
+
+  // Re-opening the browser and getting a new token (tok4) within the 6h grace window must NOT consume another view
+  const tok4 = await apiReq(`/lessons/${firstLesson.id}/video-token`, { method: 'POST', token: studentToken });
+  assert.equal(tok4.status, 200);
+  const com2 = await apiReq(`/lessons/${firstLesson.id}/view-commit`, {
+    method: 'POST',
+    token: studentToken,
+    body: { token: tok4.data.token }
+  });
+  assert.equal(com2.status, 200);
+  assert.equal(com2.data.views_used, 1);
+
+  // Teacher adds +3 extra views for the student
+  const adjRes = await apiReq(`/students/${studentId}/lessons/${firstLesson.id}/views`, {
+    method: 'POST',
+    token: teacherToken,
+    body: { action: 'adjust', delta: 3 }
+  });
+  assert.equal(adjRes.status, 200);
+  assert.equal(adjRes.data.extra_views, 3);
+
+  // Teacher resets all views for the student
+  const rstAll = await apiReq(`/students/${studentId}/reset-all-views`, {
+    method: 'POST',
+    token: teacherToken
+  });
+  assert.equal(rstAll.status, 200);
+
+  const lCheck = await apiReq(`/lessons/${firstLesson.id}`, { token: studentToken });
+  assert.equal(lCheck.status, 200);
+  assert.equal(lCheck.data.views.used, 0);
+});
+
 server.close();
 try {
   db.pragma('wal_checkpoint(TRUNCATE)');

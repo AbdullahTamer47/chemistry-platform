@@ -130,7 +130,7 @@ export async function initExams() {
               <div class="exam-meta">
                 <span><span class="material-symbols-rounded" style="font-size:1.05rem;">schedule</span> ${e.duration_minutes} دقيقة</span>
                 <span><span class="material-symbols-rounded" style="font-size:1.05rem;">help</span> ${e.question_count} سؤال</span>
-                <span><span class="material-symbols-rounded" style="font-size:1.05rem;">repeat</span> المحاولات: ${e.my_attempts || 0} من ${isHomework ? 'مفتوح' : effectiveMax}</span>
+                <span><span class="material-symbols-rounded" style="font-size:1.05rem;">repeat</span> ${isHomework ? 'المحاولات: <strong style="color:var(--primary);">لا نهائي (مفتوح بلا حدود)</strong>' : `المحاولات: ${e.my_attempts || 0} من ${effectiveMax}`}</span>
                 ${e.course_title ? `<span><span class="material-symbols-rounded" style="font-size:1.05rem;">book</span> ${esc(e.course_title)}</span>` : ''}
               </div>
             </div>

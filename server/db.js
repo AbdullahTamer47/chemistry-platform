@@ -516,11 +516,18 @@ const migrations = [
   "ALTER TABLE exams ADD COLUMN order_num INTEGER DEFAULT 0;",
   "ALTER TABLE exams ADD COLUMN random_questions_count INTEGER DEFAULT 0;",
   "ALTER TABLE activation_codes ADD COLUMN expires_at DATETIME;",
+  "ALTER TABLE lesson_progress ADD COLUMN last_view_at TEXT;",
+  "ALTER TABLE video_tokens ADD COLUMN view_counted INTEGER DEFAULT 0;",
 ];
 
 for (const query of migrations) {
   try { db.exec(query); } catch (e) { /* ignore if column already exists */ }
 }
+
+// Reset legacy page-load view counts that were recorded before last_view_at tracking was introduced
+try {
+  db.exec("UPDATE lesson_progress SET views_count = 0 WHERE views_count > 0 AND last_view_at IS NULL;");
+} catch (e) {}
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS course_discussions (

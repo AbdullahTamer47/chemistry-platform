@@ -129,6 +129,8 @@ export const api = {
   getCourseLessons: (courseId) => request(`/lessons/course/${courseId}`),
   getLesson: (id) => request(`/lessons/${id}`),
   getVideoToken: (id) => request(`/lessons/${id}/video-token`, { method: 'POST' }),
+  commitLessonView: (id, token) => request(`/lessons/${id}/view-commit`, { method: 'POST', body: { token } }),
+  requestExtraViews: (id) => request(`/lessons/${id}/request-views`, { method: 'POST' }),
   updateProgress: (id, body) => request(`/lessons/${id}/progress`, { method: 'POST', body }),
   createLesson: (body) => request('/lessons', { method: 'POST', body }),
   updateLesson: (id, body) => request(`/lessons/${id}`, { method: 'PUT', body }),
@@ -187,6 +189,8 @@ export const api = {
   deleteStudent: (id) => request(`/students/${id}`, { method: 'DELETE' }),
   getStudentWhatsAppReport: (id) => request(`/students/${id}/whatsapp-report`),
   resetStudentDevices: (id) => request(`/students/${id}/devices`, { method: 'DELETE' }),
+  adjustStudentLessonViews: (studentId, lessonId, body) => request(`/students/${studentId}/lessons/${lessonId}/views`, { method: 'POST', body }),
+  resetStudentAllViews: (studentId) => request(`/students/${studentId}/reset-all-views`, { method: 'POST' }),
   getDashboardStats: () => request('/students/stats/dashboard'),
 
   // Notifications

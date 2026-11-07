@@ -461,9 +461,60 @@ router.get('/:id', authMiddleware, teacherMiddleware, (req, res) => {
     if (!student) return res.status(404).json({ error: 'الطالب غير موجود' });
     student.enrollments = db.prepare('SELECT e.*, c.title as course_title FROM enrollments e JOIN courses c ON e.course_id = c.id WHERE e.user_id = ?').all(student.id);
     student.exam_attempts = db.prepare('SELECT ea.*, ex.title as exam_title FROM exam_attempts ea JOIN exams ex ON ea.exam_id = ex.id WHERE ea.user_id = ? ORDER BY ea.completed_at DESC LIMIT 20').all(student.id);
-    student.lesson_progress = db.prepare('SELECT lp.*, l.title as lesson_title, l.max_views, c.title as course_title FROM lesson_progress lp JOIN lessons l ON lp.lesson_id = l.id JOIN courses c ON l.course_id = c.id WHERE lp.user_id = ? ORDER BY lp.completed_at DESC LIMIT 30').all(student.id);
+    student.lesson_progress = db.prepare('SELECT lp.*, l.title as lesson_title, l.max_views, c.title as course_title FROM lesson_progress lp JOIN lessons l ON lp.lesson_id = l.id JOIN courses c ON l.course_id = c.id WHERE lp.user_id = ? ORDER BY lp.id DESC LIMIT 50').all(student.id);
     res.json(student);
   } catch (err) { res.status(500).json({ error: 'حدث خطأ' }); }
+});
+
+// Teacher: Adjust, reset, or set custom views for a student on a specific lesson
+router.post('/:id/lessons/:lessonId/views', authMiddleware, teacherMiddleware, (req, res) => {
+  try {
+    const userId = Number(req.params.id);
+    const lessonId = Number(req.params.lessonId);
+    const { action = 'reset', delta = 0, allowed = null } = req.body || {};
+
+    const lesson = db.prepare('SELECT id, title, max_views FROM lessons WHERE id = ?').get(lessonId);
+    if (!lesson) return res.status(404).json({ error: 'المحاضرة غير موجودة' });
+
+    const existing = db.prepare('SELECT * FROM lesson_progress WHERE user_id = ? AND lesson_id = ?').get(userId, lessonId);
+    if (!existing) {
+      db.prepare('INSERT INTO lesson_progress (user_id, lesson_id, views_count, extra_views) VALUES (?, ?, 0, 0)').run(userId, lessonId);
+    }
+
+    if (action === 'reset') {
+      db.prepare('UPDATE lesson_progress SET views_count = 0, last_view_at = NULL WHERE user_id = ? AND lesson_id = ?').run(userId, lessonId);
+    } else if (action === 'adjust') {
+      const d = parseInt(delta, 10) || 0;
+      db.prepare('UPDATE lesson_progress SET extra_views = COALESCE(extra_views, 0) + ? WHERE user_id = ? AND lesson_id = ?').run(d, userId, lessonId);
+    } else if (action === 'set_allowed') {
+      const targetAllowed = Math.max(1, parseInt(allowed, 10) || 8);
+      const baseMax = Number(lesson.max_views) > 0 ? Number(lesson.max_views) : 8;
+      const newExtra = targetAllowed - baseMax;
+      db.prepare('UPDATE lesson_progress SET extra_views = ? WHERE user_id = ? AND lesson_id = ?').run(newExtra, userId, lessonId);
+    }
+
+    const updated = db.prepare('SELECT lp.*, l.max_views FROM lesson_progress lp JOIN lessons l ON lp.lesson_id = l.id WHERE lp.user_id = ? AND lp.lesson_id = ?').get(userId, lessonId);
+    res.json({
+      message: action === 'reset' ? 'تم تصفير المشاهدات المستهلكة وإعادة السماح للطالب' : 'تم تعديل عدد المشاهدات المسموحة للطالب بنجاح',
+      extra_views: updated?.extra_views || 0,
+      views_count: updated?.views_count || 0,
+      progress: updated
+    });
+  } catch (err) {
+    console.error('Adjust student lesson views error:', err);
+    res.status(500).json({ error: 'حدث خطأ في تعديل مشاهدات الطالب' });
+  }
+});
+
+// Teacher: Reset all consumed views across all lessons for a student
+router.post('/:id/reset-all-views', authMiddleware, teacherMiddleware, (req, res) => {
+  try {
+    const userId = Number(req.params.id);
+    db.prepare('UPDATE lesson_progress SET views_count = 0, last_view_at = NULL WHERE user_id = ?').run(userId);
+    res.json({ message: 'تم تصفير وإعادة تفعيل جميع مشاهدات المحاضرات لهذا الطالب بنجاح' });
+  } catch (err) {
+    res.status(500).json({ error: 'حدث خطأ في إعادة ضبط المشاهدات' });
+  }
 });
 
 // Update student

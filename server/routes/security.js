@@ -66,18 +66,10 @@ router.post('/report', authMiddleware, (req, res) => {
       const studentRow = db.prepare('SELECT id, name, phone, grade, security_strikes, is_blocked FROM users WHERE id = ?').get(req.user.id);
       const strikes = Number(studentRow?.security_strikes || 1);
 
-      // Auto-block student if they reach 5 severe violations and notify teacher
-      if (strikes >= 5 && !studentRow?.is_blocked) {
-        db.prepare('UPDATE users SET is_blocked = 1 WHERE id = ?').run(req.user.id);
-        db.prepare('UPDATE enrollments SET is_suspended = 1 WHERE user_id = ?').run(req.user.id);
-      }
-
-      // Notify teachers
+      // Silent notification to teachers only (never shown to student, no auto-block at a fixed 5 limit)
       const teachers = db.prepare("SELECT id FROM users WHERE role IN ('teacher', 'admin')").all();
-      const notifTitle = strikes >= 5
-        ? `🚨 حظر تلقائي لطالب بسبب تكرار محاولات التسريب (${strikes} مخالفات)`
-        : `⚠️ تنبيه أمني: ${label}`;
-      const notifMsg = `قام الطالب "${studentRow?.name || req.user.name}" (${studentRow?.phone || ''}) بـ ${label} داخل "${source_title || 'محتوى محمي'}" — إجمالي المخالفات: ${strikes}.`;
+      const notifTitle = `⚠️ تنبيه حماية المحتوى: ${label}`;
+      const notifMsg = `قام الطالب "${studentRow?.name || req.user.name}" (${studentRow?.phone || ''}) بـ ${label} داخل "${source_title || 'محتوى محمي'}" — إجمالي المرات المرصودة: ${strikes}.`;
       for (const t of teachers) {
         db.prepare('INSERT INTO notifications (user_id, title, message, type) VALUES (?, ?, ?, ?)').run(
           t.id,
@@ -92,8 +84,7 @@ router.post('/report', authMiddleware, (req, res) => {
     res.json({
       logged: true,
       strikes: Number(updatedUser?.strikes || 1),
-      is_blocked: Number(updatedUser?.is_blocked || 0),
-      cooldown_seconds: Math.min(30, 8 + Number(updatedUser?.strikes || 1) * 4)
+      is_blocked: Number(updatedUser?.is_blocked || 0)
     });
   } catch (err) {
     console.error('Security report error:', err);

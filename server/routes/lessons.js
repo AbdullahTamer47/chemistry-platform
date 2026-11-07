@@ -29,7 +29,7 @@ function checkLessonAccess(user, lesson, allItems) {
   if (isTeacher(user)) return null;
   const uRow = db.prepare('SELECT COALESCE(is_blocked, 0) as is_blocked FROM users WHERE id = ?').get(user.id);
   if (uRow?.is_blocked) {
-    return { status: 403, body: { error: 'تم إيقاف حسابك تلقائياً بسبب رصد محاولات تصوير الشاشة أو تحميل المحتوى المحمي. تواصل مع المعلم لفك الحظر.' } };
+    return { status: 403, body: { error: 'تم إيقاف حسابك مؤقتاً. يرجى التواصل مع الدعم الفني للمنصة.', account_blocked: true } };
   }
   if (!lesson.is_free && !canAccessCourse(user, lesson.course_id)) {
     return { status: 403, body: { error: 'يجب الاشتراك في الكورس أولاً' } };
@@ -54,6 +54,33 @@ function checkLessonAccess(user, lesson, allItems) {
     }
   }
   return null;
+}
+
+// Re-opening a lecture within this window after a counted view does NOT consume another view
+// (e.g. browser closed / page reloaded / internet dropped mid-lecture).
+const VIEW_GRACE_HOURS = 6;
+
+function getViewQuota(userId, lesson) {
+  const progress = db.prepare('SELECT views_count, extra_views, last_view_at FROM lesson_progress WHERE user_id = ? AND lesson_id = ?').get(userId, lesson.id);
+  const rawMax = lesson.max_views !== undefined && lesson.max_views !== null ? Number(lesson.max_views) : 8;
+  const unlimited = rawMax <= 0;
+  const maxViews = unlimited ? 0 : rawMax;
+  const extra = Number(progress?.extra_views || 0);
+  const used = Number(progress?.views_count || 0);
+  const allowed = unlimited ? 0 : Math.max(1, maxViews + extra);
+  let inGrace = false;
+  if (progress?.last_view_at) {
+    const last = new Date(progress.last_view_at).getTime();
+    inGrace = Number.isFinite(last) && (Date.now() - last) < VIEW_GRACE_HOURS * 3600000;
+  }
+  return {
+    unlimited,
+    used,
+    allowed,
+    remaining: unlimited ? 999999 : Math.max(0, allowed - used),
+    in_grace: inGrace,
+    grace_hours: VIEW_GRACE_HOURS
+  };
 }
 
 function checkPrerequisiteExam(user, lesson) {
@@ -228,6 +255,7 @@ router.get('/:id', authMiddleware, (req, res) => {
     lesson.prerequisite_exam = prereq.exam;
 
     lesson.progress = db.prepare('SELECT * FROM lesson_progress WHERE user_id = ? AND lesson_id = ?').get(req.user.id, lesson.id);
+    if (!isTeacher(req.user)) lesson.views = getViewQuota(req.user.id, lesson);
     lesson.is_saved = db.prepare('SELECT 1 FROM saved_lessons WHERE user_id = ? AND lesson_id = ?').get(req.user.id, lesson.id) ? 1 : 0;
     const currentIndex = allItems.findIndex(item => item.item_type === 'lesson' && item.id === lesson.id);
     if (currentIndex > 0) lesson.prev_lesson = allItems[currentIndex - 1];
@@ -382,18 +410,17 @@ router.post('/:id/video-token', authMiddleware, async (req, res) => {
       });
     }
 
+    // Views are NOT consumed by opening the page or requesting a token.
+    // A view is only counted later via POST /:id/view-commit after real playback,
+    // and re-opening the lecture within VIEW_GRACE_HOURS of the last counted view is free.
     if (!isTeacher(req.user)) {
-      const progress = db.prepare('SELECT views_count, extra_views FROM lesson_progress WHERE user_id = ? AND lesson_id = ?').get(req.user.id, lesson.id);
-      const viewsCount = progress?.views_count || 0;
-      const extraViews = progress?.extra_views || 0;
-      const maxViews = lesson.max_views || 8;
-      if (viewsCount >= (maxViews + extraViews)) {
-        return res.status(403).json({ error: 'لقد استنفذت عدد المشاهدات المسموح بها لهذا الدرس' });
-      }
-      if (progress) {
-        db.prepare('UPDATE lesson_progress SET views_count = views_count + 1 WHERE user_id = ? AND lesson_id = ?').run(req.user.id, lesson.id);
-      } else {
-        db.prepare('INSERT INTO lesson_progress (user_id, lesson_id, views_count) VALUES (?, ?, 1)').run(req.user.id, lesson.id);
+      const quota = getViewQuota(req.user.id, lesson);
+      if (quota.remaining <= 0 && !quota.in_grace) {
+        return res.status(403).json({
+          error: 'لقد استنفدت عدد المشاهدات المسموح بها لهذه المحاضرة. يمكنك طلب مشاهدات إضافية من المدرس.',
+          views_exhausted: true,
+          views: quota
+        });
       }
     }
 
@@ -459,6 +486,7 @@ router.post('/:id/video-token', authMiddleware, async (req, res) => {
       } catch (e) {}
     }
 
+    const currentQuota = isTeacher(req.user) ? null : getViewQuota(req.user.id, lesson);
     res.setHeader('Cache-Control', 'private, no-store, no-cache, must-revalidate');
     res.json({
       token,
@@ -468,9 +496,69 @@ router.post('/:id/video-token', authMiddleware, async (req, res) => {
       vdocipher_playback_info: vdocipherPlaybackInfo,
       stream_cipher: streamCipher,
       expires_at: expiresAt,
-      watermark: wmText
+      watermark: wmText,
+      views_used: currentQuota ? currentQuota.used : 0,
+      views: currentQuota
     });
   } catch (err) { console.error(err); res.status(500).json({ error: 'حدث خطأ' }); }
+});
+
+// Commit ONE view after the student actually watched a meaningful part of the lecture.
+// Idempotent per video token; free if within the grace window of the last counted view.
+router.post('/:id/view-commit', authMiddleware, (req, res) => {
+  try {
+    const lesson = db.prepare('SELECT id, course_id, max_views FROM lessons WHERE id = ?').get(req.params.id);
+    if (!lesson) return res.status(404).json({ error: 'الدرس غير موجود' });
+    if (isTeacher(req.user)) return res.json({ counted: false, views: null });
+
+    const tokenStr = String(req.body?.token || '');
+    const vt = db.prepare("SELECT id, COALESCE(view_counted, 0) as view_counted FROM video_tokens WHERE token = ? AND user_id = ? AND lesson_id = ? AND datetime(expires_at) > datetime('now')").get(tokenStr, req.user.id, lesson.id);
+    if (!vt) return res.status(403).json({ error: 'جلسة مشاهدة غير صالحة' });
+    if (vt.view_counted) {
+      const q = getViewQuota(req.user.id, lesson);
+      return res.json({ counted: false, views_used: q.used, ...q, views: q });
+    }
+
+    const quota = getViewQuota(req.user.id, lesson);
+    db.prepare('UPDATE video_tokens SET view_counted = 1 WHERE id = ?').run(vt.id);
+
+    if (quota.in_grace) {
+      return res.json({ counted: false, reason: 'grace', views_used: quota.used, ...quota, views: quota });
+    }
+
+    const nowIso = new Date().toISOString();
+    const existing = db.prepare('SELECT id FROM lesson_progress WHERE user_id = ? AND lesson_id = ?').get(req.user.id, lesson.id);
+    if (existing) {
+      db.prepare('UPDATE lesson_progress SET views_count = COALESCE(views_count, 0) + 1, last_view_at = ? WHERE id = ?').run(nowIso, existing.id);
+    } else {
+      db.prepare('INSERT INTO lesson_progress (user_id, lesson_id, views_count, last_view_at) VALUES (?, ?, 1, ?)').run(req.user.id, lesson.id, nowIso);
+    }
+    const updatedQuota = getViewQuota(req.user.id, lesson);
+    res.json({ counted: true, views_used: updatedQuota.used, ...updatedQuota, views: updatedQuota });
+  } catch (err) {
+    console.error('View commit error:', err);
+    res.status(500).json({ error: 'حدث خطأ' });
+  }
+});
+
+// Student requests extra views from the teacher after exhausting the quota
+router.post('/:id/request-views', authMiddleware, (req, res) => {
+  try {
+    const lesson = db.prepare('SELECT l.id, l.title, c.title as course_title FROM lessons l LEFT JOIN courses c ON l.course_id = c.id WHERE l.id = ?').get(req.params.id);
+    if (!lesson) return res.status(404).json({ error: 'الدرس غير موجود' });
+    const recent = db.prepare("SELECT id FROM notifications WHERE title = ? AND message LIKE ? AND datetime(created_at) > datetime('now', '-6 hours') LIMIT 1")
+      .get('طلب مشاهدات إضافية', `%#${req.user.id}#%${lesson.id}%`);
+    if (recent) return res.json({ message: 'تم إرسال طلبك بالفعل، سيتم مراجعته قريباً' });
+
+    const teachers = db.prepare("SELECT id FROM users WHERE role IN ('teacher', 'admin')").all();
+    const msg = `الطالب "${req.user.name}" (#${req.user.id}#) يطلب مشاهدات إضافية لمحاضرة "${lesson.title}" (رقم ${lesson.id}) — ${lesson.course_title || ''}. يمكنك زيادة المشاهدات من سجل الطلاب ← تقرير الطالب.`;
+    for (const t of teachers) {
+      db.prepare('INSERT INTO notifications (user_id, title, message, type) VALUES (?, ?, ?, ?)').run(t.id, 'طلب مشاهدات إضافية', msg, 'info');
+    }
+    res.json({ message: 'تم إرسال طلبك للمدرس، وسيتم إشعارك عند إضافة المشاهدات' });
+  } catch (err) {
+    res.status(500).json({ error: 'حدث خطأ في إرسال الطلب' });
+  }
 });
 
 
@@ -499,8 +587,9 @@ router.post('/', authMiddleware, teacherMiddleware, (req, res) => {
     const { chapter_id, course_id, title, description, video_url, video_source, vdocipher_id, duration, order_num, max_views, is_free, pdf_url, prerequisite_exam_id, prerequisite_passing_score } = req.body;
     const prereqId = prerequisite_exam_id ? parseInt(prerequisite_exam_id, 10) : null;
     const prereqScore = prerequisite_passing_score ? parseInt(prerequisite_passing_score, 10) : 60;
+    const parsedMaxViews = max_views !== undefined && max_views !== null && max_views !== '' ? parseInt(max_views, 10) : 8;
     const result = db.prepare('INSERT INTO lessons (chapter_id, course_id, title, description, video_url, video_source, vdocipher_id, duration, order_num, max_views, is_free, pdf_url, prerequisite_exam_id, prerequisite_passing_score) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
-      .run(chapter_id, course_id, title, description, video_url || '', video_source || 'custom_shield', vdocipher_id || null, duration || 0, order_num || 0, max_views || 8, is_free ? 1 : 0, pdf_url || null, prereqId, prereqScore);
+      .run(chapter_id, course_id, title, description, video_url || '', video_source || 'custom_shield', vdocipher_id || null, duration || 0, order_num || 0, Number.isFinite(parsedMaxViews) ? parsedMaxViews : 8, is_free ? 1 : 0, pdf_url || null, prereqId, prereqScore);
     try { db.prepare('UPDATE courses SET updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(course_id); } catch (e) {}
     res.status(201).json(db.prepare('SELECT * FROM lessons WHERE id = ?').get(result.lastInsertRowid));
   } catch (err) { res.status(500).json({ error: 'حدث خطأ في إضافة الدرس' }); }

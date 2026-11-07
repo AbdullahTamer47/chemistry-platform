@@ -193,19 +193,13 @@ export async function initLesson(id) {
             </div>
           ` : `
             <div class="video-container kimyawy-custom-player" id="videoBox" oncontextmenu="return false;" style="user-select:none;-webkit-user-select:none; margin-bottom:14px; border-radius:18px; border:1.5px solid rgba(16,185,129,0.35); box-shadow:0 20px 45px rgba(2,12,27,0.35); overflow:hidden; background:#030914;">
-              <!-- Top Encrypted Cinema HUD Bar -->
-              <div id="kimyawyPlayerTopBar" style="position:absolute; top:0; left:0; right:0; height:44px; padding:0 16px; background:linear-gradient(to bottom, rgba(3,9,20,0.92) 0%, rgba(3,9,20,0.4) 75%, transparent 100%); z-index:19; display:flex; align-items:center; justify-content:space-between; pointer-events:none; color:#f8fafc; font-size:0.76rem;">
-                <div style="display:inline-flex; align-items:center; gap:8px; background:rgba(6,78,59,0.75); border:1px solid rgba(16,185,129,0.4); padding:4px 11px; border-radius:99px; backdrop-filter:blur(8px);">
-                  <span style="width:8px; height:8px; border-radius:50%; background:#10b981; box-shadow:0 0 8px #10b981; display:inline-block;"></span>
+              <!-- Top Encrypted Cinema HUD Bar (Auto-hides during playback, no yellow student name or strike badge) -->
+              <div id="kimyawyPlayerTopBar" style="position:absolute; top:0; left:0; right:0; height:44px; padding:0 16px; background:linear-gradient(to bottom, rgba(3,9,20,0.88) 0%, rgba(3,9,20,0.35) 75%, transparent 100%); z-index:19; display:flex; align-items:center; justify-content:space-between; pointer-events:none; color:#f8fafc; font-size:0.75rem; transition:opacity 0.25s ease, transform 0.25s ease;">
+                <div style="display:inline-flex; align-items:center; gap:8px; background:rgba(6,78,59,0.72); border:1px solid rgba(16,185,129,0.38); padding:4px 12px; border-radius:99px; backdrop-filter:blur(8px);">
+                  <span style="width:7px; height:7px; border-radius:50%; background:#10b981; box-shadow:0 0 8px #10b981; display:inline-block;"></span>
                   <span style="font-weight:800; color:#ecfdf5;">مشغل كيمياوي المشفر</span>
                   <span style="color:#E0A526; font-weight:900;">◆</span>
-                  <span style="color:#a7f3d0; font-size:0.7rem;">حماية نشطة ضد التحميل والتسجيل</span>
-                </div>
-                <div style="display:inline-flex; align-items:center; gap:8px;">
-                  <span id="playerStrikeBadge" style="display:none; background:rgba(225,29,72,0.85); color:#fff; padding:3px 10px; border-radius:99px; font-weight:800; font-size:0.7rem;"></span>
-                  <span style="background:rgba(15,23,42,0.78); border:1px solid rgba(224,165,38,0.35); color:#fde68a; padding:3px 10px; border-radius:99px; font-weight:800; font-size:0.72rem;" dir="ltr">
-                    ${esc(shortName)} • ${esc(user.phone || '')}
-                  </span>
+                  <span style="color:#a7f3d0; font-size:0.69rem;">بث محمي فائق الجودة</span>
                 </div>
               </div>
 
@@ -216,17 +210,17 @@ export async function initLesson(id) {
                 </div>
               </div>
 
-              <!-- Permanent Diagonal Forensic Watermark Grid (Always burned over video frame against external/screen recording) -->
-              <div id="videoWatermarkMatrix" style="position:absolute; inset:0 0 58px 0; z-index:15; pointer-events:none; overflow:hidden; display:grid; grid-template-columns:repeat(3, 1fr); grid-template-rows:repeat(3, 1fr); place-items:center; opacity:0.16; user-select:none;">
+              <!-- Subtle Forensic Watermark Grid -->
+              <div id="videoWatermarkMatrix" style="position:absolute; inset:0; z-index:15; pointer-events:none; overflow:hidden; display:grid; grid-template-columns:repeat(3, 1fr); grid-template-rows:repeat(3, 1fr); place-items:center; opacity:0.11; user-select:none;">
                 ${Array.from({ length: 9 }).map(() => `
-                  <div style="transform:rotate(-24deg); color:#ffffff; font-weight:900; font-size:0.78rem; white-space:nowrap; text-shadow:0 1px 3px rgba(0,0,0,0.9); font-family:monospace;" dir="ltr">
+                  <div style="transform:rotate(-24deg); color:#ffffff; font-weight:900; font-size:0.74rem; white-space:nowrap; text-shadow:0 1px 3px rgba(0,0,0,0.9); font-family:monospace;" dir="ltr">
                     ${esc(shortName)} • ${esc(user.phone || '')}
                   </div>
                 `).join('')}
               </div>
 
               <!-- Transparent Click & Gesture Shield (Blocks all direct iframe hover/clicks, right-clicks, and IDM hooks) -->
-              <div id="playerClickShield" style="position:absolute; inset:0 0 58px 0; z-index:16; cursor:pointer; display:flex; align-items:center; justify-content:center;">
+              <div id="playerClickShield" style="position:absolute; inset:0; z-index:16; cursor:pointer; display:flex; align-items:center; justify-content:center;">
                 <!-- Sleek Cinema Pause Overlay -->
                 <div id="playerPauseMask" style="position:absolute; inset:0; background:radial-gradient(circle at center, rgba(6,78,59,0.84) 0%, rgba(3,9,20,0.96) 100%); backdrop-filter:blur(6px); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px; color:#fff; transition:opacity 0.18s ease;">
                   <div style="position:relative; width:82px; height:82px; border-radius:24px; background:linear-gradient(135deg, #059669 0%, #047857 100%); border:2px solid rgba(224,165,38,0.65); color:#fff; display:flex; align-items:center; justify-content:center; box-shadow:0 0 0 12px rgba(16,185,129,0.15), 0 16px 36px rgba(0,0,0,0.6); transform:rotate(0deg);">
@@ -250,23 +244,31 @@ export async function initLesson(id) {
                 <span style="direction:ltr; display:inline-block;">${esc(user.phone || '')}</span>
               </div>
 
-              <!-- Upgraded Custom Kimyawy Cinema Control Bar -->
-              <div id="kimyawyPlayerControls" dir="ltr" style="position:absolute; bottom:0; left:0; right:0; height:58px; background:linear-gradient(to top, rgba(3,9,20,0.98) 0%, rgba(6,22,38,0.92) 100%); border-top:1px solid rgba(16,185,129,0.22); z-index:17; display:flex; align-items:center; gap:10px; padding:0 16px; color:#fff;">
-                <button type="button" id="kpPlayBtn" style="background:linear-gradient(135deg, #10b981 0%, #059669 100%); border:1px solid rgba(255,255,255,0.15); color:#fff; width:38px; height:38px; border-radius:10px; display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0; box-shadow:0 4px 12px rgba(16,185,129,0.3);" title="تشغيل / إيقاف">
-                  <span class="material-symbols-rounded" id="kpPlayIcon" style="font-size:1.45rem;">play_arrow</span>
+              <!-- Upgraded Custom Kimyawy Cinema Control Bar (Auto-hides on inactivity in normal & fullscreen modes) -->
+              <div id="kimyawyPlayerControls" dir="ltr" style="position:absolute; bottom:0; left:0; right:0; height:58px; background:linear-gradient(to top, rgba(3,9,20,0.96) 0%, rgba(6,22,38,0.88) 100%); border-top:1px solid rgba(16,185,129,0.22); z-index:20; display:flex; align-items:center; gap:8px; padding:0 14px; color:#fff; transition:opacity 0.25s ease, transform 0.25s ease;">
+                <button type="button" id="kpPlayBtn" style="background:linear-gradient(135deg, #10b981 0%, #059669 100%); border:1px solid rgba(255,255,255,0.15); color:#fff; width:36px; height:36px; border-radius:10px; display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0; box-shadow:0 4px 12px rgba(16,185,129,0.3);" title="تشغيل / إيقاف">
+                  <span class="material-symbols-rounded" id="kpPlayIcon" style="font-size:1.4rem;">play_arrow</span>
                 </button>
-                <button type="button" id="kpRewindBtn" style="background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.1); color:#e2e8f0; height:34px; padding:0 9px; border-radius:8px; display:flex; align-items:center; gap:2px; cursor:pointer; font-size:0.72rem; font-weight:700; flex-shrink:0;" title="رجوع 10 ثوانٍ">
-                  <span class="material-symbols-rounded" style="font-size:1.1rem;">replay_10</span>
+                <button type="button" id="kpRewindBtn" style="background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.1); color:#e2e8f0; height:32px; padding:0 8px; border-radius:8px; display:flex; align-items:center; gap:2px; cursor:pointer; font-size:0.72rem; font-weight:700; flex-shrink:0;" title="رجوع 10 ثوانٍ">
+                  <span class="material-symbols-rounded" style="font-size:1.08rem;">replay_10</span>
                 </button>
-                <button type="button" id="kpForwardBtn" style="background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.1); color:#e2e8f0; height:34px; padding:0 9px; border-radius:8px; display:flex; align-items:center; gap:2px; cursor:pointer; font-size:0.72rem; font-weight:700; flex-shrink:0;" title="تقديم 10 ثوانٍ">
-                  <span class="material-symbols-rounded" style="font-size:1.1rem;">forward_10</span>
+                <button type="button" id="kpForwardBtn" style="background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.1); color:#e2e8f0; height:32px; padding:0 8px; border-radius:8px; display:flex; align-items:center; gap:2px; cursor:pointer; font-size:0.72rem; font-weight:700; flex-shrink:0;" title="تقديم 10 ثوانٍ">
+                  <span class="material-symbols-rounded" style="font-size:1.08rem;">forward_10</span>
                 </button>
 
-                <span id="kpTimeDisplay" style="font-family:monospace; font-size:0.78rem; font-weight:700; color:#e2e8f0; background:rgba(255,255,255,0.06); padding:4px 8px; border-radius:6px; white-space:nowrap; min-width:92px; text-align:center;">00:00 / 00:00</span>
+                <span id="kpTimeDisplay" style="font-family:monospace; font-size:0.75rem; font-weight:700; color:#e2e8f0; background:rgba(255,255,255,0.06); padding:4px 7px; border-radius:6px; white-space:nowrap; min-width:88px; text-align:center;">00:00 / 00:00</span>
 
-                <input type="range" id="kpProgressRange" min="0" max="1000" value="0" style="flex:1; accent-color:#10b981; height:6px; cursor:pointer;">
+                <input type="range" id="kpProgressRange" min="0" max="1000" value="0" style="flex:1; min-width:70px; accent-color:#10b981; height:6px; cursor:pointer;">
 
-                <select id="kpSpeedSelect" style="background:rgba(255,255,255,0.1); color:#fff; border:1px solid rgba(16,185,129,0.3); border-radius:8px; padding:5px 8px; font-size:0.75rem; font-weight:800; cursor:pointer;" title="سرعة التشغيل">
+                <select id="kpQualitySelect" style="background:rgba(255,255,255,0.1); color:#fde68a; border:1px solid rgba(224,165,38,0.4); border-radius:8px; padding:4px 7px; font-size:0.72rem; font-weight:800; cursor:pointer; flex-shrink:0;" title="جودة الفيديو">
+                  <option value="auto" style="color:#000;">تلقائي HD</option>
+                  <option value="hd1080" selected style="color:#000;">1080p FHD</option>
+                  <option value="hd720" style="color:#000;">720p HD</option>
+                  <option value="large" style="color:#000;">480p</option>
+                  <option value="medium" style="color:#000;">360p</option>
+                </select>
+
+                <select id="kpSpeedSelect" style="background:rgba(255,255,255,0.1); color:#fff; border:1px solid rgba(16,185,129,0.3); border-radius:8px; padding:4px 7px; font-size:0.72rem; font-weight:800; cursor:pointer; flex-shrink:0;" title="سرعة التشغيل">
                   <option value="0.75" style="color:#000;">0.75x</option>
                   <option value="1" selected style="color:#000;">1x</option>
                   <option value="1.25" style="color:#000;">1.25x</option>
@@ -274,29 +276,26 @@ export async function initLesson(id) {
                   <option value="2" style="color:#000;">2x</option>
                 </select>
 
-                <button type="button" id="kpMuteBtn" style="background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.1); color:#fff; width:34px; height:34px; border-radius:8px; display:flex; align-items:center; justify-content:center; cursor:pointer;" title="الصوت">
-                  <span class="material-symbols-rounded" id="kpMuteIcon" style="font-size:1.25rem;">volume_up</span>
+                <button type="button" id="kpMuteBtn" style="background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.1); color:#fff; width:32px; height:32px; border-radius:8px; display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0;" title="الصوت">
+                  <span class="material-symbols-rounded" id="kpMuteIcon" style="font-size:1.2rem;">volume_up</span>
                 </button>
 
-                <button type="button" id="customFullscreenBtn" style="background:rgba(224,165,38,0.16); border:1px solid rgba(224,165,38,0.4); color:#fde68a; width:36px; height:36px; border-radius:8px; display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0;" title="ملء الشاشة">
-                  <span class="material-symbols-rounded" id="fullscreenIcon" style="font-size:1.3rem;">fullscreen</span>
+                <button type="button" id="customFullscreenBtn" style="background:rgba(224,165,38,0.16); border:1px solid rgba(224,165,38,0.4); color:#fde68a; width:34px; height:34px; border-radius:8px; display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0;" title="ملء الشاشة">
+                  <span class="material-symbols-rounded" id="fullscreenIcon" style="font-size:1.25rem;">fullscreen</span>
                 </button>
               </div>
 
-              <!-- Pre-emptive Anti-Screenshot / Screen-Record / IDM Lockout Shield -->
+              <!-- Non-intrusive Content Protection Overlay (Only on actual screenshot/capture shortcut, instant 1-click resume, no strike counters) -->
               <div id="antiCaptureShield" class="video-anti-capture-shield" style="display:none; z-index:30; background:#02060d; padding:24px; text-align:center;">
-                <div style="width:68px; height:68px; border-radius:20px; background:rgba(225,29,72,0.16); border:2px solid rgba(225,29,72,0.5); display:flex; align-items:center; justify-content:center; margin:0 auto 12px; color:#f43f5e;">
-                  <span class="material-symbols-rounded" style="font-size:2.6rem;">gpp_bad</span>
+                <div style="width:64px; height:64px; border-radius:20px; background:rgba(225,29,72,0.16); border:2px solid rgba(225,29,72,0.5); display:flex; align-items:center; justify-content:center; margin:0 auto 12px; color:#f43f5e;">
+                  <span class="material-symbols-rounded" style="font-size:2.4rem;">shield_lock</span>
                 </div>
-                <h4 id="antiCaptureTitle" style="margin:0 0 6px; font-weight:900; font-size:1.1rem; color:#fff;">تم إعتام وإيقاف البث فوراً لحماية المحتوى!</h4>
-                <p id="antiCaptureDesc" style="font-size:0.84rem; color:#cbd5e1; max-width:480px; margin:0 auto 10px; line-height:1.6;">
-                  رصد النظام محاولة التبديل لنافذة خارجية أو تشغيل أداة تصوير/تسجيل شاشة أو برنامج تحميل. تم تسجيل التنبيه في سجل الأمان الخاص بالمعلم.
+                <h4 id="antiCaptureTitle" style="margin:0 0 6px; font-weight:900; font-size:1.08rem; color:#fff;">تم إيقاف البث مؤقتاً لحماية المحتوى</h4>
+                <p id="antiCaptureDesc" style="font-size:0.84rem; color:#cbd5e1; max-width:460px; margin:0 auto 16px; line-height:1.6;">
+                  غير مسموح بالتقاط صور للشاشة أو تشغيل أدوات تسجيل أثناء مشاهدة المحاضرة.
                 </p>
-                <div id="antiCaptureStrikeNotice" style="font-size:0.76rem; color:#fda4af; background:rgba(225,29,72,0.18); border:1px solid rgba(225,29,72,0.35); padding:5px 14px; border-radius:99px; margin-bottom:14px; font-weight:800;">
-                  تحذير أمني: تكرار المحاولة يؤدي إلى حظر الحساب تلقائياً وإيقاف الاشتراك
-                </div>
-                <button type="button" id="resumeSafePlayBtn" class="btn btn-primary btn-sm" style="pointer-events:auto; font-weight:900; padding:10px 24px; border-radius:10px;" disabled>
-                  جاري فحص بيئة التشغيل الآمنة...
+                <button type="button" id="resumeSafePlayBtn" class="btn btn-primary btn-sm" style="pointer-events:auto; font-weight:900; padding:10px 26px; border-radius:10px; cursor:pointer;">
+                  متابعة المشاهدة الآن
                 </button>
               </div>
             </div>
@@ -320,12 +319,13 @@ export async function initLesson(id) {
                 : ''
               }
             </div>
-            ${(lesson.progress && (lesson.max_views || 8)) ? `
-              <span style="font-size:0.78rem; color:var(--text-secondary); font-weight:700; display:inline-flex; align-items:center; gap:5px;">
-                <span class="material-symbols-rounded" style="font-size:1rem; color:var(--primary);">visibility</span>
-                المشاهدات المتبقية: <strong>${Math.max(0, ((lesson.max_views || 8) + (lesson.progress.extra_views || 0)) - (lesson.progress.views_count || 0))}</strong> من ${(lesson.max_views || 8) + (lesson.progress.extra_views || 0)}
-              </span>
-            ` : ''}
+            <span id="lessonViewsBadge" style="font-size:0.78rem; color:var(--text-secondary); font-weight:700; display:inline-flex; align-items:center; gap:5px;">
+              <span class="material-symbols-rounded" style="font-size:1rem; color:var(--primary);">visibility</span>
+              ${(lesson.views?.unlimited || Number(lesson.max_views) <= 0)
+                ? 'المشاهدات المتاحة: <strong style="color:var(--primary);">غير محدودة (لا نهائي)</strong>'
+                : `المشاهدات المتبقية: <strong>${lesson.views ? lesson.views.remaining : Math.max(0, ((lesson.max_views || 8) + (lesson.progress?.extra_views || 0)) - (lesson.progress?.views_count || 0))}</strong> من ${lesson.views ? lesson.views.allowed : ((lesson.max_views || 8) + (lesson.progress?.extra_views || 0))}`
+              }
+            </span>
           </div>
 
           <!-- Description card -->
@@ -349,8 +349,11 @@ export async function initLesson(id) {
                     <span class="material-symbols-rounded" style="font-size:1.6rem;">shield_lock</span>
                   </div>
                   <div>
-                    <h4 style="font-size:0.95rem; font-weight:800; color:var(--text-primary); margin:0 0 2px;">مذكرة وملخص الحصة المنهجي المحمي (PDF)</h4>
-                    <p style="font-size:0.78rem; color:var(--text-muted); margin:0;">يُفتح داخل العارض المشفر المحمي ببيانات الطالب ضد التحميل والتسريب</p>
+                    <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:2px;">
+                      <h4 style="font-size:0.95rem; font-weight:800; color:var(--text-primary); margin:0;">مذكرة وملخص الحصة المنهجي المحمي (PDF)</h4>
+                      <span class="badge badge-success" style="font-size:0.68rem;">فتح لا نهائي بلا حدود</span>
+                    </div>
+                    <p style="font-size:0.78rem; color:var(--text-muted); margin:0;">يُفتح داخل العارض المشفر المحمي ببيانات الطالب — متاح للمذاكرة في أي وقت بدون حد أقصى</p>
                   </div>
                 </div>
                 <div style="display:flex; gap:8px;">
@@ -421,10 +424,34 @@ export async function initLesson(id) {
     let pauseProtectedVideo = () => {};
     let isProtectedVideoPlaying = () => false;
     let getCurrentVideoTimeSec = () => 0;
+    let activeVideoToken = '';
+    let viewCommitted = false;
+    let playedSeconds = 0;
+
+    // Helper: Spoof getBoundingClientRect & getClientRects on internal media elements so IDM / video downloaders cannot position floating bars over the video
+    const cloakMediaElementFromDownloaders = (el) => {
+      if (!el) return;
+      try {
+        const fakeRect = () => ({
+          top: -9999,
+          left: -9999,
+          right: -9999,
+          bottom: -9999,
+          width: 0,
+          height: 0,
+          x: -9999,
+          y: -9999,
+          toJSON() { return this; }
+        });
+        Object.defineProperty(el, 'getBoundingClientRect', { value: fakeRect, configurable: true });
+        Object.defineProperty(el, 'getClientRects', { value: () => [], configurable: true });
+      } catch (_) {}
+    };
 
     if (!prereqLocked) {
       try {
         const res = await api.getVideoToken(id);
+        activeVideoToken = res.token || '';
         // Decode obfuscated stream_cipher if present (never exposed in plain JSON)
         let decodedUrl = '';
         let decodedYtId = '';
@@ -450,15 +477,59 @@ export async function initLesson(id) {
         const clickShield = document.getElementById('playerClickShield');
         const pauseMask = document.getElementById('playerPauseMask');
         const controlsBar = document.getElementById('kimyawyPlayerControls');
+        const topBar = document.getElementById('kimyawyPlayerTopBar');
         const playBtn = document.getElementById('kpPlayBtn');
         const playIcon = document.getElementById('kpPlayIcon');
         const rewindBtn = document.getElementById('kpRewindBtn');
         const forwardBtn = document.getElementById('kpForwardBtn');
         const progressRange = document.getElementById('kpProgressRange');
         const timeDisplay = document.getElementById('kpTimeDisplay');
+        const qualitySelect = document.getElementById('kpQualitySelect');
         const speedSelect = document.getElementById('kpSpeedSelect');
         const muteBtn = document.getElementById('kpMuteBtn');
         const muteIcon = document.getElementById('kpMuteIcon');
+
+        // Auto-hide controls bar & top bar after 2.5s of mouse/touch inactivity during playback (both normal & fullscreen!)
+        let controlsHideTimer = null;
+        const showPlayerChrome = () => {
+          if (controlsBar) {
+            controlsBar.style.opacity = '1';
+            controlsBar.style.pointerEvents = 'auto';
+            controlsBar.style.transform = 'translateY(0)';
+          }
+          if (topBar) {
+            topBar.style.opacity = '1';
+            topBar.style.transform = 'translateY(0)';
+          }
+          if (clickShield) clickShield.style.cursor = 'pointer';
+          if (controlsHideTimer) clearTimeout(controlsHideTimer);
+          if (isProtectedVideoPlaying()) {
+            controlsHideTimer = setTimeout(() => {
+              if (!isProtectedVideoPlaying()) return;
+              if (controlsBar) {
+                controlsBar.style.opacity = '0';
+                controlsBar.style.pointerEvents = 'none';
+                controlsBar.style.transform = 'translateY(100%)';
+              }
+              if (topBar) {
+                topBar.style.opacity = '0';
+                topBar.style.transform = 'translateY(-100%)';
+              }
+              if (clickShield) clickShield.style.cursor = 'none';
+            }, 2500);
+          }
+        };
+
+        const vBoxEl = document.getElementById('videoBox');
+        ['mousemove', 'pointermove', 'touchstart', 'click', 'keydown'].forEach(evName => {
+          vBoxEl?.addEventListener(evName, showPlayerChrome, { passive: true });
+        });
+        document.addEventListener('fullscreenchange', showPlayerChrome);
+
+        // Stop hover events from bubbling out of #videoBox to document/window so IDM & floating video downloaders never trigger on hover
+        ['mouseover', 'mouseenter', 'pointerover', 'pointerenter'].forEach(evName => {
+          vBoxEl?.addEventListener(evName, (e) => { e.stopPropagation(); });
+        });
 
         // Case 1: VdoCipher Hardware DRM (OTP + playbackInfo)
         if (vSource === 'vdocipher' && res.vdocipher_otp && res.vdocipher_playback_info) {
@@ -469,7 +540,7 @@ export async function initLesson(id) {
             vc.innerHTML = `<iframe src="${esc(drmSrc)}" style="width:100%;height:100%;border:0;" allow="encrypted-media" allowfullscreen></iframe>`;
           }
         } else if (decodedYtId || decodedUrl.includes('youtube.com') || decodedUrl.includes('youtu.be')) {
-          // Case 2: Custom Shielded Player for YouTube (Zero YouTube Branding, Cropped Chrome, No Video ID in initial iframe.src, Anti-IDM)
+          // Case 2: Custom Shielded Player inside a Closed Shadow DOM (Invisible to document.querySelectorAll('iframe') & IDM hooks)
           let videoId = decodedYtId;
           if (!videoId) {
             if (decodedUrl.includes('youtu.be/')) videoId = decodedUrl.split('youtu.be/')[1].split('?')[0].split('&')[0];
@@ -479,13 +550,28 @@ export async function initLesson(id) {
           }
           if (!videoId) throw new Error('رابط الفيديو غير صالح');
 
+          let ytMountTarget = null;
+          let shadowHostWrap = null;
           if (vc) {
-            // Cropped container (-72px top & bottom) + pointer-events:none completely hides YouTube header/footer & blocks right-click/IDM hover
-            vc.innerHTML = `
-              <div style="position:absolute; top:-72px; left:0; width:100%; height:calc(100% + 144px); pointer-events:none; overflow:hidden; user-select:none;">
-                <div id="ytShieldTarget" style="width:100%; height:100%; pointer-events:none;"></div>
-              </div>
-            `;
+            vc.innerHTML = '';
+            try {
+              const closedRoot = vc.attachShadow({ mode: 'closed' });
+              shadowHostWrap = document.createElement('div');
+              shadowHostWrap.style.cssText = 'position:absolute; top:-72px; left:0; width:100%; height:calc(100% + 144px); pointer-events:none; overflow:hidden; user-select:none;';
+              ytMountTarget = document.createElement('div');
+              ytMountTarget.style.cssText = 'width:100%; height:100%; pointer-events:none;';
+              cloakMediaElementFromDownloaders(shadowHostWrap);
+              cloakMediaElementFromDownloaders(ytMountTarget);
+              shadowHostWrap.appendChild(ytMountTarget);
+              closedRoot.appendChild(shadowHostWrap);
+            } catch (_) {
+              vc.innerHTML = `
+                <div style="position:absolute; top:-72px; left:0; width:100%; height:calc(100% + 144px); pointer-events:none; overflow:hidden; user-select:none;">
+                  <div id="ytShieldTarget" style="width:100%; height:100%; pointer-events:none;"></div>
+                </div>
+              `;
+              ytMountTarget = document.getElementById('ytShieldTarget');
+            }
           }
 
           const loadYtApi = () => new Promise((resolve) => {
@@ -516,12 +602,13 @@ export async function initLesson(id) {
               pauseMask.style.opacity = playing ? '0' : '1';
               pauseMask.style.pointerEvents = playing ? 'none' : 'auto';
             }
+            showPlayerChrome();
           };
 
           isProtectedVideoPlaying = () => isPlaying;
 
-          // Initialize YT.Player WITHOUT videoId in the constructor so the DOM iframe.src attribute never exposes the video ID to IDM!
-          const ytPlayer = new YT.Player('ytShieldTarget', {
+          // Initialize YT.Player passing the Closed Shadow DOM Element directly (never exposes videoId in initial src or document DOM)
+          const ytPlayer = new YT.Player(ytMountTarget, {
             host: 'https://www.youtube-nocookie.com',
             playerVars: {
               autoplay: 0,
@@ -538,12 +625,16 @@ export async function initLesson(id) {
             events: {
               onReady: (ev) => {
                 try {
-                  ev.target.cueVideoById({ videoId, suggestedQuality: 'hd1080' });
-                  const iframeEl = document.getElementById('ytShieldTarget');
+                  const initialQ = qualitySelect?.value && qualitySelect.value !== 'auto' ? qualitySelect.value : 'hd1080';
+                  ev.target.cueVideoById({ videoId, suggestedQuality: initialQ });
+                  const iframeEl = ev.target.getIframe?.() || shadowHostWrap?.querySelector?.('iframe');
                   if (iframeEl) {
                     iframeEl.style.pointerEvents = 'none';
+                    iframeEl.style.width = '100%';
+                    iframeEl.style.height = '100%';
+                    iframeEl.style.border = '0';
                     iframeEl.setAttribute('tabindex', '-1');
-                    iframeEl.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-presentation');
+                    cloakMediaElementFromDownloaders(iframeEl);
                   }
                 } catch (_) {}
                 if (timeDisplay) timeDisplay.textContent = `${formatTime(0)} / ${formatTime(durationSec)}`;
@@ -564,6 +655,10 @@ export async function initLesson(id) {
                 if (ev.data === YT.PlayerState.PLAYING) {
                   const d = ev.target.getDuration();
                   if (d && d > 0) durationSec = Math.floor(d);
+                  const chosenQ = qualitySelect?.value;
+                  if (chosenQ && chosenQ !== 'auto') {
+                    try { ev.target.setPlaybackQuality?.(chosenQ); } catch (_) {}
+                  }
                   syncUiState(true);
                 } else if (ev.data === YT.PlayerState.PAUSED || ev.data === YT.PlayerState.ENDED || ev.data === YT.PlayerState.CUED) {
                   syncUiState(false);
@@ -603,12 +698,14 @@ export async function initLesson(id) {
             try {
               const target = Math.max(0, (ytPlayer.getCurrentTime() || 0) - 10);
               ytPlayer.seekTo(target, true);
+              showPlayerChrome();
             } catch (_) {}
           });
           forwardBtn?.addEventListener('click', () => {
             try {
               const target = Math.min(durationSec, (ytPlayer.getCurrentTime() || 0) + 10);
               ytPlayer.seekTo(target, true);
+              showPlayerChrome();
             } catch (_) {}
           });
           progressRange?.addEventListener('input', () => {
@@ -616,11 +713,34 @@ export async function initLesson(id) {
               const pct = Number(progressRange.value) / 1000;
               const target = Math.floor(pct * (durationSec || 1));
               ytPlayer.seekTo(target, true);
+              showPlayerChrome();
+            } catch (_) {}
+          });
+          qualitySelect?.addEventListener('change', () => {
+            try {
+              const q = qualitySelect.value === 'auto' ? 'default' : qualitySelect.value;
+              const curTime = ytPlayer.getCurrentTime?.() || currentSec || 0;
+              const wasPlaying = isPlaying;
+              if (typeof ytPlayer.setPlaybackQualityRange === 'function') {
+                ytPlayer.setPlaybackQualityRange(q, q);
+              }
+              if (typeof ytPlayer.setPlaybackQuality === 'function') {
+                ytPlayer.setPlaybackQuality(q);
+              }
+              if (wasPlaying && typeof ytPlayer.loadVideoById === 'function') {
+                ytPlayer.loadVideoById({ videoId, startSeconds: curTime, suggestedQuality: q });
+              } else if (typeof ytPlayer.cueVideoById === 'function') {
+                ytPlayer.cueVideoById({ videoId, startSeconds: curTime, suggestedQuality: q });
+              }
+              const label = qualitySelect.options[qualitySelect.selectedIndex]?.text || q;
+              showToast(`تم تغيير جودة الفيديو إلى ${label}`, 'info');
+              showPlayerChrome();
             } catch (_) {}
           });
           speedSelect?.addEventListener('change', () => {
             try {
               ytPlayer.setPlaybackRate(parseFloat(speedSelect.value) || 1);
+              showPlayerChrome();
             } catch (_) {}
           });
           muteBtn?.addEventListener('click', () => {
@@ -634,16 +754,30 @@ export async function initLesson(id) {
                 isMuted = true;
                 if (muteIcon) muteIcon.textContent = 'volume_off';
               }
+              showPlayerChrome();
             } catch (_) {}
           });
           window.addEventListener('popstate', () => { if (uiTimer) clearInterval(uiTimer); }, { once: true });
         } else if (/\.mp4($|\?)/i.test(decodedUrl)) {
-          // Case 3: Direct MP4 video inside custom HTML5 encrypted player (Blob URL obfuscation + controlsList="nodownload" + disablePictureInPicture)
+          // Case 3: Direct MP4 video inside Closed Shadow DOM + Blob URL obfuscation
           if (vc) {
-            vc.innerHTML = `
-              <video id="nativeProtectedVideo" style="width:100%; height:calc(100% - 58px); object-fit:contain; background:#000; pointer-events:none;" playsinline controlsList="nodownload nofullscreen noremoteplayback noplaybackrate" disablePictureInPicture disableRemotePlayback oncontextmenu="return false;"></video>
-            `;
-            const vEl = document.getElementById('nativeProtectedVideo');
+            vc.innerHTML = '';
+            let vEl = null;
+            try {
+              const closedRoot = vc.attachShadow({ mode: 'closed' });
+              vEl = document.createElement('video');
+              vEl.style.cssText = 'width:100%; height:100%; object-fit:contain; background:#000; pointer-events:none;';
+              vEl.playsInline = true;
+              vEl.setAttribute('controlsList', 'nodownload nofullscreen noremoteplayback noplaybackrate');
+              vEl.disablePictureInPicture = true;
+              cloakMediaElementFromDownloaders(vEl);
+              closedRoot.appendChild(vEl);
+            } catch (_) {
+              vc.innerHTML = `<video id="nativeProtectedVideo" style="width:100%; height:100%; object-fit:contain; background:#000; pointer-events:none;" playsinline controlsList="nodownload nofullscreen noremoteplayback noplaybackrate" disablePictureInPicture disableRemotePlayback oncontextmenu="return false;"></video>`;
+              vEl = document.getElementById('nativeProtectedVideo');
+              cloakMediaElementFromDownloaders(vEl);
+            }
+
             // Convert same-origin or CORS-enabled MP4 into an ephemeral Blob URL so IDM cannot read a direct .mp4 src attribute
             fetch(decodedUrl)
               .then(r => r.ok ? r.blob() : Promise.reject())
@@ -659,16 +793,24 @@ export async function initLesson(id) {
 
             const toggleV = () => {
               if (!vEl) return;
-              if (vEl.paused) { vEl.play(); if (playIcon) playIcon.textContent = 'pause'; if (pauseMask) { pauseMask.style.opacity = '0'; pauseMask.style.pointerEvents = 'none'; } }
-              else { vEl.pause(); if (playIcon) playIcon.textContent = 'play_arrow'; if (pauseMask) { pauseMask.style.opacity = '1'; pauseMask.style.pointerEvents = 'auto'; } }
+              if (vEl.paused) {
+                vEl.play();
+                if (playIcon) playIcon.textContent = 'pause';
+                if (pauseMask) { pauseMask.style.opacity = '0'; pauseMask.style.pointerEvents = 'none'; }
+              } else {
+                vEl.pause();
+                if (playIcon) playIcon.textContent = 'play_arrow';
+                if (pauseMask) { pauseMask.style.opacity = '1'; pauseMask.style.pointerEvents = 'auto'; }
+              }
+              showPlayerChrome();
             };
             isProtectedVideoPlaying = () => Boolean(vEl && !vEl.paused);
             pauseProtectedVideo = () => { if (vEl && !vEl.paused) toggleV(); };
             getCurrentVideoTimeSec = () => Math.floor(vEl?.currentTime || 0);
             clickShield?.addEventListener('click', toggleV);
             playBtn?.addEventListener('click', toggleV);
-            rewindBtn?.addEventListener('click', () => { if (vEl) vEl.currentTime = Math.max(0, vEl.currentTime - 10); });
-            forwardBtn?.addEventListener('click', () => { if (vEl) vEl.currentTime = Math.min(vEl.duration || 3600, vEl.currentTime + 10); });
+            rewindBtn?.addEventListener('click', () => { if (vEl) vEl.currentTime = Math.max(0, vEl.currentTime - 10); showPlayerChrome(); });
+            forwardBtn?.addEventListener('click', () => { if (vEl) vEl.currentTime = Math.min(vEl.duration || 3600, vEl.currentTime + 10); showPlayerChrome(); });
             vEl?.addEventListener('timeupdate', () => {
               const c = Math.floor(vEl.currentTime || 0);
               const d = Math.floor(vEl.duration || 1);
@@ -677,12 +819,19 @@ export async function initLesson(id) {
             });
             progressRange?.addEventListener('input', () => {
               if (vEl && vEl.duration) vEl.currentTime = (Number(progressRange.value) / 1000) * vEl.duration;
+              showPlayerChrome();
             });
-            speedSelect?.addEventListener('change', () => { if (vEl) vEl.playbackRate = parseFloat(speedSelect.value) || 1; });
+            qualitySelect?.addEventListener('change', () => {
+              const label = qualitySelect.options[qualitySelect.selectedIndex]?.text || '';
+              showToast(`تم تغيير جودة الفيديو إلى ${label}`, 'info');
+              showPlayerChrome();
+            });
+            speedSelect?.addEventListener('change', () => { if (vEl) vEl.playbackRate = parseFloat(speedSelect.value) || 1; showPlayerChrome(); });
             muteBtn?.addEventListener('click', () => {
               if (!vEl) return;
               vEl.muted = !vEl.muted;
               if (muteIcon) muteIcon.textContent = vEl.muted ? 'volume_off' : 'volume_up';
+              showPlayerChrome();
             });
           }
         } else {
@@ -714,29 +863,77 @@ export async function initLesson(id) {
       } catch (err) {
         const vc = document.getElementById('videoContainer');
         const clickShield = document.getElementById('playerClickShield');
+        const controlsBar = document.getElementById('kimyawyPlayerControls');
         if (clickShield) clickShield.style.display = 'none';
+        if (controlsBar) controlsBar.style.display = 'none';
         if (vc) {
           vc.innerHTML = `
-            <div style="display:flex; align-items:center; justify-content:center; height:100%; color:var(--error); flex-direction:column; gap:12px; background:var(--bg-secondary);">
-              <span class="material-symbols-rounded" style="font-size:3rem;">error</span>
-              <p style="font-size:0.85rem; font-weight:700;">${esc(err.message)}</p>
+            <div style="display:flex; align-items:center; justify-content:center; height:100%; color:#f8fafc; flex-direction:column; gap:12px; padding:24px; text-align:center; background:radial-gradient(circle at center, rgba(6,78,59,0.5) 0%, #030914 100%);">
+              <div style="width:62px; height:62px; border-radius:18px; background:rgba(245,158,11,0.16); border:1.5px solid rgba(245,158,11,0.45); color:#fbbf24; display:flex; align-items:center; justify-content:center;">
+                <span class="material-symbols-rounded" style="font-size:2.2rem;">visibility_off</span>
+              </div>
+              <h3 style="margin:0; font-size:1.05rem; font-weight:900; color:#fff;">${esc(err.message)}</h3>
+              <p style="margin:0; font-size:0.82rem; color:#cbd5e1; max-width:440px; line-height:1.6;">
+                يمكنك إرسال طلب فوري للمدرس لفتح مشاهدات إضافية لك على هذه المحاضرة وتصفير العداد.
+              </p>
+              <button type="button" id="requestExtraViewsBtn" class="btn btn-primary btn-sm" style="margin-top:4px; gap:6px; font-weight:800; padding:9px 20px; border-radius:10px;">
+                <span class="material-symbols-rounded">add_circle</span> طلب مشاهدات إضافية من المدرس
+              </button>
             </div>
           `;
+          document.getElementById('requestExtraViewsBtn')?.addEventListener('click', async (e) => {
+            const btn = e.currentTarget;
+            btn.disabled = true;
+            btn.textContent = 'جاري إرسال الطلب للمدرس...';
+            try {
+              const r = await api.requestExtraViews(id);
+              showToast(r.message || 'تم إرسال طلبك للمدرس بنجاح', 'success');
+              btn.textContent = 'تم إرسال الطلب للمدرس بنجاح ✓';
+            } catch (reqErr) {
+              showToast(reqErr.message || 'تعذر إرسال الطلب', 'error');
+              btn.disabled = false;
+              btn.textContent = 'طلب مشاهدات إضافية من المدرس';
+            }
+          });
         }
       }
     }
 
     // =========================================================================
-    // PRE-EMPTIVE ZERO-LATENCY ANTI-SCREENSHOT, ANTI-SCREEN-RECORD & ANTI-IDM SHIELD
+    // FAIR VIEW COUNTING (Only commits 1 view after 25s of actual video playback; closing/reopening browser does NOT consume views!)
+    // =========================================================================
+    const viewCommitTimer = setInterval(() => {
+      if (viewCommitted || isTeacher() || !activeVideoToken) return;
+      if (isProtectedVideoPlaying()) {
+        playedSeconds += 1;
+        if (playedSeconds >= 25) {
+          viewCommitted = true;
+          api.commitLessonView(id, activeVideoToken).then((vRes) => {
+            const badgeEl = document.getElementById('lessonViewsBadge');
+            if (badgeEl && vRes) {
+              if (vRes.unlimited) {
+                badgeEl.innerHTML = `<span class="material-symbols-rounded" style="font-size:1rem; color:var(--primary);">visibility</span> المشاهدات المتاحة: <strong style="color:var(--primary);">غير محدودة (لا نهائي)</strong>`;
+              } else if (typeof vRes.remaining === 'number' && typeof vRes.allowed === 'number') {
+                badgeEl.innerHTML = `<span class="material-symbols-rounded" style="font-size:1rem; color:var(--primary);">visibility</span> المشاهدات المتبقية: <strong>${vRes.remaining}</strong> من ${vRes.allowed}`;
+              }
+            }
+          }).catch(() => {});
+        }
+      }
+    }, 1000);
+
+    // =========================================================================
+    // SMART, SILENT, NON-INTRUSIVE CONTENT PROTECTION SHIELD
+    // - Never locks out on lone Win key press, tab switch, or Fullscreen!
+    // - Never tells the student that the teacher was notified ("بيني وبينك") and shows zero strike counters.
+    // - Resumes immediately on 1 click when "متابعة المشاهدة الآن" is clicked.
     // =========================================================================
     const videoBox = document.getElementById('videoBox');
     const vcEl = document.getElementById('videoContainer');
     const shield = document.getElementById('antiCaptureShield');
     const shieldTitle = document.getElementById('antiCaptureTitle');
     const shieldDesc = document.getElementById('antiCaptureDesc');
-    const shieldStrikeNotice = document.getElementById('antiCaptureStrikeNotice');
     const resumeBtn = document.getElementById('resumeSafePlayBtn');
-    const strikeBadge = document.getElementById('playerStrikeBadge');
     const fsBtn = document.getElementById('customFullscreenBtn');
     const fsIcon = document.getElementById('fullscreenIcon');
 
@@ -758,11 +955,35 @@ export async function initLesson(id) {
     }
 
     let isPermanentlyBlocked = false;
-    let cooldownInterval = null;
-    let cooldownRemaining = 0;
     let lastReportTime = 0;
+    let metaDimTimeout = null;
 
-    // 1. Synchronous <1ms Blackout (executes BEFORE OS snipping tool or PrintScreen captures the frame!)
+    const silentReportToTeacher = (violationType, detailsText) => {
+      const now = Date.now();
+      if (isTeacher() || (now - lastReportTime < 3500)) return;
+      lastReportTime = now;
+      api.reportSecurityViolation({
+        violation_type: violationType,
+        course_id: lesson.course_id,
+        lesson_id: id,
+        source_title: lesson.title,
+        details: detailsText || violationType
+      }).then((rep) => {
+        if (rep?.is_blocked) {
+          isPermanentlyBlocked = true;
+          if (vcEl) vcEl.innerHTML = '';
+          if (shield) shield.style.display = 'flex';
+          if (shieldTitle) shieldTitle.textContent = '🚫 الحساب موقوف حالياً';
+          if (shieldDesc) shieldDesc.textContent = rep.message || 'يرجى التواصل مع إدارة المنصة.';
+          if (resumeBtn) {
+            resumeBtn.disabled = true;
+            resumeBtn.style.background = '#e11d48';
+            resumeBtn.textContent = 'تواصل مع إدارة المنصة';
+          }
+        }
+      }).catch(() => {});
+    };
+
     const instantBlackoutFrame = () => {
       if (vcEl) {
         vcEl.style.transition = 'none';
@@ -788,157 +1009,76 @@ export async function initLesson(id) {
       }
     };
 
-    // 2. Violation Reporter + Mandatory Cooldown Lockout
-    const triggerSecurityLockout = (violationType, customTitle, customDesc, cooldownSecs = 8, shouldReportToServer = true) => {
+    const triggerSecurityLockout = (violationType, customTitle, customDesc) => {
       if (isPermanentlyBlocked) return;
       instantBlackoutFrame();
-
       if (shieldTitle && customTitle) shieldTitle.textContent = customTitle;
       if (shieldDesc && customDesc) shieldDesc.textContent = customDesc;
-
-      // Start or extend mandatory cooldown timer (cannot resume until timer hits 0 AND window is focused!)
-      cooldownRemaining = Math.max(cooldownRemaining, cooldownSecs);
       if (resumeBtn) {
-        resumeBtn.disabled = true;
-        resumeBtn.style.opacity = '0.6';
-        resumeBtn.style.cursor = 'not-allowed';
-        resumeBtn.textContent = `لا يمكن الاستئناف قبل ${cooldownRemaining} ثوانٍ (تأكد من إغلاق أي أداة تسجيل/تصوير)...`;
+        resumeBtn.disabled = false;
+        resumeBtn.style.opacity = '1';
+        resumeBtn.style.cursor = 'pointer';
+        resumeBtn.textContent = 'متابعة المشاهدة الآن';
       }
-
-      if (cooldownInterval) clearInterval(cooldownInterval);
-      cooldownInterval = setInterval(() => {
-        if (isPermanentlyBlocked) {
-          clearInterval(cooldownInterval);
-          return;
-        }
-        // Only count down while the user is actively focused on the platform window and no DevTools is docked
-        const devToolsDocked = (window.outerWidth - window.innerWidth > 180) || (window.outerHeight - window.innerHeight > 220);
-        if (document.hidden || !document.hasFocus() || devToolsDocked) {
-          if (resumeBtn) {
-            resumeBtn.disabled = true;
-            resumeBtn.textContent = devToolsDocked
-              ? 'يرجى إغلاق أدوات المطور (DevTools) أولاً لاستئناف المشاهدة'
-              : 'يرجى إبقاء نافذة المنصة نشطة وإغلاق أي برنامج خارجي لاستكمال العد التنازلي...';
-          }
-          return;
-        }
-
-        cooldownRemaining -= 1;
-        if (cooldownRemaining > 0) {
-          if (resumeBtn) {
-            resumeBtn.disabled = true;
-            resumeBtn.textContent = `إعادة فحص الأمان... يمكنك الاستئناف بعد ${cooldownRemaining} ثوانٍ`;
-          }
-        } else {
-          clearInterval(cooldownInterval);
-          cooldownInterval = null;
-          if (resumeBtn) {
-            resumeBtn.disabled = false;
-            resumeBtn.style.opacity = '1';
-            resumeBtn.style.cursor = 'pointer';
-            resumeBtn.textContent = 'استئناف المشاهدة الآمنة الآن';
-          }
-        }
-      }, 1000);
-
-      // Report confirmed violation to Teacher Security Center (throttled to avoid duplicate burst spam)
-      const now = Date.now();
-      if (shouldReportToServer && !isTeacher() && (now - lastReportTime > 3500)) {
-        lastReportTime = now;
-        api.reportSecurityViolation({
-          violation_type: violationType,
-          course_id: lesson.course_id,
-          lesson_id: id,
-          source_title: lesson.title,
-          details: customTitle || violationType
-        }).then((rep) => {
-          if (rep?.strikes) {
-            if (strikeBadge) {
-              strikeBadge.style.display = 'inline-block';
-              strikeBadge.textContent = `إنذارات الأمان: ${rep.strikes}/5`;
-            }
-            if (shieldStrikeNotice) {
-              shieldStrikeNotice.textContent = `تم تسجيل مخالفة أمنية في ملفك لدى المدرس (الإنذار رقم ${rep.strikes} من 5 — يتم حظر الحساب تلقائياً عند 5 إنذارات)`;
-            }
-          }
-          if (rep?.is_blocked) {
-            isPermanentlyBlocked = true;
-            if (vcEl) vcEl.innerHTML = '';
-            if (shieldTitle) shieldTitle.textContent = '🚫 تم حظر حسابك تلقائياً وإيقاف البث!';
-            if (shieldDesc) shieldDesc.textContent = rep.message || 'تم رصد تكرار محاولات تصوير أو تسجيل أو تحميل المحتوى المحمي، وتم إرسال تقرير كامل للمعلم.';
-            if (resumeBtn) {
-              resumeBtn.disabled = true;
-              resumeBtn.style.background = '#e11d48';
-              resumeBtn.textContent = 'الحساب موقوف أمنياً — تواصل مع إدارة المنصة';
-            }
-          }
-        }).catch(() => {});
-      }
+      silentReportToTeacher(violationType, customTitle || violationType);
     };
 
     resumeBtn?.addEventListener('click', (e) => {
       e.stopPropagation();
-      if (cooldownRemaining > 0 || isPermanentlyBlocked || document.hidden || !document.hasFocus()) return;
+      if (isPermanentlyBlocked) return;
       restoreFrameVisibility();
     });
 
-    // 3. Block Browser Screen Capture APIs (getDisplayMedia & captureStream)
+    // Block Browser Screen Capture APIs (getDisplayMedia)
     if (navigator.mediaDevices && typeof navigator.mediaDevices.getDisplayMedia === 'function') {
       navigator.mediaDevices.getDisplayMedia = async () => {
         triggerSecurityLockout(
           'screen_record',
-          'تم رصد محاولة تسجيل الشاشة عبر المتصفح!',
-          'يُمنع منعاً باتاً استخدام أدوات تسجيل الشاشة أثناء مشاهدة المحاضرات المشفرة.',
-          12,
-          true
+          'تم إيقاف البث مؤقتاً لحماية المحتوى',
+          'لا يُسمح بتشغيل أدوات تسجيل الشاشة أثناء مشاهدة المحاضرة.'
         );
         throw new DOMException('Screen recording is disabled by Kimyawy DRM Shield', 'NotAllowedError');
       };
     }
 
-    // 4. Pre-emptive Keydown Capture (Fires on the VERY FIRST key of Win+Shift+S, Win+Alt+R, Alt+F9, PrintScreen, F12)
+    // Smart Keydown Protection:
+    // - Lone Meta (Win) key only silently dims opacity while held (in case Win+Shift+S follows) and restores immediately on release without pausing or showing any modal!
+    // - Actual screenshot/devtools combos trigger instant pause + silent report + 1-click resume.
     const onPreemptiveKeyDown = (e) => {
       const k = e.key || '';
       const code = e.code || '';
 
-      // Instant synchronous blackout on Meta (Windows/Cmd) or Alt press so Win+Shift+S / Win+G / Win+Alt+R sees a black frame BEFORE snipping overlay opens!
-      if (k === 'Meta' || k === 'OS' || k === 'Super' || code === 'MetaLeft' || code === 'MetaRight') {
-        instantBlackoutFrame();
-        triggerSecurityLockout(
-          'screenshot',
-          'تم إعتام الشاشة فوراً لمنع لقطات الشاشة وتسجيل النظام (Win+Shift+S / Game Bar)',
-          'عند الضغط على زر النظام (Windows/Command) يتم إعتام الفيديو تلقائياً في أجزاء من المللي ثانية لمنع التقاط أو تسجيل الشاشة.',
-          6,
-          isProtectedVideoPlaying()
-        );
+      if ((k === 'Meta' || k === 'OS' || k === 'Super' || code === 'MetaLeft' || code === 'MetaRight') && !e.shiftKey && !e.altKey) {
+        if (vcEl && shield?.style.display === 'none') {
+          vcEl.style.transition = 'none';
+          vcEl.style.opacity = '0';
+          if (metaDimTimeout) clearTimeout(metaDimTimeout);
+          metaDimTimeout = setTimeout(() => {
+            if (vcEl && shield?.style.display === 'none') vcEl.style.opacity = '1';
+          }, 1200);
+        }
         return;
       }
 
-      // PrintScreen or Mac/Windows screenshot/recording combos
       if (
         k === 'PrintScreen' ||
         code === 'PrintScreen' ||
-        (e.metaKey && e.shiftKey) ||
-        (e.metaKey && e.altKey) ||
+        (e.metaKey && e.shiftKey && (k === 'S' || k === 's' || k === '3' || k === '4' || k === '5')) ||
+        (e.metaKey && e.altKey && (k === 'R' || k === 'r' || k === 'G' || k === 'g')) ||
         (e.altKey && (k === 'F9' || k === 'F10' || k === 'PrintScreen')) ||
         (e.ctrlKey && e.shiftKey && (k === 'S' || k === 's' || k === 'E' || k === 'e' || k === 'R' || k === 'r'))
       ) {
         e.preventDefault();
         e.stopPropagation();
-        instantBlackoutFrame();
         navigator.clipboard?.writeText?.('محتوى محمي — منصة كيمياوي').catch(() => {});
         triggerSecurityLockout(
           (e.metaKey && e.altKey) || (e.altKey && k === 'F9') ? 'screen_record' : 'screenshot',
-          'تم إحباط محاولة تصوير أو تسجيل الشاشة وإبلاغ المعلم!',
-          'تم إعتام الفيديو قبل التقاط الصورة وتسجيل المخالفة باسمك ورقم هاتفك في لوحة تحكم المعلم.',
-          10,
-          true
+          'تم إيقاف البث مؤقتاً لحماية المحتوى',
+          'لا يُسمح بالتقاط صور للشاشة أو تسجيل الفيديو أثناء مشاهدة المحاضرة.'
         );
-        showToast('تم إعتام الفيديو وإرسال تنبيه للمعلم بمحاولة تصوير الشاشة!', 'error');
         return;
       }
 
-      // DevTools & Source Inspection shortcuts
       if (
         k === 'F12' ||
         (e.ctrlKey && e.shiftKey && (k === 'I' || k === 'i' || k === 'C' || k === 'c' || k === 'J' || k === 'j')) ||
@@ -946,73 +1086,60 @@ export async function initLesson(id) {
       ) {
         e.preventDefault();
         e.stopPropagation();
-        instantBlackoutFrame();
         triggerSecurityLockout(
           'devtools',
-          'تم رصد محاولة فتح أدوات الفحص أو حفظ الصفحة!',
-          'محاولة فحص الكود المصدري أو استخراج روابط البث المشفر تُعد مخالفة أمنية جسيمة.',
-          10,
-          true
+          'تم إيقاف البث مؤقتاً لحماية المحتوى',
+          'يرجى إغلاق أدوات الفحص للمتابعة.'
         );
-        showToast('غير مسموح بفتح أدوات المطور أو حفظ الصفحة', 'error');
       }
     };
 
     const onPreemptiveKeyUp = (e) => {
-      if (e.key === 'PrintScreen' || e.code === 'PrintScreen' || e.key === 'Meta' || e.key === 'OS') {
-        instantBlackoutFrame();
-        navigator.clipboard?.writeText?.('محتوى محمي — منصة كيمياوي').catch(() => {});
-        if (e.key === 'PrintScreen' || e.code === 'PrintScreen') {
-          triggerSecurityLockout(
-            'screenshot',
-            'تم إحباط محاولة التقاط الشاشة (PrintScreen) وإبلاغ المعلم!',
-            'تم مسح الحافظة وإعتام المشغل وتسجيل المخالفة في لوحة المعلم.',
-            10,
-            true
-          );
+      if (e.key === 'Meta' || e.key === 'OS' || e.key === 'Super' || e.code === 'MetaLeft' || e.code === 'MetaRight') {
+        if (metaDimTimeout) clearTimeout(metaDimTimeout);
+        if (vcEl && shield?.style.display === 'none') {
+          vcEl.style.opacity = '1';
         }
+        return;
+      }
+      if (e.key === 'PrintScreen' || e.code === 'PrintScreen') {
+        navigator.clipboard?.writeText?.('محتوى محمي — منصة كيمياوي').catch(() => {});
+        triggerSecurityLockout(
+          'screenshot',
+          'تم إيقاف البث مؤقتاً لحماية المحتوى',
+          'لا يُسمح بالتقاط صور للشاشة أثناء مشاهدة المحاضرة.'
+        );
       }
     };
 
     window.addEventListener('keydown', onPreemptiveKeyDown, { capture: true });
     window.addEventListener('keyup', onPreemptiveKeyUp, { capture: true });
 
-    // 5. Instant Blackout on Window Blur, Visibility Hidden, or Mouse Leaving Viewport While Playing
-    const onVisibilityChange = () => {
-      if (document.hidden) {
-        const wasPlaying = isProtectedVideoPlaying();
-        instantBlackoutFrame();
-        triggerSecurityLockout(
-          'screen_record',
-          'تم إيقاف البث مؤقتاً لمغادرة تبويب المحاضرة',
-          'يتم إعتام وإيقاف البث فور مغادرة التبويب لمنع التسجيل في الخلفية.',
-          6,
-          wasPlaying
-        );
-      }
+    // Silent Anti-IDM & Floating Video Downloader Sweeper (Removes injected downloader toolbars & reports silently without interrupting the student)
+    const sweepDownloaderNodes = (rootDoc = document) => {
+      try {
+        const selectors = [
+          '[id*="idm" i]',
+          '[class*="idm" i]',
+          '[id*="vdh" i]',
+          '[class*="savefrom" i]',
+          '[class*=" sf-" i]',
+          'iframe[src*="idm" i]',
+          'div[style*="z-index: 2147483647"]'
+        ];
+        rootDoc.querySelectorAll(selectors.join(',')).forEach(el => {
+          if (el.closest('#app') && !String(el.id || '').toLowerCase().includes('idm')) return;
+          try {
+            el.style.setProperty('display', 'none', 'important');
+            el.style.setProperty('visibility', 'hidden', 'important');
+            el.style.setProperty('pointer-events', 'none', 'important');
+            el.remove();
+          } catch (_) {}
+          silentReportToTeacher('idm_download', 'محاولة ظهور شريط أداة تحميل فوق مشغل الفيديو');
+        });
+      } catch (_) {}
     };
 
-    const onWindowBlur = () => {
-      if (document.activeElement?.tagName === 'IFRAME') {
-        // Immediately return focus to window so keyboard & blur listeners stay active!
-        setTimeout(() => window.focus(), 0);
-        return;
-      }
-      const wasPlaying = isProtectedVideoPlaying();
-      instantBlackoutFrame();
-      triggerSecurityLockout(
-        'screen_record',
-        'تم إعتام وإيقاف البث فوراً لانتقال التركيز إلى أداة أو نافذة خارجية!',
-        'إذا كنت تحاول تشغيل أداة اقتصاص الشاشة (Snipping Tool) أو برنامج تسجيل خارجي (OBS / ShareX / Game Bar)، فقد تم إعتام الفيديو تلقائياً.',
-        8,
-        wasPlaying
-      );
-    };
-
-    document.addEventListener('visibilitychange', onVisibilityChange, { capture: true });
-    window.addEventListener('blur', onWindowBlur, { capture: true });
-
-    // 6. Active Anti-IDM & Video Downloader Extension Detector (MutationObserver + Heartbeat)
     const idmObserver = new MutationObserver((mutations) => {
       for (const m of mutations) {
         for (const node of m.addedNodes) {
@@ -1021,7 +1148,7 @@ export async function initLesson(id) {
           const idStr = String(el.id || '').toLowerCase();
           const clsStr = String(el.className || '').toLowerCase();
           const srcStr = String(el.getAttribute?.('src') || '').toLowerCase();
-          const htmlStr = String(el.outerHTML || '').slice(0, 300).toLowerCase();
+          const htmlStr = String(el.outerHTML || '').slice(0, 350).toLowerCase();
 
           if (
             idStr.includes('idm') ||
@@ -1033,50 +1160,19 @@ export async function initLesson(id) {
             idStr.includes('vdh-') ||
             clsStr.includes('savefrom')
           ) {
-            try { el.remove(); } catch (_) {}
-            instantBlackoutFrame();
-            triggerSecurityLockout(
-              'idm_download',
-              'تم رصد وإحباط محاولة التقاط الفيديو بواسطة برنامج تحميل (IDM)!',
-              'يُمنع استخدام إضافات التحميل مثل Internet Download Manager. يرجى تعطيل إضافة IDM من المتصفح لتجنب حظر حسابك.',
-              12,
-              true
-            );
-            return;
+            try {
+              el.style.setProperty('display', 'none', 'important');
+              el.remove();
+            } catch (_) {}
+            silentReportToTeacher('idm_download', 'محاولة التقاط الفيديو بواسطة أداة تحميل خارجية (IDM)');
           }
         }
       }
     });
     idmObserver.observe(document.documentElement, { childList: true, subtree: true });
+    const idmSweepInterval = setInterval(() => sweepDownloaderNodes(document), 800);
 
-    // 7. Continuous 250ms Focus & DevTools Heartbeat (Ensures video NEVER plays while unfocused or while recorder overlay has focus)
-    const focusHeartbeat = setInterval(() => {
-      if (isPermanentlyBlocked) return;
-      const devToolsOpen = (window.outerWidth - window.innerWidth > 180) || (window.outerHeight - window.innerHeight > 220);
-      if (devToolsOpen && isProtectedVideoPlaying()) {
-        instantBlackoutFrame();
-        triggerSecurityLockout(
-          'devtools',
-          'تم رصد فتح أدوات المطور (DevTools) أثناء تشغيل المحاضرة!',
-          'يرجى إغلاق أدوات المطور فوراً لاستئناف المشاهدة الآمنة.',
-          10,
-          true
-        );
-        return;
-      }
-      if (isProtectedVideoPlaying() && (document.hidden || (!document.hasFocus() && document.activeElement?.tagName !== 'IFRAME'))) {
-        instantBlackoutFrame();
-        triggerSecurityLockout(
-          'screen_record',
-          'تم إيقاف البث لعدم تواجدك داخل نافذة المنصة النشطة',
-          'لا يعمل الفيديو في الخلفية أو أثناء تفعيل نافذة برنامج تسجيل خارجي.',
-          8,
-          true
-        );
-      }
-    }, 250);
-
-    // 8. Instant Watermark jump (zero transition animation)
+    // Instant Watermark jump (zero transition animation)
     const watermark = document.getElementById('watermark');
     let wmInterval;
     if (watermark) {
@@ -1095,11 +1191,9 @@ export async function initLesson(id) {
     const cleanupLessonListeners = () => {
       window.removeEventListener('keydown', onPreemptiveKeyDown, { capture: true });
       window.removeEventListener('keyup', onPreemptiveKeyUp, { capture: true });
-      document.removeEventListener('visibilitychange', onVisibilityChange, { capture: true });
-      window.removeEventListener('blur', onWindowBlur, { capture: true });
       idmObserver.disconnect();
-      clearInterval(focusHeartbeat);
-      if (cooldownInterval) clearInterval(cooldownInterval);
+      clearInterval(idmSweepInterval);
+      clearInterval(viewCommitTimer);
       if (wmInterval) clearInterval(wmInterval);
     };
     window.addEventListener('popstate', cleanupLessonListeners, { once: true });

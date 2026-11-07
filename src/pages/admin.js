@@ -808,57 +808,105 @@ export async function initAdminStudents() {
       document.querySelectorAll('.report-st-btn').forEach(btn => {
         btn.addEventListener('click', async () => {
           const s = students.find(x => x.id == btn.dataset.id);
-          try {
-            const details = await api.getStudent(s.id);
-            const examsHtml = details.exam_attempts && details.exam_attempts.length > 0 
-              ? details.exam_attempts.map(e => `
-                <div style="display:flex;justify-content:space-between;align-items:center;background:var(--bg-secondary);padding:10px;border-radius:6px;margin-bottom:8px">
-                  <div><strong style="font-size:0.9rem">${escA(e.exam_title)}</strong><div style="font-size:0.75rem;color:var(--text-muted)">${new Date(e.completed_at).toLocaleDateString('ar-EG')}</div></div>
-                  <span class="badge ${e.score >= 60 ? 'badge-success' : 'badge-danger'}">${e.score}%</span>
-                </div>`).join('') 
-              : '<div style="font-size:0.85rem;color:var(--text-muted)">لم يقم بأي امتحانات.</div>';
+          const openStudentReportModal = async () => {
+            try {
+              const details = await api.getStudent(s.id);
+              const examsHtml = details.exam_attempts && details.exam_attempts.length > 0 
+                ? details.exam_attempts.map(e => `
+                  <div style="display:flex;justify-content:space-between;align-items:center;background:var(--bg-secondary);padding:10px;border-radius:6px;margin-bottom:8px">
+                    <div><strong style="font-size:0.9rem">${escA(e.exam_title)}</strong><div style="font-size:0.75rem;color:var(--text-muted)">${new Date(e.completed_at).toLocaleDateString('ar-EG')}</div></div>
+                    <span class="badge ${e.score >= 60 ? 'badge-success' : 'badge-danger'}">${e.score}%</span>
+                  </div>`).join('') 
+                : '<div style="font-size:0.85rem;color:var(--text-muted)">لم يقم بأي امتحانات.</div>';
 
-            const lessonsHtml = details.lesson_progress && details.lesson_progress.length > 0
-              ? details.lesson_progress.map(l => `
-                <div style="display:flex;justify-content:space-between;align-items:center;background:var(--bg-secondary);padding:10px;border-radius:6px;margin-bottom:8px">
-                  <div>
-                    <strong style="font-size:0.9rem">${escA(l.lesson_title)}</strong>
-                    <div style="font-size:0.75rem;color:var(--text-muted)">${escA(l.course_title)}</div>
-                  </div>
-                  <div style="text-align:left">
-                    <div style="font-size:0.8rem;color:var(--text-secondary)">المشاهدات: ${l.views_count} / ${l.max_views || 8}</div>
-                    ${l.completed ? '<span class="badge badge-success" style="font-size:0.7rem;padding:2px 6px">مكتمل</span>' : ''}
-                  </div>
-                </div>`).join('')
-              : '<div style="font-size:0.85rem;color:var(--text-muted)">لم يقم بمشاهدة أي دروس.</div>';
+              const lessonsHtml = details.lesson_progress && details.lesson_progress.length > 0
+                ? details.lesson_progress.map(l => {
+                    const isUnlimited = Number(l.max_views) <= 0;
+                    const allowedTotal = isUnlimited ? 'لا نهائي' : ((l.max_views || 8) + (l.extra_views || 0));
+                    const isExhausted = !isUnlimited && Number(l.views_count || 0) >= Number(allowedTotal);
+                    return `
+                      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;background:var(--bg-secondary);padding:10px 12px;border-radius:8px;margin-bottom:8px;border:1px solid ${isExhausted ? 'rgba(225,29,72,0.35)' : 'var(--border-light)'};">
+                        <div style="min-width:160px;flex:1;">
+                          <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+                            <strong style="font-size:0.88rem">${escA(l.lesson_title)}</strong>
+                            ${l.completed ? '<span class="badge badge-success" style="font-size:0.65rem;padding:2px 6px">مكتمل</span>' : ''}
+                            ${isExhausted ? '<span class="badge badge-danger" style="font-size:0.65rem;padding:2px 6px">استنفد المشاهدات</span>' : ''}
+                          </div>
+                          <div style="font-size:0.74rem;color:var(--text-muted)">${escA(l.course_title)}</div>
+                        </div>
+                        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+                          <span style="font-size:0.78rem;font-weight:800;color:var(--text-primary);background:var(--bg-card);padding:4px 10px;border-radius:6px;border:1px solid var(--border-light);">
+                            المستهلك: ${l.views_count || 0} / ${allowedTotal}
+                          </span>
+                          <button type="button" class="btn btn-secondary btn-sm st-lesson-view-btn" data-lid="${l.lesson_id}" data-act="adjust" data-delta="-1" style="padding:3px 8px;font-size:0.75rem;font-weight:800;" title="تقليل المشاهدات المسموحة (-1)">-1</button>
+                          <button type="button" class="btn btn-secondary btn-sm st-lesson-view-btn" data-lid="${l.lesson_id}" data-act="adjust" data-delta="1" style="padding:3px 8px;font-size:0.75rem;font-weight:800;" title="إضافة مشاهدة إضافية (+1)">+1</button>
+                          <button type="button" class="btn btn-secondary btn-sm st-lesson-view-btn" data-lid="${l.lesson_id}" data-act="adjust" data-delta="3" style="padding:3px 8px;font-size:0.75rem;font-weight:800;" title="إضافة 3 مشاهدات إضافية (+3)">+3</button>
+                          <button type="button" class="btn btn-primary btn-sm st-lesson-view-btn" data-lid="${l.lesson_id}" data-act="reset" style="padding:3px 10px;font-size:0.74rem;font-weight:800;" title="تصفير العداد وإعادة السماح بالمشاهدة">إعادة السماح</button>
+                        </div>
+                      </div>`;
+                  }).join('')
+                : '<div style="font-size:0.85rem;color:var(--text-muted)">لم يقم بمشاهدة أي دروس.</div>';
 
-            showModal(`تقرير الطالب: ${escA(s.name)}`, `
-              <div style="margin-bottom:20px;display:grid;grid-template-columns:1fr 1fr;gap:12px">
-                <div class="card" style="padding:12px"><div style="font-size:0.8rem;color:var(--text-muted)">متوسط درجاته</div><div style="font-size:1.4rem;font-weight:700;color:var(--primary)">${s.avg_score || 0}%</div></div>
-                <div class="card" style="padding:12px"><div style="font-size:0.8rem;color:var(--text-muted)">عدد الكورسات</div><div style="font-size:1.4rem;font-weight:700;color:var(--accent)">${details.enrollments?.length || 0}</div></div>
-              </div>
-              <h4 style="font-weight:700;margin-bottom:12px;display:flex;align-items:center;gap:6px"><span class="material-symbols-rounded" style="color:var(--gold-600)">assignment</span> نتائج الامتحانات الأخيرة</h4>
-              <div style="max-height:200px;overflow-y:auto;margin-bottom:20px">${examsHtml}</div>
-              <h4 style="font-weight:700;margin-bottom:12px;display:flex;align-items:center;gap:6px"><span class="material-symbols-rounded" style="color:var(--info)">play_circle</span> استهلاك المشاهدات (الدروس)</h4>
-              <div style="max-height:200px;overflow-y:auto">${lessonsHtml}</div>
-              <div style="display:flex;gap:10px;margin-top:20px;">
-                <button class="btn btn-secondary flex-1" onclick="document.querySelector('.modal-overlay')?.remove()">إغلاق</button>
-                <button class="btn btn-outline-danger" id="modalResetDeviceBtn" style="border:1px solid var(--error);color:var(--error);gap:6px;">
-                  <span class="material-symbols-rounded" style="font-size:1.1rem;">devices_off</span> إعادة ضبط الأجهزة
-                </button>
-              </div>
-            `);
+              document.querySelector('.modal-overlay')?.remove();
+              showModal(`تقرير الطالب والتحكم بالمشاهدات: ${escA(s.name)}`, `
+                <div style="margin-bottom:20px;display:grid;grid-template-columns:1fr 1fr;gap:12px">
+                  <div class="card" style="padding:12px"><div style="font-size:0.8rem;color:var(--text-muted)">متوسط درجاته</div><div style="font-size:1.4rem;font-weight:700;color:var(--primary)">${s.avg_score || 0}%</div></div>
+                  <div class="card" style="padding:12px"><div style="font-size:0.8rem;color:var(--text-muted)">عدد الكورسات</div><div style="font-size:1.4rem;font-weight:700;color:var(--accent)">${details.enrollments?.length || 0}</div></div>
+                </div>
+                <h4 style="font-weight:700;margin-bottom:12px;display:flex;align-items:center;gap:6px"><span class="material-symbols-rounded" style="color:var(--gold-600)">assignment</span> نتائج الامتحانات الأخيرة</h4>
+                <div style="max-height:180px;overflow-y:auto;margin-bottom:20px">${examsHtml}</div>
+                <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:12px;">
+                  <h4 style="font-weight:700;margin:0;display:flex;align-items:center;gap:6px"><span class="material-symbols-rounded" style="color:var(--info)">play_circle</span> التحكم في مشاهدات المحاضرات للطالب</h4>
+                  <button type="button" class="btn btn-primary btn-sm" id="resetAllStudentViewsBtn" style="gap:4px;font-size:0.75rem;font-weight:800;">
+                    <span class="material-symbols-rounded" style="font-size:1rem;">restart_alt</span> تصفير واستعادة جميع المشاهدات
+                  </button>
+                </div>
+                <div style="max-height:240px;overflow-y:auto">${lessonsHtml}</div>
+                <div style="display:flex;gap:10px;margin-top:20px;">
+                  <button class="btn btn-secondary flex-1" onclick="document.querySelector('.modal-overlay')?.remove()">إغلاق</button>
+                  <button class="btn btn-outline-danger" id="modalResetDeviceBtn" style="border:1px solid var(--error);color:var(--error);gap:6px;">
+                    <span class="material-symbols-rounded" style="font-size:1.1rem;">devices_off</span> إعادة ضبط الأجهزة
+                  </button>
+                </div>
+              `);
 
-            document.getElementById('modalResetDeviceBtn')?.addEventListener('click', async () => {
-              const ok = await confirmModal('إعادة ضبط الأجهزة', `هل أنت متأكد من مسح الأجهزة المسجلة للطالب ${escA(s.name)}؟ سيمكنه ذلك من الدخول من أجهزة جديدة.`);
-              if (ok) {
+              document.getElementById('resetAllStudentViewsBtn')?.addEventListener('click', async () => {
                 try {
-                  const res = await api.resetStudentDevices(s.id);
-                  showToast(res.message || 'تمت إعادة الضبط بنجاح', 'success');
-                } catch(err) { showToast(err.message, 'error'); }
-              }
-            });
-          } catch(err) { showToast('تعذر تحميل التقرير', 'error'); }
+                  const res = await api.resetStudentAllViews(s.id);
+                  showToast(res.message || 'تم تصفير جميع مشاهدات الطالب بنجاح', 'success');
+                  openStudentReportModal();
+                } catch (err) {
+                  showToast(err.message, 'error');
+                }
+              });
+
+              document.querySelectorAll('.st-lesson-view-btn').forEach(vBtn => {
+                vBtn.addEventListener('click', async () => {
+                  const lid = vBtn.dataset.lid;
+                  const act = vBtn.dataset.act;
+                  const delta = parseInt(vBtn.dataset.delta || '0', 10);
+                  try {
+                    const res = await api.adjustStudentLessonViews(s.id, lid, { action: act, delta });
+                    showToast(res.message || 'تم تحديث مشاهدات الطالب', 'success');
+                    openStudentReportModal();
+                  } catch (err) {
+                    showToast(err.message, 'error');
+                  }
+                });
+              });
+
+              document.getElementById('modalResetDeviceBtn')?.addEventListener('click', async () => {
+                const ok = await confirmModal('إعادة ضبط الأجهزة', `هل أنت متأكد من مسح الأجهزة المسجلة للطالب ${escA(s.name)}؟ سيمكنه ذلك من الدخول من أجهزة جديدة.`);
+                if (ok) {
+                  try {
+                    const res = await api.resetStudentDevices(s.id);
+                    showToast(res.message || 'تمت إعادة الضبط بنجاح', 'success');
+                  } catch(err) { showToast(err.message, 'error'); }
+                }
+              });
+            } catch(err) { showToast('تعذر تحميل التقرير', 'error'); }
+          };
+          openStudentReportModal();
         });
       });
 
@@ -1512,7 +1560,7 @@ export function renderAdminSecurity() {
             <span class="material-symbols-rounded" style="color:#e11d48">person_alert</span>
             قائمة الطلاب المخالفين وإجراءات الحظر الفوري
           </h3>
-          <span style="font-size:0.78rem;color:var(--text-muted);font-weight:700;">يتم حظر الطالب تلقائياً عند الوصول إلى 5 إنذارات أمنية</span>
+          <span style="font-size:0.78rem;color:var(--text-muted);font-weight:700;">رصد سري فوري للمعلم — يمكنك حظر أو فك حظر أي طالب بضغطة واحدة</span>
         </div>
         <div id="securityOffendersList" style="margin-top:14px;">
           <div class="loading-spinner"><div class="spinner"></div></div>
@@ -1611,7 +1659,7 @@ export async function initAdminSecurity() {
                     <th>أرقام التواصل</th>
                     <th>المرحلة</th>
                     <th>تفصيل المخالفات</th>
-                    <th>الإنذارات</th>
+                    <th>إجمالي المحاولات</th>
                     <th>آخر مخالفة</th>
                     <th>الحالة</th>
                     <th>إجراءات المعلم</th>
@@ -1653,8 +1701,8 @@ export async function initAdminSecurity() {
                           </div>
                         </td>
                         <td>
-                          <span class="badge ${(o.security_strikes || o.violations_count) >= 5 ? 'badge-danger' : 'badge-warning'}" style="font-weight:900;">
-                            ${o.security_strikes || o.violations_count} / 5
+                          <span class="badge badge-danger" style="font-weight:900;">
+                            ${o.violations_count || o.security_strikes || 1} محاولة
                           </span>
                         </td>
                         <td style="font-size:0.76rem;color:var(--text-secondary);">${o.last_violation_at ? new Date(o.last_violation_at).toLocaleString('ar-EG') : '-'}</td>
