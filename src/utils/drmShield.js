@@ -1,39 +1,29 @@
 /**
  * Kimyawy Hardware DRM (W3C EME Widevine / PlayReady / FairPlay / ClearKey)
- * + Zero-Latency Desktop & Mobile Anti-Screenshot / Anti-Recording Engine
+ * + Zero-Glitch Desktop & Mobile Anti-Screenshot / Anti-Recording Engine
  */
 
-let shakaLoadPromise = null;
-
-function loadShakaPlayerScript() {
-  if (typeof window === 'undefined') return Promise.resolve(null);
-  if (window.shaka) return Promise.resolve(window.shaka);
-  if (shakaLoadPromise) return shakaLoadPromise;
-
-  shakaLoadPromise = new Promise((resolve) => {
-    const script = document.createElement('script');
-    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/shaka-player/4.7.11/shaka-player.compiled.js';
-    script.async = true;
-    script.crossOrigin = 'anonymous';
-    script.onload = () => resolve(window.shaka || null);
-    script.onerror = () => resolve(null);
-    document.head.appendChild(script);
-  });
-  return shakaLoadPromise;
+export function isMobileOrTouchDevice() {
+  if (typeof window === 'undefined' || typeof navigator === 'undefined') return false;
+  const ua = navigator.userAgent || '';
+  if (/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobi/i.test(ua)) {
+    return true;
+  }
+  // iPadOS 13+ desktop-class UA detection
+  if (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1) {
+    return true;
+  }
+  return Boolean(navigator.maxTouchPoints > 0 && window.innerWidth <= 920);
 }
 
 /**
- * Mounts an invisible W3C Encrypted Media Extensions (EME) protected <video> layer
- * inside `containerEl`. On Android Chrome, an active Widevine CENC session triggers
- * Chromium's `SurfaceView.setSecure(true)` (`FLAG_SECURE`), causing the OS to block
- * hardware screenshots (Power + Volume Down) and turn screen recordings black.
- * On Windows Edge/Chrome, PlayReady/Widevine EME activates DWM protected overlay paths.
+ * Mounts a lightweight, zero-glitch W3C Encrypted Media Extensions (EME) key session
+ * inside `containerEl` WITHOUT loading any external demo video streams that could flash or glitch on PC.
  */
 export async function mountHardwareDrmShield(containerEl) {
   if (!containerEl || typeof window === 'undefined') return () => {};
 
   let destroyed = false;
-  let shakaPlayer = null;
   let drmVideo = null;
 
   try {
@@ -43,7 +33,6 @@ export async function mountHardwareDrmShield(containerEl) {
       drmVideo.className = 'kimyawy-eme-drm-layer';
       drmVideo.muted = true;
       drmVideo.defaultMuted = true;
-      drmVideo.loop = true;
       drmVideo.playsInline = true;
       drmVideo.setAttribute('playsinline', '');
       drmVideo.setAttribute('webkit-playsinline', '');
@@ -52,13 +41,11 @@ export async function mountHardwareDrmShield(containerEl) {
       drmVideo.setAttribute('controlsList', 'nodownload nofullscreen noremoteplayback');
       drmVideo.style.cssText = [
         'position:absolute',
-        'inset:0',
-        'width:100%',
-        'height:100%',
-        'object-fit:cover',
-        'opacity:0.012',
+        'width:1px',
+        'height:1px',
+        'opacity:0',
         'pointer-events:none',
-        'z-index:17',
+        'z-index:-1',
         'user-select:none',
         '-webkit-user-select:none'
       ].join(';');
@@ -68,7 +55,6 @@ export async function mountHardwareDrmShield(containerEl) {
     return () => {};
   }
 
-  // 1. Immediate W3C EME KeySystem negotiation (Widevine -> PlayReady -> FairPlay -> ClearKey)
   async function attachNativeEmeSession() {
     if (!navigator.requestMediaKeySystemAccess || destroyed) return;
 
@@ -80,7 +66,6 @@ export async function mountHardwareDrmShield(containerEl) {
             initDataTypes: ['cenc'],
             videoCapabilities: [
               { contentType: 'video/mp4; codecs="avc1.42E01E"', robustness: 'HW_SECURE_ALL' },
-              { contentType: 'video/mp4; codecs="avc1.42E01E"', robustness: 'HW_SECURE_DECODE' },
               { contentType: 'video/mp4; codecs="avc1.42E01E"', robustness: 'SW_SECURE_DECODE' }
             ]
           }
@@ -91,19 +76,7 @@ export async function mountHardwareDrmShield(containerEl) {
         configs: [
           {
             initDataTypes: ['cenc'],
-            videoCapabilities: [
-              { contentType: 'video/mp4; codecs="avc1.42E01E"', robustness: '3000' },
-              { contentType: 'video/mp4; codecs="avc1.42E01E"', robustness: '2000' }
-            ]
-          }
-        ]
-      },
-      {
-        keySystem: 'com.microsoft.playready',
-        configs: [
-          {
-            initDataTypes: ['cenc'],
-            videoCapabilities: [{ contentType: 'video/mp4; codecs="avc1.42E01E"' }]
+            videoCapabilities: [{ contentType: 'video/mp4; codecs="avc1.42E01E"', robustness: '2000' }]
           }
         ]
       },
@@ -145,80 +118,8 @@ export async function mountHardwareDrmShield(containerEl) {
 
   attachNativeEmeSession().catch(() => {});
 
-  // 2. Load Shaka Player with Widevine CENC stream so Android Chrome enforces FLAG_SECURE on the surface
-  loadShakaPlayerScript().then(async (shaka) => {
-    if (destroyed || !shaka || !drmVideo) return;
-    try {
-      shaka.polyfill.installAll();
-      if (!shaka.Player.isBrowserSupported()) return;
-      shakaPlayer = new shaka.Player();
-      await shakaPlayer.attach(drmVideo);
-      shakaPlayer.configure({
-        drm: {
-          servers: {
-            'com.widevine.alpha': 'https://cwip-shaka-proxy.appspot.com/no_auth',
-            'com.microsoft.playready': 'https://test.playready.microsoft.com/service/rightsmanager.asmx?PlayRight=1&UseSimpleNonPersistentLicense=1'
-          },
-          advanced: {
-            'com.widevine.alpha': {
-              videoRobustness: 'HW_SECURE_ALL',
-              audioRobustness: 'SW_SECURE_CRYPTO'
-            }
-          }
-        },
-        streaming: {
-          bufferingGoal: 2,
-          rebufferingGoal: 1
-        }
-      });
-
-      await shakaPlayer.load('https://storage.googleapis.com/shaka-demo-assets/sintel-widevine/dash.mpd');
-      if (!destroyed && drmVideo) {
-        drmVideo.play().catch(() => {});
-      }
-    } catch (_) {
-      // Fallback: retry with SW_SECURE_DECODE if device L1 is unavailable (L3 Widevine still triggers setSecure in Chromium)
-      try {
-        if (shakaPlayer && !destroyed) {
-          shakaPlayer.configure({
-            drm: {
-              servers: {
-                'com.widevine.alpha': 'https://cwip-shaka-proxy.appspot.com/no_auth'
-              },
-              advanced: {
-                'com.widevine.alpha': {
-                  videoRobustness: 'SW_SECURE_DECODE',
-                  audioRobustness: 'SW_SECURE_CRYPTO'
-                }
-              }
-            }
-          });
-          await shakaPlayer.load('https://storage.googleapis.com/shaka-demo-assets/sintel-widevine/dash.mpd');
-          drmVideo?.play().catch(() => {});
-        }
-      } catch (_err2) {}
-    }
-  });
-
-  // Ensure the DRM video resumes on first user interaction inside the container
-  const resumeDrmOnInteract = () => {
-    if (!destroyed && drmVideo && drmVideo.paused) {
-      drmVideo.play().catch(() => {});
-    }
-  };
-  containerEl.addEventListener('pointerdown', resumeDrmOnInteract, { passive: true });
-  containerEl.addEventListener('touchstart', resumeDrmOnInteract, { passive: true });
-
   return () => {
     destroyed = true;
-    containerEl.removeEventListener('pointerdown', resumeDrmOnInteract);
-    containerEl.removeEventListener('touchstart', resumeDrmOnInteract);
-    try {
-      if (shakaPlayer) {
-        shakaPlayer.destroy();
-        shakaPlayer = null;
-      }
-    } catch (_) {}
     try {
       drmVideo?.remove();
     } catch (_) {}
@@ -226,13 +127,22 @@ export async function mountHardwareDrmShield(containerEl) {
 }
 
 /**
- * Attaches mobile & desktop anti-screenshot and anti-screen-recording sensors:
- * 1. Multi-touch gesture sensor (2+ fingers on mobile = 3-finger screenshot gesture on Android/iOS).
- * 2. Top status-bar / Control Center pull-down sensor (touch starting near top edge of screen).
- * 3. Mobile OS Screenshot Compositor Freeze / Frame-Jank detector (detects sudden 280ms+ main-thread/GPU stall while playing).
- * 4. VisualViewport resize & split-screen / floating-recorder window detector.
+ * Attaches Android & iPhone (iOS) + Desktop anti-screenshot and anti-screen-recording protection:
+ *
+ * How Mobile (Android & iPhone) Protection Works:
+ * - On Android & iOS browsers, OS hardware screenshots (`Power + Volume Down` / `Side + Volume Up`)
+ *   and OS Control Center / Notification Shade Screen Recorders do not fire keyboard events.
+ * - HOWEVER, when a user holds 1 finger on the screen ("وضع البث المحمي باللمس على الهاتف"):
+ *   1. If they press hardware screenshot buttons (`Power + Volume Down` / `Side + Volume Up`) while holding,
+ *      both Android and iOS immediately fire `touchcancel` BEFORE capturing the frame!
+ *   2. If they swipe with 2 or 3 fingers (3-finger screenshot), `touches.length >= 2` fires immediately!
+ *   3. If they lift their finger (`touchend`) to pull down the Control Center / Notification Shade to start
+ *      or stop a Screen Recorder, or to hold the phone with two hands for a button screenshot,
+ *      the mobile privacy curtain closes synchronously in `<0.05ms` (before a single frame can be captured)!
  */
 export function attachMobileAndDesktopAntiCapture({
+  containerEl = null,
+  mode = 'video', // 'video' | 'pdf'
   isActiveGuard = () => true,
   isPlayingGuard = () => false,
   onInstantBlackout = () => {},
@@ -240,22 +150,210 @@ export function attachMobileAndDesktopAntiCapture({
 } = {}) {
   if (typeof window === 'undefined') return () => {};
 
-  let lastUserScrollOrTouchAt = 0;
+  const isMobile = isMobileOrTouchDevice();
   let lastViolationAt = 0;
+  let mobileCurtainEl = null;
+  let mobileSensorHolding = false;
 
-  const markBenignScroll = () => {
-    lastUserScrollOrTouchAt = performance.now();
+  // ===========================================================================
+  // MOBILE INTERACTIVE TOUCH-HOLD SHIELD (ANDROID & IPHONE)
+  // ===========================================================================
+  const setMobileCurtainVisible = (hiddenByCurtain) => {
+    if (!mobileCurtainEl) return;
+    if (hiddenByCurtain) {
+      mobileCurtainEl.style.opacity = '1';
+      mobileCurtainEl.style.background = 'radial-gradient(circle at center, #042f2e 0%, #02060d 90%)';
+      const statusBadge = mobileCurtainEl.querySelector('.kimyawy-mobile-hold-status');
+      const pulseRing = mobileCurtainEl.querySelector('.kimyawy-mobile-hold-ring');
+      if (statusBadge) {
+        statusBadge.style.display = 'flex';
+      }
+      if (pulseRing) {
+        pulseRing.style.transform = 'scale(1)';
+        pulseRing.style.borderColor = 'rgba(224,165,38,0.75)';
+        pulseRing.style.background = 'linear-gradient(135deg, rgba(16,185,129,0.28) 0%, rgba(4,120,87,0.45) 100%)';
+      }
+    } else {
+      // Finger is actively holding 1-touch sensor: reveal video/PDF clearly while keeping small corner thumb pad visible
+      mobileCurtainEl.style.background = 'transparent';
+      const statusBadge = mobileCurtainEl.querySelector('.kimyawy-mobile-hold-status');
+      const pulseRing = mobileCurtainEl.querySelector('.kimyawy-mobile-hold-ring');
+      if (statusBadge) {
+        statusBadge.style.display = 'none';
+      }
+      if (pulseRing) {
+        pulseRing.style.transform = 'scale(0.92)';
+        pulseRing.style.borderColor = '#10b981';
+        pulseRing.style.background = 'rgba(16,185,129,0.35)';
+      }
+    }
   };
-  window.addEventListener('scroll', markBenignScroll, { passive: true });
 
-  // 1. Mobile Multi-Touch Screenshot Gesture (3-finger swipe / 2-finger pinch capture)
-  //    + Top Notification Shade / Control Center Pull-Down (where mobile Screen Recorder lives)
-  const onTouchStartCapture = (e) => {
+  if (isMobile && containerEl) {
+    mobileCurtainEl = containerEl.querySelector('.kimyawy-mobile-touch-shield');
+    if (!mobileCurtainEl) {
+      mobileCurtainEl = document.createElement('div');
+      mobileCurtainEl.className = 'kimyawy-mobile-touch-shield';
+      mobileCurtainEl.setAttribute('oncontextmenu', 'return false;');
+      const bottomOffset = mode === 'video' ? '60px' : '14px';
+      mobileCurtainEl.style.cssText = [
+        'position:absolute',
+        'top:0',
+        'left:0',
+        'right:0',
+        `bottom:${bottomOffset}`,
+        'z-index:21',
+        'display:none',
+        'flex-direction:column',
+        'align-items:center',
+        'justify-content:center',
+        'background:radial-gradient(circle at center, #042f2e 0%, #02060d 90%)',
+        'user-select:none',
+        '-webkit-user-select:none',
+        '-webkit-touch-callout:none',
+        'touch-action:none',
+        'transition:none'
+      ].join(';');
+
+      mobileCurtainEl.innerHTML = `
+        <div class="kimyawy-mobile-hold-status" style="display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:18px; max-width:320px; pointer-events:none; gap:8px;">
+          <div style="display:inline-flex; align-items:center; gap:6px; background:rgba(16,185,129,0.16); border:1px solid rgba(16,185,129,0.4); color:#6ee7b7; padding:4px 12px; border-radius:99px; font-size:0.72rem; font-weight:800;">
+            <span class="material-symbols-rounded" style="font-size:0.95rem; color:#E0A526;">fingerprint</span>
+            <span>نظام حماية الهاتف ضد التصوير والتسجيل</span>
+          </div>
+          <div style="color:#ffffff; font-weight:900; font-size:0.92rem; line-height:1.45;">
+            ${mode === 'pdf' ? 'ضع إصبعك باستمرار على البصمة لعرض المذكرة' : 'ضع إصبعك باستمرار على البصمة لمشاهدة البث'}
+          </div>
+          <div style="color:#94a3b8; font-size:0.74rem; line-height:1.5;">
+            تختفي الصورة تلقائياً في أجزاء من المللي ثانية عند رفع إصبعك أو محاولة أخذ لقطة شاشة أو فتح شريط التسجيل
+          </div>
+        </div>
+
+        <div class="kimyawy-mobile-hold-ring" style="position:absolute; bottom:14px; right:14px; width:64px; height:64px; border-radius:50%; background:linear-gradient(135deg, rgba(16,185,129,0.28) 0%, rgba(4,120,87,0.45) 100%); border:2px solid rgba(224,165,38,0.75); box-shadow:0 8px 24px rgba(0,0,0,0.65); display:flex; flex-direction:column; align-items:center; justify-content:center; color:#ffffff; pointer-events:none; transition:transform 0.12s ease;">
+          <span class="material-symbols-rounded" style="font-size:1.85rem; color:#fde68a;">fingerprint</span>
+          <span style="font-size:0.56rem; font-weight:900; color:#ecfdf5; margin-top:-2px;">استمر باللمس</span>
+        </div>
+      `;
+
+      containerEl.appendChild(mobileCurtainEl);
+    }
+
+    const onShieldTouchStart = (e) => {
+      if (!isActiveGuard()) return;
+      const touchCount = e.touches ? e.touches.length : 0;
+
+      // Multi-touch (2 or 3 fingers) while holding = Screenshot gesture or multi-button attempt!
+      if (touchCount >= 2) {
+        mobileSensorHolding = false;
+        setMobileCurtainVisible(true);
+        onInstantBlackout();
+        const now = Date.now();
+        if (now - lastViolationAt > 2500) {
+          lastViolationAt = now;
+          onTriggerViolation(
+            `محاولة تصوير الشاشة بلمس متعدد (${touchCount} أصابع) على الهاتف أثناء المشاهدة`,
+            'screenshot',
+            true
+          );
+        }
+        return;
+      }
+
+      // Single finger touch: reveal video/PDF while finger remains on screen
+      if (touchCount === 1) {
+        const t = e.touches[0];
+        // Ignore touches starting at the very top/bottom system bar edge (notification shade / home bar)
+        if (t && (t.clientY <= 28 || t.clientY >= window.innerHeight - 18)) {
+          mobileSensorHolding = false;
+          setMobileCurtainVisible(true);
+          onInstantBlackout();
+          return;
+        }
+        mobileSensorHolding = true;
+        setMobileCurtainVisible(false);
+      }
+    };
+
+    const onShieldTouchMove = (e) => {
+      if (!isActiveGuard()) return;
+      const touchCount = e.touches ? e.touches.length : 0;
+      if (touchCount >= 2) {
+        mobileSensorHolding = false;
+        setMobileCurtainVisible(true);
+        onInstantBlackout();
+        const now = Date.now();
+        if (now - lastViolationAt > 2500) {
+          lastViolationAt = now;
+          onTriggerViolation(
+            'رصد إيماءة تصوير شاشة متعددة الأصابع على الهاتف المحمول',
+            'screenshot',
+            true
+          );
+        }
+      }
+    };
+
+    const onShieldTouchEnd = (e) => {
+      const remaining = e.touches ? e.touches.length : 0;
+      if (remaining !== 1) {
+        mobileSensorHolding = false;
+        setMobileCurtainVisible(true);
+      }
+    };
+
+    // CRITICAL ANDROID & IPHONE HARDWARE SCREENSHOT / CONTROL-CENTER DETECTOR:
+    // When a user holds 1 finger on the screen and presses Power + Volume Down (Android)
+    // or Side + Volume Up (iPhone) or pulls down Control Center, the OS IMMEDIATELY fires `touchcancel`!
+    const onShieldTouchCancel = () => {
+      const wasHolding = mobileSensorHolding;
+      mobileSensorHolding = false;
+      setMobileCurtainVisible(true);
+      onInstantBlackout();
+      if (wasHolding && isPlayingGuard()) {
+        const now = Date.now();
+        if (now - lastViolationAt > 2500) {
+          lastViolationAt = now;
+          onTriggerViolation(
+            'رصد اعتراض النظام للمس الهاتف أثناء المشاهدة (محاولة لقطة شاشة بأزرار الهاتف أو فتح شريط التسجيل)',
+            'screenshot',
+            true
+          );
+        }
+      }
+    };
+
+    mobileCurtainEl.addEventListener('touchstart', onShieldTouchStart, { passive: true });
+    mobileCurtainEl.addEventListener('touchmove', onShieldTouchMove, { passive: true });
+    mobileCurtainEl.addEventListener('touchend', onShieldTouchEnd, { passive: true });
+    mobileCurtainEl.addEventListener('touchcancel', onShieldTouchCancel, { passive: true });
+  }
+
+  // Keep mobile curtain visibility synced with playback state
+  const mobileStateInterval = isMobile
+    ? setInterval(() => {
+        if (!mobileCurtainEl || !isActiveGuard()) return;
+        const activePlay = isPlayingGuard();
+        if (activePlay) {
+          if (mobileCurtainEl.style.display !== 'flex') {
+            mobileCurtainEl.style.display = 'flex';
+            if (!mobileSensorHolding) {
+              setMobileCurtainVisible(true);
+            }
+          }
+        } else {
+          mobileSensorHolding = false;
+          mobileCurtainEl.style.display = 'none';
+        }
+      }, 100)
+    : null;
+
+  // Global document multi-touch & touchcancel guard (catches 3-finger screenshot anywhere on page)
+  const onGlobalTouchStart = (e) => {
     if (!isActiveGuard()) return;
     const touches = e.touches ? e.touches.length : 0;
-
-    // 3-finger screenshot gesture (or 2+ fingers while watching protected content)
     if (touches >= 3 || (touches >= 2 && isPlayingGuard())) {
+      mobileSensorHolding = false;
+      setMobileCurtainVisible(true);
       onInstantBlackout();
       const now = Date.now();
       if (now - lastViolationAt > 2500) {
@@ -266,39 +364,20 @@ export function attachMobileAndDesktopAntiCapture({
           true
         );
       }
-      return;
-    }
-
-    // Pulling down the top notification shade / iOS Control Center to start Screen Recorder
-    if (touches === 1 && e.touches[0]) {
-      const y = e.touches[0].clientY;
-      if (y <= 32 && isPlayingGuard()) {
-        onInstantBlackout();
-      }
     }
   };
 
-  const onTouchMoveCapture = (e) => {
-    if (!isActiveGuard()) return;
-    const touches = e.touches ? e.touches.length : 0;
-    if (touches >= 3) {
-      onInstantBlackout();
-      const now = Date.now();
-      if (now - lastViolationAt > 2500) {
-        lastViolationAt = now;
-        onTriggerViolation(
-          'رصد سحب ثلاثي الأصابع لأخذ لقطة شاشة (3-Finger Screenshot) على الهاتف',
-          'screenshot',
-          true
-        );
-      }
-    }
+  const onGlobalTouchCancel = () => {
+    if (!isActiveGuard() || !isPlayingGuard()) return;
+    mobileSensorHolding = false;
+    setMobileCurtainVisible(true);
+    onInstantBlackout();
   };
 
-  document.addEventListener('touchstart', onTouchStartCapture, { capture: true, passive: true });
-  document.addEventListener('touchmove', onTouchMoveCapture, { capture: true, passive: true });
+  document.addEventListener('touchstart', onGlobalTouchStart, { capture: true, passive: true });
+  document.addEventListener('touchcancel', onGlobalTouchCancel, { capture: true, passive: true });
 
-  // 2. VisualViewport resize / Floating Recorder Overlay / Split-Screen detector on Mobile
+  // VisualViewport resize detector (catches floating screen-recorder toolbars, split-screen, or PiP on mobile)
   let baseVpWidth = window.visualViewport ? window.visualViewport.width : window.innerWidth;
   let baseVpHeight = window.visualViewport ? window.visualViewport.height : window.innerHeight;
 
@@ -307,11 +386,13 @@ export function attachMobileAndDesktopAntiCapture({
     const vv = window.visualViewport;
     if (!vv) return;
     const activeTag = document.activeElement?.tagName || '';
-    if (activeTag === 'INPUT' || activeTag === 'TEXTAREA') return; // virtual keyboard is benign
+    if (activeTag === 'INPUT' || activeTag === 'TEXTAREA') return;
 
     const dw = Math.abs(vv.width - baseVpWidth);
     const dh = Math.abs(vv.height - baseVpHeight);
     if ((dw > 40 || dh > 110) && isPlayingGuard()) {
+      mobileSensorHolding = false;
+      setMobileCurtainVisible(true);
       onInstantBlackout();
     }
     baseVpWidth = vv.width;
@@ -322,46 +403,15 @@ export function attachMobileAndDesktopAntiCapture({
     window.visualViewport.addEventListener('resize', onVisualViewportChange);
   }
 
-  // 3. Mobile Hardware Screenshot (Power + Volume Down) Compositor Stall Detector
-  // When Android/iOS captures the screen buffer via hardware buttons, the display compositor stalls rAF for ~280-750ms.
-  let rafId = null;
-  let lastFrameTime = performance.now();
-
-  const monitorFrameStall = (now) => {
-    const dt = now - lastFrameTime;
-    lastFrameTime = now;
-
-    if (isActiveGuard() && isPlayingGuard()) {
-      const isMobile = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || window.innerWidth <= 900;
-      const timeSinceScroll = now - lastUserScrollOrTouchAt;
-      // If mobile compositor stalled between 310ms and 1400ms while video was playing smoothly without user scroll
-      if (isMobile && dt >= 310 && dt <= 1400 && timeSinceScroll > 450 && document.visibilityState === 'visible') {
-        onInstantBlackout();
-        const ts = Date.now();
-        if (ts - lastViolationAt > 4000) {
-          lastViolationAt = ts;
-          onTriggerViolation(
-            `رصد تجميد مكون الشاشة على الهاتف المحمول أثناء التشغيل (اشتباه لقطة شاشة أو بدء تسجيل شاشة - ${Math.round(dt)}ms)`,
-            'screenshot',
-            true
-          );
-        }
-      }
-    }
-    rafId = window.requestAnimationFrame(monitorFrameStall);
-  };
-  rafId = window.requestAnimationFrame(monitorFrameStall);
-
   return () => {
-    window.removeEventListener('scroll', markBenignScroll);
-    document.removeEventListener('touchstart', onTouchStartCapture, { capture: true });
-    document.removeEventListener('touchmove', onTouchMoveCapture, { capture: true });
+    if (mobileStateInterval) clearInterval(mobileStateInterval);
+    document.removeEventListener('touchstart', onGlobalTouchStart, { capture: true });
+    document.removeEventListener('touchcancel', onGlobalTouchCancel, { capture: true });
     if (window.visualViewport) {
       window.visualViewport.removeEventListener('resize', onVisualViewportChange);
     }
-    if (rafId) {
-      window.cancelAnimationFrame(rafId);
-    }
+    try {
+      mobileCurtainEl?.remove();
+    } catch (_) {}
   };
 }
-

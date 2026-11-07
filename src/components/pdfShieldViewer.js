@@ -243,7 +243,7 @@ export async function openProtectedPdfModal(lessonId, lessonTitle = 'مذكرة 
         navigator.clipboard?.writeText?.('').catch(() => {});
         return;
       }
-      if (!isSecurityLocked && document.hasFocus() && !e.metaKey && !e.altKey) {
+      if (!isSecurityLocked && !e.metaKey && !e.altKey) {
         clearBlackout();
       }
     };
@@ -254,19 +254,28 @@ export async function openProtectedPdfModal(lessonId, lessonTitle = 'مذكرة 
         setTimeout(() => { try { window.focus(); } catch (_) {} }, 25);
         return;
       }
-      const recentMod = (Date.now() - lastModKeyPressAt) < 4000;
-      triggerBlackout(recentMod, 'محاولة تصوير أو تسجيل شاشة المذكرة المحمية');
+      instantPdfCurtainBlackout();
+    };
+
+    const onPdfFocus = () => {
+      if (!isSecurityLocked) {
+        clearBlackout();
+      }
     };
 
     const onPdfVisibility = () => {
       if (document.hidden) {
         instantPdfCurtainBlackout();
+      } else if (!isSecurityLocked) {
+        clearBlackout();
       }
     };
 
     const pdfViewportEl = document.getElementById('pdfShieldViewport');
     const unmountPdfDrm = pdfViewportEl ? await mountHardwareDrmShield(pdfViewportEl) : () => {};
     const detachPdfMobileCapture = attachMobileAndDesktopAntiCapture({
+      containerEl: pdfViewportEl,
+      mode: 'pdf',
       isActiveGuard: () => Boolean(document.getElementById('kimyawyPdfShieldModal')),
       isPlayingGuard: () => !isSecurityLocked,
       onInstantBlackout: () => instantPdfCurtainBlackout(),
@@ -276,6 +285,7 @@ export async function openProtectedPdfModal(lessonId, lessonTitle = 'مذكرة 
     window.addEventListener('keydown', onKeyDown, true);
     window.addEventListener('keyup', onKeyUp, true);
     window.addEventListener('blur', onPdfBlur);
+    window.addEventListener('focus', onPdfFocus);
     document.addEventListener('visibilitychange', onPdfVisibility);
 
     const fsBtn = document.getElementById('pdfShieldFullscreenBtn');
@@ -296,6 +306,7 @@ export async function openProtectedPdfModal(lessonId, lessonTitle = 'مذكرة 
       window.removeEventListener('keydown', onKeyDown, true);
       window.removeEventListener('keyup', onKeyUp, true);
       window.removeEventListener('blur', onPdfBlur);
+      window.removeEventListener('focus', onPdfFocus);
       document.removeEventListener('visibilitychange', onPdfVisibility);
       try { unmountPdfDrm(); } catch (_) {}
       try { detachPdfMobileCapture(); } catch (_) {}

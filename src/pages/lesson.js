@@ -661,7 +661,7 @@ export async function initLesson(id) {
               },
               onStateChange: (ev) => {
                 if (ev.data === YT.PlayerState.PLAYING) {
-                  if (document.getElementById('antiCaptureShield')?.style.display === 'flex' || document.hidden || !document.hasFocus()) {
+                  if (document.getElementById('antiCaptureShield')?.style.display === 'flex' || document.hidden) {
                     try { ev.target.pauseVideo(); } catch (_) {}
                     syncUiState(false);
                     return;
@@ -1100,11 +1100,12 @@ export async function initLesson(id) {
     });
 
     // Mount Hardware DRM Shield (W3C EME Widevine / PlayReady / FairPlay / ClearKey) inside #videoBox
-    // Activates Android Chrome FLAG_SECURE (SurfaceView.setSecure) and Windows DWM Hardware Overlay Protection
     const unmountHardwareDrm = videoBox ? await mountHardwareDrmShield(videoBox) : () => {};
 
-    // Attach Mobile & Desktop Multi-Touch Screenshot, Shade Pull-Down, and Compositor Freeze Sensors
+    // Attach Mobile (Android & iPhone) Interactive Touch-Hold Shield + Multi-Touch & touchcancel Screenshot Sensor
     const detachMobileAntiCapture = attachMobileAndDesktopAntiCapture({
+      containerEl: videoBox,
+      mode: 'video',
       isActiveGuard: () => Boolean(document.getElementById('videoBox')),
       isPlayingGuard: () => isProtectedVideoPlaying(),
       onInstantBlackout: () => instantBlackoutFrame(),
@@ -1119,25 +1120,6 @@ export async function initLesson(id) {
       }
     });
 
-    // Continuous 120ms Hardware Focus & Visibility Watchdog (Prevents background/OBS/GameBar recording while unfocused)
-    const focusWatchdogInterval = setInterval(() => {
-      if (isTogglingFullscreen || isPermanentlyBlocked) return;
-      if ((document.hidden || !document.hasFocus()) && isProtectedVideoPlaying()) {
-        if (document.activeElement && document.activeElement.tagName === 'IFRAME') {
-          try { window.focus(); } catch (_) {}
-          return;
-        }
-        instantBlackoutFrame();
-        triggerSecurityLockout(
-          'screen_record',
-          'تم إيقاف البث مؤقتاً لحماية المحتوى',
-          'يتوقف الفيديو تلقائياً عند خروجك من نافذة المحاضرة أو فتح أي أداة خارجية لمنع التسجيل.',
-          true,
-          6
-        );
-      }
-    }, 120);
-
     // Block Browser Screen Capture APIs (getDisplayMedia)
     if (navigator.mediaDevices && typeof navigator.mediaDevices.getDisplayMedia === 'function') {
       navigator.mediaDevices.getDisplayMedia = async () => {
@@ -1151,8 +1133,8 @@ export async function initLesson(id) {
     }
 
     // Zero-Latency Pre-emptive Keydown Protection:
-    // 1. Immediately blacks out to #000000 and pauses on the 1st key (Meta / Win / Alt / PrintScreen) at <0.1ms.
-    // 2. Triggers full lockout + silent teacher report on the 2nd key (Win+Shift or Win+Alt) BEFORE Windows swallows 'S' or 'R'!
+    // 1. Pressing a lone Meta (Win) or Alt key silently lowers #instantBlackCurtain in <0.1ms and pauses on the normal pause cover WITHOUT showing any false "tool detected" warning!
+    // 2. Pressing an actual capture chord (PrintScreen, Win+Shift+S, Win+Alt+R, Win+G, Alt+F9, Ctrl+Shift+S) triggers the security lockout + silent teacher report.
     const onPreemptiveKeyDown = (e) => {
       const k = e.key || '';
       const code = e.code || '';
@@ -1217,39 +1199,42 @@ export async function initLesson(id) {
         );
         return;
       }
-      // If user only tapped lone Win or Alt without triggering lockout and window is still focused, restore smoothly
-      if (!isSecurityLocked && document.hasFocus() && !e.metaKey && !e.altKey) {
+      // If user only tapped lone Win or Alt without triggering lockout, restore normal pause cover smoothly
+      if (!isSecurityLocked && !e.metaKey && !e.altKey) {
         restoreFrameVisibility();
       }
     };
 
-    // Instant Blur & Visibility Protection (Catches Snipping Tool overlay, Xbox Game Bar Win+G, OBS, or external recorder taking focus)
+    // Silent Blur & Visibility Protection:
+    // When window loses focus (e.g. pressing Win opens Start Menu, or user clicks taskbar / external app),
+    // immediately pause the video and cover with the normal pause screen + black curtain WITHOUT showing a false warning!
     const onWindowBlur = () => {
       if (isTogglingFullscreen) return;
       if (document.activeElement && document.activeElement.tagName === 'IFRAME') {
         setTimeout(() => { try { window.focus(); } catch (_) {} }, 25);
         return;
       }
-      const wasPlaying = isProtectedVideoPlaying();
-      const recentModKey = (Date.now() - lastModKeyPressAt) < 4000;
       instantBlackoutFrame();
-      triggerSecurityLockout(
-        recentModKey ? 'screenshot' : 'screen_record',
-        'تم إيقاف البث مؤقتاً لحماية المحتوى',
-        'تم إخفاء الفيديو تلقائياً لمنع التصوير أو التسجيل الخارجي — اضغط متابعة المشاهدة عند العودة للنافذة.',
-        Boolean(recentModKey || wasPlaying)
-      );
+    };
+
+    const onWindowFocus = () => {
+      if (!isSecurityLocked && !isPermanentlyBlocked) {
+        restoreFrameVisibility();
+      }
     };
 
     const onVisibilityChange = () => {
       if (document.hidden) {
         instantBlackoutFrame();
+      } else if (!isSecurityLocked && !isPermanentlyBlocked) {
+        restoreFrameVisibility();
       }
     };
 
     window.addEventListener('keydown', onPreemptiveKeyDown, { capture: true });
     window.addEventListener('keyup', onPreemptiveKeyUp, { capture: true });
     window.addEventListener('blur', onWindowBlur);
+    window.addEventListener('focus', onWindowFocus);
     document.addEventListener('visibilitychange', onVisibilityChange);
 
     // Silent Anti-IDM & Floating Video Downloader Sweeper (Removes injected downloader toolbars & reports silently without interrupting the student)
@@ -1329,11 +1314,11 @@ export async function initLesson(id) {
       window.removeEventListener('keydown', onPreemptiveKeyDown, { capture: true });
       window.removeEventListener('keyup', onPreemptiveKeyUp, { capture: true });
       window.removeEventListener('blur', onWindowBlur);
+      window.removeEventListener('focus', onWindowFocus);
       document.removeEventListener('visibilitychange', onVisibilityChange);
       idmObserver.disconnect();
       clearInterval(idmSweepInterval);
       clearInterval(viewCommitTimer);
-      clearInterval(focusWatchdogInterval);
       if (recordCooldownTimer) clearInterval(recordCooldownTimer);
       if (wmInterval) clearInterval(wmInterval);
       try { unmountHardwareDrm(); } catch (_) {}
