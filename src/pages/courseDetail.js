@@ -3,7 +3,7 @@ import { api } from '../utils/api.js';
 import { isLoggedIn, isTeacher } from '../utils/auth.js';
 import { showToast } from '../components/toast.js';
 import { showModal, confirmModal } from '../components/modal.js';
-import { esc } from '../utils/helpers.js';
+import { esc, getInitials } from '../utils/helpers.js';
 import { renderPublicHeader, initPublicHeader } from '../components/publicHeader.js';
 import { openChemistryLabModal } from '../components/chemistryLabModal.js';
 import { openProtectedPdfModal } from '../components/pdfShieldViewer.js';
@@ -859,7 +859,7 @@ export async function initCourseDetail(id) {
             <div class="discussion-card">
               <div class="discussion-header">
                 <div class="discussion-avatar" style="background: var(--green-50); color: var(--primary); font-weight: 800; border: 1px solid var(--green-200);">
-                  ${esc((d.user_name || 'ط').charAt(0))}
+                  ${getInitials(d.user_name)}
                 </div>
                 <div style="flex:1;">
                   <div style="display:flex; align-items:center; justify-content:space-between;">
@@ -888,7 +888,7 @@ export async function initCourseDetail(id) {
                 ${(d.replies || []).map(r => `
                   <div class="reply-item">
                     <div class="reply-avatar" style="background:var(--gold-50); color:var(--accent); font-weight:800; border:1px solid var(--gold-200);">
-                      ${esc((r.user_name || 'م').charAt(0))}
+                      ${getInitials(r.user_name)}
                     </div>
                     <div class="reply-content">
                       <div style="display:flex; align-items:center; justify-content:space-between;">

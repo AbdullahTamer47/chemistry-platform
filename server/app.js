@@ -16,6 +16,7 @@ import discussionRoutes from './routes/discussions.js';
 import paymentRoutes from './routes/payments.js';
 import uploadRoutes from './routes/upload.js';
 import packageRoutes from './routes/packages.js';
+import securityRoutes from './routes/security.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -117,6 +118,7 @@ mount('/discussions', discussionRoutes);
 mount('/payments', paymentRoutes);
 mount('/upload', uploadRoutes);
 mount('/packages', packageRoutes);
+mount('/security', securityRoutes);
 
 // Health check
 app.get(['/api/health', '/health'], (req, res) => res.json({

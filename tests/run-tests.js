@@ -126,11 +126,12 @@ await test('الاشتراك في الكورس المجاني، توكن الف�
   assert.equal(lessonRes.status, 200);
   assert.equal(lessonRes.data.video_url, undefined);
 
-  // Request video token & verify it
+  // Request video token & verify it (video_url must be obfuscated inside stream_cipher, never plain!)
   const vtRes = await apiReq(`/lessons/${firstLesson.id}/video-token`, { method: 'POST', token: studentToken });
   assert.equal(vtRes.status, 200);
   assert.ok(vtRes.data.token);
-  assert.ok(vtRes.data.video_url);
+  assert.ok(vtRes.data.stream_cipher);
+  assert.equal(vtRes.data.video_url, undefined);
 
   const verifyVt = await apiReq(`/lessons/video/${vtRes.data.token}`, { token: studentToken });
   assert.equal(verifyVt.status, 200);
@@ -249,6 +250,57 @@ await test('تقييم المكتبات المعتمدة وحساب المتوس
   assert.equal(rateRes.status, 200);
   assert.equal(rateRes.data.reviews_count, 1);
   assert.equal(rateRes.data.rating, 4);
+});
+
+// 9. Security Violation Reporting, Teacher Security Center & Student Blocking
+await test('تسجيل مخالفات الأمان (سكرين شوت / تسجيل شاشة / IDM) ولوحة تقارير المعلم والحظر الفوري', async () => {
+  const rep1 = await apiReq('/security/report', {
+    method: 'POST',
+    token: studentToken,
+    body: {
+      violation_type: 'screenshot',
+      source_title: 'المحاضرة الأولى: العناصر الانتقالية',
+      details: 'محاولة التقاط شاشة (Win+Shift+S)'
+    }
+  });
+  assert.equal(rep1.status, 200);
+  assert.equal(rep1.data.strikes, 1);
+
+  const rep2 = await apiReq('/security/report', {
+    method: 'POST',
+    token: studentToken,
+    body: {
+      violation_type: 'screen_record',
+      source_title: 'المحاضرة الأولى: العناصر الانتقالية',
+      details: 'محاولة تسجيل شاشة'
+    }
+  });
+  assert.equal(rep2.status, 200);
+  assert.equal(rep2.data.strikes, 2);
+
+  const listRes = await apiReq('/security/violations', { token: teacherToken });
+  assert.equal(listRes.status, 200);
+  assert.equal(listRes.data.stats.total_violations, 2);
+  assert.equal(listRes.data.offenders.length, 1);
+  assert.equal(listRes.data.offenders[0].id, studentId);
+
+  // Teacher blocks student
+  const blockRes = await apiReq(`/security/student/${studentId}/action`, {
+    method: 'POST',
+    token: teacherToken,
+    body: { action: 'block' }
+  });
+  assert.equal(blockRes.status, 200);
+  assert.equal(blockRes.data.is_blocked, 1);
+
+  // Teacher unblocks student
+  const unblockRes = await apiReq(`/security/student/${studentId}/action`, {
+    method: 'POST',
+    token: teacherToken,
+    body: { action: 'unblock' }
+  });
+  assert.equal(unblockRes.status, 200);
+  assert.equal(unblockRes.data.is_blocked, 0);
 });
 
 server.close();

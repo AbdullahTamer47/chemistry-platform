@@ -706,6 +706,24 @@ db.exec(`
     size INTEGER DEFAULT 0,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
+
+  CREATE TABLE IF NOT EXISTS security_violations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    course_id INTEGER REFERENCES courses(id) ON DELETE SET NULL,
+    lesson_id INTEGER REFERENCES lessons(id) ON DELETE SET NULL,
+    exam_id INTEGER REFERENCES exams(id) ON DELETE SET NULL,
+    violation_type TEXT NOT NULL,
+    severity TEXT DEFAULT 'high',
+    source_title TEXT,
+    details TEXT,
+    device_info TEXT,
+    ip_address TEXT,
+    is_resolved INTEGER DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_security_violations_user ON security_violations(user_id, created_at DESC);
 `);
 
 function addColumnIfMissing(table, column, def) {
@@ -743,6 +761,8 @@ addColumnIfMissing('exam_sessions', 'updated_at', 'DATETIME');
 addColumnIfMissing('enrollments', 'expires_at', 'DATETIME');
 addColumnIfMissing('users', 'parent_phone_secondary', 'TEXT');
 addColumnIfMissing('users', 'study_track', "TEXT DEFAULT 'عام'");
+addColumnIfMissing('users', 'is_blocked', 'INTEGER DEFAULT 0');
+addColumnIfMissing('users', 'security_strikes', 'INTEGER DEFAULT 0');
 addColumnIfMissing('courses', 'course_type', "TEXT DEFAULT 'monthly'");
 addColumnIfMissing('courses', 'duration_days', 'INTEGER DEFAULT 30');
 addColumnIfMissing('courses', 'original_price', 'REAL DEFAULT 0');

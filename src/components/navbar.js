@@ -1,6 +1,7 @@
 import { getUser, isTeacher, logout } from '../utils/auth.js';
 import { getInitials, esc } from '../utils/helpers.js';
 import { api } from '../utils/api.js';
+import { showToast } from './toast.js';
 import { renderBedigitalSidebarBadge } from './bedigitalBrand.js';
 import zraLogoFace from '../assets/zra-logo-face.png';
 import zraLogoText from '../assets/zra-logo-text.png';
@@ -59,6 +60,9 @@ export function renderNavbar(currentPage) {
     </a>
     <a class="nav-item ${currentPage === 'admin-students' ? 'active' : ''}" href="/admin/students">
       <span class="material-symbols-rounded">group</span> سجل الطلاب
+    </a>
+    <a class="nav-item ${currentPage === 'admin-security' ? 'active' : ''}" href="/admin/security">
+      <span class="material-symbols-rounded" style="color:#e11d48;">gpp_maybe</span> تقارير المخالفات والحماية
     </a>
     <a class="nav-item ${currentPage === 'admin-codes' ? 'active' : ''}" href="/admin/codes">
       <span class="material-symbols-rounded">key</span> أكواد التفعيل والشحن
@@ -332,8 +336,14 @@ export function initNavbar() {
 
     document.getElementById('appTopbarSearchForm')?.addEventListener('submit', (e) => {
       e.preventDefault();
-      const q = (document.getElementById('appTopbarSearchInput')?.value || '').trim();
-      const target = q ? `/courses?q=${encodeURIComponent(q)}` : '/courses';
+      const inputEl = document.getElementById('appTopbarSearchInput');
+      const q = (inputEl?.value || '').trim();
+      if (!q) {
+        showToast('يرجى كتابة اسم الكورس أو المرحلة الدراسية للبحث أولاً', 'warning');
+        inputEl?.focus();
+        return;
+      }
+      const target = `/courses?q=${encodeURIComponent(q)}`;
       if (typeof window.navigateTo === 'function') {
         window.navigateTo(target);
       } else {

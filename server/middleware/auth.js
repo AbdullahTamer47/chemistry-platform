@@ -107,6 +107,8 @@ export const isTeacher = (user) => user && (user.role === 'teacher' || user.role
 export function canAccessCourse(user, courseId) {
   if (!user) return false;
   if (isTeacher(user)) return true;
+  const userRow = db.prepare('SELECT COALESCE(is_blocked, 0) as is_blocked FROM users WHERE id = ?').get(user.id);
+  if (userRow?.is_blocked) return false;
   const course = db.prepare('SELECT is_free FROM courses WHERE id = ?').get(courseId);
   if (!course) return false;
   if (course.is_free) return true;

@@ -1,5 +1,5 @@
 import { api } from '../utils/api.js';
-import { getUser } from '../utils/auth.js';
+import { getUser, isTeacher } from '../utils/auth.js';
 import { esc, getShortStudentName } from '../utils/helpers.js';
 import { showToast } from './toast.js';
 
@@ -121,6 +121,8 @@ export async function openProtectedPdfModal(lessonId, lessonTitle = 'مذكرة 
 
     const jumpWm = document.getElementById('pdfJumpingWatermark');
     const shield = document.getElementById('pdfAntiCaptureShield');
+    const resumeBtn = document.getElementById('pdfResumeViewBtn');
+    const pdfIframe = modal.querySelector('.pdf-shield-iframe');
     const card = modal.querySelector('.pdf-shield-modal-card');
 
     const moveWm = () => {
@@ -135,49 +137,109 @@ export async function openProtectedPdfModal(lessonId, lessonTitle = 'مذكرة 
     moveWm();
     const wmTimer = setInterval(moveWm, 3200);
 
-    const triggerBlackout = () => {
+    let pdfCooldownTimer = null;
+    let pdfCooldownSec = 0;
+    let lastPdfReport = 0;
+
+    const triggerBlackout = (reportViolation = false, reasonText = 'محاولة تصوير أو نسخ المذكرة المحمية') => {
+      if (pdfIframe) {
+        pdfIframe.style.transition = 'none';
+        pdfIframe.style.visibility = 'hidden';
+        pdfIframe.style.opacity = '0';
+      }
       if (shield) shield.style.display = 'flex';
+
+      pdfCooldownSec = Math.max(pdfCooldownSec, 6);
+      if (resumeBtn) {
+        resumeBtn.disabled = true;
+        resumeBtn.textContent = `إعادة فحص الأمان... يمكنك الاستئناف بعد ${pdfCooldownSec} ثوانٍ`;
+      }
+      if (pdfCooldownTimer) clearInterval(pdfCooldownTimer);
+      pdfCooldownTimer = setInterval(() => {
+        if (document.hidden || !document.hasFocus()) return;
+        pdfCooldownSec -= 1;
+        if (pdfCooldownSec > 0) {
+          if (resumeBtn) resumeBtn.textContent = `إعادة فحص الأمان... يمكنك الاستئناف بعد ${pdfCooldownSec} ثوانٍ`;
+        } else {
+          clearInterval(pdfCooldownTimer);
+          pdfCooldownTimer = null;
+          if (resumeBtn) {
+            resumeBtn.disabled = false;
+            resumeBtn.textContent = 'استئناف قراءة المذكرة الآن';
+          }
+        }
+      }, 1000);
+
+      const now = Date.now();
+      if (reportViolation && !isTeacher() && now - lastPdfReport > 4000) {
+        lastPdfReport = now;
+        api.reportSecurityViolation({
+          violation_type: 'pdf_leak',
+          lesson_id: lessonId,
+          source_title: lessonTitle,
+          details: reasonText
+        }).catch(() => {});
+      }
     };
-    const clearBlackout = () => {
+
+    const clearBlackout = (e) => {
+      e?.stopPropagation?.();
+      if (pdfCooldownSec > 0 || document.hidden || !document.hasFocus()) return;
+      if (pdfIframe) {
+        pdfIframe.style.visibility = 'visible';
+        pdfIframe.style.opacity = '1';
+      }
       if (shield) shield.style.display = 'none';
     };
 
-    document.getElementById('pdfResumeViewBtn')?.addEventListener('click', clearBlackout);
-    shield?.addEventListener('click', clearBlackout);
+    resumeBtn?.addEventListener('click', clearBlackout);
 
     const onKeyDown = (e) => {
       if (e.key === 'Escape' && !document.fullscreenElement) {
         closeViewer();
         return;
       }
+      // Instant synchronous blackout on Meta (Windows/Cmd) key before Win+Shift+S captures the PDF!
+      if (e.key === 'Meta' || e.key === 'OS' || e.code === 'MetaLeft' || e.code === 'MetaRight') {
+        triggerBlackout(true, 'محاولة تشغيل أداة لقطة الشاشة (Win+Shift+S) داخل المذكرة المحمية');
+        return;
+      }
       if (
         e.key === 'PrintScreen' ||
         e.key === 'F12' ||
-        (e.metaKey && e.shiftKey && ['s', 'S', '3', '4', '5'].includes(e.key)) ||
+        (e.metaKey && e.shiftKey) ||
         (e.ctrlKey && e.shiftKey && ['i', 'I', 'c', 'C', 'j', 'J', 's', 'S'].includes(e.key)) ||
         (e.ctrlKey && ['p', 'P', 's', 'S', 'u', 'U', 'c', 'C'].includes(e.key))
       ) {
         e.preventDefault();
         e.stopPropagation();
-        triggerBlackout();
-        showToast('غير مسموح بطباعة أو تحميل أو تصوير الملفات المحمية', 'warning');
+        triggerBlackout(true, 'محاولة تصوير أو طباعة أو حفظ ملف PDF محمي');
+        navigator.clipboard?.writeText?.('ملف محمي — منصة كيمياوي').catch(() => {});
+        showToast('غير مسموح بطباعة أو تحميل أو تصوير الملفات المحمية — تم إبلاغ المعلم', 'error');
       }
     };
 
     const onKeyUp = (e) => {
-      if (e.key === 'PrintScreen') {
-        triggerBlackout();
-        navigator.clipboard?.writeText?.('').catch(() => {});
+      if (e.key === 'PrintScreen' || e.code === 'PrintScreen') {
+        triggerBlackout(true, 'محاولة التقاط صورة للمذكرة (PrintScreen)');
+        navigator.clipboard?.writeText?.('ملف محمي — منصة كيمياوي').catch(() => {});
       }
     };
 
     const onVisibility = () => {
-      if (document.hidden) triggerBlackout();
+      if (document.hidden) triggerBlackout(false);
     };
 
-    document.addEventListener('keydown', onKeyDown, true);
-    document.addEventListener('keyup', onKeyUp, true);
-    document.addEventListener('visibilitychange', onVisibility);
+    const onWindowBlur = () => {
+      if (document.activeElement !== pdfIframe) {
+        triggerBlackout(false);
+      }
+    };
+
+    window.addEventListener('keydown', onKeyDown, true);
+    window.addEventListener('keyup', onKeyUp, true);
+    document.addEventListener('visibilitychange', onVisibility, true);
+    window.addEventListener('blur', onWindowBlur, true);
 
     document.getElementById('pdfShieldFullscreenBtn')?.addEventListener('click', () => {
       if (!document.fullscreenElement) {
@@ -189,9 +251,11 @@ export async function openProtectedPdfModal(lessonId, lessonTitle = 'مذكرة 
 
     function closeViewer() {
       clearInterval(wmTimer);
-      document.removeEventListener('keydown', onKeyDown, true);
-      document.removeEventListener('keyup', onKeyUp, true);
-      document.removeEventListener('visibilitychange', onVisibility);
+      if (pdfCooldownTimer) clearInterval(pdfCooldownTimer);
+      window.removeEventListener('keydown', onKeyDown, true);
+      window.removeEventListener('keyup', onKeyUp, true);
+      document.removeEventListener('visibilitychange', onVisibility, true);
+      window.removeEventListener('blur', onWindowBlur, true);
       if (document.fullscreenElement) {
         document.exitFullscreen?.().catch(() => {});
       }
@@ -254,31 +318,49 @@ export function attachContentProtectionShield(containerEl) {
     e.preventDefault();
   };
 
+  let lastExamReport = 0;
+  const reportExamLeak = (details) => {
+    const now = Date.now();
+    if (!isTeacher() && now - lastExamReport > 4000) {
+      lastExamReport = now;
+      api.reportSecurityViolation({
+        violation_type: 'exam_leak',
+        source_title: document.title || 'اختبار إلكتروني محمي',
+        details
+      }).catch(() => {});
+    }
+  };
+
   const onKeyDown = (e) => {
+    if (e.key === 'Meta' || e.key === 'OS' || e.code === 'MetaLeft' || e.code === 'MetaRight') {
+      containerEl.classList.add('shield-blurred');
+      reportExamLeak('محاولة تصوير شاشة الامتحان عبر اختصار النظام (Win+Shift+S)');
+      setTimeout(() => containerEl.classList.remove('shield-blurred'), 3500);
+      return;
+    }
     if (
       e.key === 'PrintScreen' ||
       e.key === 'F12' ||
-      (e.metaKey && e.shiftKey && ['s', 'S', '3', '4', '5'].includes(e.key)) ||
+      (e.metaKey && e.shiftKey) ||
       (e.ctrlKey && e.shiftKey && ['i', 'I', 'c', 'C', 'j', 'J', 's', 'S'].includes(e.key)) ||
       (e.ctrlKey && ['p', 'P', 's', 'S', 'u', 'U', 'c', 'C'].includes(e.key))
     ) {
-      const tag = e.target?.tagName;
-      if ((e.key === 'c' || e.key === 'C') && (tag === 'INPUT' || tag === 'TEXTAREA')) {
-        // Still block copying questions
-      }
       e.preventDefault();
       e.stopPropagation();
       containerEl.classList.add('shield-blurred');
-      showToast('أسئلة الواجبات والامتحانات محمية ضد النسخ والطباعة وتصوير الشاشة', 'warning');
-      setTimeout(() => containerEl.classList.remove('shield-blurred'), 2200);
+      navigator.clipboard?.writeText?.('امتحان محمي — منصة كيمياوي').catch(() => {});
+      reportExamLeak('محاولة تصوير أو نسخ أو طباعة أسئلة الامتحان');
+      showToast('أسئلة الواجبات والامتحانات محمية ضد النسخ وتصوير الشاشة — تم إبلاغ المعلم', 'error');
+      setTimeout(() => containerEl.classList.remove('shield-blurred'), 3500);
     }
   };
 
   const onKeyUp = (e) => {
-    if (e.key === 'PrintScreen') {
+    if (e.key === 'PrintScreen' || e.code === 'PrintScreen') {
       containerEl.classList.add('shield-blurred');
-      navigator.clipboard?.writeText?.('').catch(() => {});
-      setTimeout(() => containerEl.classList.remove('shield-blurred'), 2200);
+      navigator.clipboard?.writeText?.('امتحان محمي — منصة كيمياوي').catch(() => {});
+      reportExamLeak('محاولة التقاط شاشة الامتحان (PrintScreen)');
+      setTimeout(() => containerEl.classList.remove('shield-blurred'), 3500);
     }
   };
 
@@ -315,3 +397,4 @@ export function attachContentProtectionShield(containerEl) {
   window.addEventListener('popstate', cleanup, { once: true });
   return cleanup;
 }
+

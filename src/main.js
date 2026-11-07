@@ -24,7 +24,8 @@ import {
   renderAdminStudents, initAdminStudents,
   renderAdminExams, initAdminExams,
   renderAdminLive, initAdminLive,
-  renderAdminNotifications, initAdminNotifications
+  renderAdminNotifications, initAdminNotifications,
+  renderAdminSecurity, initAdminSecurity
 } from './pages/admin.js';
 import { renderAdminCourseDetail, initAdminCourseDetail } from './pages/adminCourseDetail.js';
 import { renderAdminExamDetail, initAdminExamDetail } from './pages/adminExamDetail.js';
@@ -365,6 +366,7 @@ const routes = {
   '/admin/courses': { render: renderAdminCourses, init: initAdminCourses, auth: true, teacher: true },
   '/admin/codes': { render: renderAdminCodes, init: initAdminCodes, auth: true, teacher: true },
   '/admin/students': { render: renderAdminStudents, init: initAdminStudents, auth: true, teacher: true },
+  '/admin/security': { render: renderAdminSecurity, init: initAdminSecurity, auth: true, teacher: true },
   '/admin/exams': { render: renderAdminExams, init: initAdminExams, auth: true, teacher: true },
   '/admin/live': { render: renderAdminLive, init: initAdminLive, auth: true, teacher: true },
   '/admin/notifications': { render: renderAdminNotifications, init: initAdminNotifications, auth: true, teacher: true },

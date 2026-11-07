@@ -256,5 +256,10 @@ export const api = {
   getLessonNotes: (lessonId) => request(`/lessons/${lessonId}/notes`),
   addLessonNote: (lessonId, body) => request(`/lessons/${lessonId}/notes`, { method: 'POST', body }),
   deleteLessonNote: (lessonId, noteId) => request(`/lessons/${lessonId}/notes/${noteId}`, { method: 'DELETE' }),
+
+  // Content Security & Anti-Leak Violation Reporting
+  reportSecurityViolation: (body) => request('/security/report', { method: 'POST', body }),
+  getSecurityViolations: () => request('/security/violations'),
+  takeSecurityAction: (userId, action) => request(`/security/student/${userId}/action`, { method: 'POST', body: { action } }),
 };
 

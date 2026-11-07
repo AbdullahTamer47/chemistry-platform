@@ -1,6 +1,7 @@
 import zraLogoFace from '../assets/zra-logo-face.png';
 import zraLogoText from '../assets/zra-logo-text.png';
 import { isLoggedIn, isTeacher, logout } from '../utils/auth.js';
+import { showToast } from './toast.js';
 
 export function renderPublicHeader(activeNav = 'home') {
   const logged = isLoggedIn();
@@ -215,9 +216,15 @@ export function initPublicHeader() {
 
   const handleHeaderSearch = (inputId) => (e) => {
     e.preventDefault();
-    const q = (document.getElementById(inputId)?.value || '').trim();
+    const inputEl = document.getElementById(inputId);
+    const q = (inputEl?.value || '').trim();
+    if (!q) {
+      showToast('يرجى كتابة اسم الكورس أو المرحلة الدراسية للبحث أولاً', 'warning');
+      inputEl?.focus();
+      return;
+    }
     closeDrawer();
-    const target = q ? `/courses?q=${encodeURIComponent(q)}` : '/courses';
+    const target = `/courses?q=${encodeURIComponent(q)}`;
     if (typeof window.navigateTo === 'function') {
       window.navigateTo(target);
     } else {

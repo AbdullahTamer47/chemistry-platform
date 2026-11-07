@@ -2,7 +2,7 @@ import { renderNavbar, initNavbar } from '../components/navbar.js';
 import { api } from '../utils/api.js';
 import { showToast } from '../components/toast.js';
 import { showModal, confirmModal } from '../components/modal.js';
-import { esc, normalizeImageUrl, extractGoogleDriveId } from '../utils/helpers.js';
+import { esc, getInitials, normalizeImageUrl, extractGoogleDriveId } from '../utils/helpers.js';
 import { renderChemMarkdown } from '../utils/chemMarkdown.js';
 import { openImageCropperModal, dataUrlToFile } from '../utils/imageProcessor.js';
 
@@ -525,7 +525,7 @@ export async function initAdminCourseDetail(id) {
           : discs.map(d => `
             <div class="discussion-item" style="border-bottom:1px solid var(--border-color);padding:16px 0">
               <div style="display:flex;gap:12px;margin-bottom:8px">
-                <div style="width:36px;height:36px;border-radius:50%;background:var(--primary-light);color:var(--primary);display:flex;align-items:center;justify-content:center;font-weight:bold">${esc(d.user_name.charAt(0))}</div>
+                <div style="width:36px;height:36px;border-radius:50%;background:var(--primary-light);color:var(--primary);display:flex;align-items:center;justify-content:center;font-weight:bold">${getInitials(d.user_name)}</div>
                 <div style="flex:1">
                   <div style="display:flex;justify-content:space-between">
                     <strong style="font-size:0.9rem">${esc(d.user_name)} ${d.user_role === 'teacher' || d.user_role === 'admin' ? '<span class="material-symbols-rounded" style="color:var(--primary);font-size:1.1rem;vertical-align:middle">verified</span>' : ''}</strong>
@@ -538,7 +538,7 @@ export async function initAdminCourseDetail(id) {
               <div style="margin-right:48px;background:var(--bg-secondary);border-radius:8px;padding:12px;margin-top:8px">
                 ${d.replies.map(r => `
                   <div style="display:flex;gap:8px;margin-bottom:8px">
-                    <div style="width:24px;height:24px;border-radius:50%;background:var(--accent-light);color:var(--accent);display:flex;align-items:center;justify-content:center;font-size:0.7rem;font-weight:bold">${esc(r.user_name.charAt(0))}</div>
+                    <div style="width:24px;height:24px;border-radius:50%;background:var(--accent-light);color:var(--accent);display:flex;align-items:center;justify-content:center;font-size:0.7rem;font-weight:bold">${getInitials(r.user_name)}</div>
                     <div style="flex:1">
                       <div style="display:flex;justify-content:space-between">
                         <strong style="font-size:0.8rem">${esc(r.user_name)} ${r.user_role === 'teacher' || r.user_role === 'admin' ? '<span class="material-symbols-rounded" style="color:var(--primary);font-size:1rem;vertical-align:middle">verified</span>' : ''}</strong>

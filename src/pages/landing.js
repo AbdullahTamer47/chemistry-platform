@@ -19,13 +19,14 @@ export function renderLanding() {
       <div class="hero-sakr-container">
         
         <div class="hero-sakr-content">
-          <div class="hero-sakr-badge">
+          <div class="hero-sakr-badge" style="border:1px solid rgba(224,165,38,0.45); box-shadow:0 6px 20px rgba(0,0,0,0.18);">
+            <span style="color:#E0A526; font-size:0.85rem; line-height:1;">◆</span>
             <span class="material-symbols-rounded">science</span>
             <span>منصة د/ زياد رمزي عياد التعليمية — كيمياء & Chemistry (عام ولغات)</span>
           </div>
 
           <h1 class="hero-sakr-title">
-            طريقك الأضمن لإتقان الكيمياء والـ Chemistry وضمان الدرجة النهائية
+            طريقك الأضمن لإتقان الكيمياء والـ Chemistry <span style="color:#fcd34d; text-decoration:underline; text-decoration-color:rgba(224,165,38,0.55); text-underline-offset:8px;">وضمان الدرجة النهائية</span>
           </h1>
 
           <p class="hero-sakr-subtitle">
@@ -35,24 +36,24 @@ export function renderLanding() {
           <div class="hero-sakr-actions">
             ${isLoggedIn()
               ? `<a href="/${isTeacher() ? 'admin' : 'dashboard'}" class="btn-sakr-hero-white"><span class="material-symbols-rounded">dashboard</span> الانتقال إلى ${isTeacher() ? 'لوحة المعلم والإدارة' : 'لوحة الطالب'}</a>
-                 <a href="/courses" class="btn-sakr-hero-trans" style="display:inline-flex; align-items:center; gap:8px;"><span class="material-symbols-rounded" style="color:#10b981;">school</span> تصفح الكورسات</a>`
+                 <a href="/courses" class="btn-sakr-hero-trans" style="display:inline-flex; align-items:center; gap:8px;"><span class="material-symbols-rounded" style="color:#34d399;">school</span> تصفح الكورسات</a>`
               : `<a href="/register" class="btn-sakr-hero-white"><span class="material-symbols-rounded">rocket_launch</span> اشترك دلوقتي !</a>
-                 <a href="/courses" class="btn-sakr-hero-trans"><span class="material-symbols-rounded">school</span> تصفح الكورسات</a>
-                 <a href="/parent-portal" class="btn-sakr-hero-trans" style="display:inline-flex; align-items:center; gap:8px;"><span class="material-symbols-rounded" style="color:#10b981;">family_restroom</span> بوابة ولي الأمر</a>`
+                 <a href="/courses" class="btn-sakr-hero-trans"><span class="material-symbols-rounded" style="color:#fcd34d;">school</span> تصفح الكورسات</a>
+                 <a href="/parent-portal" class="btn-sakr-hero-trans" style="display:inline-flex; align-items:center; gap:8px;"><span class="material-symbols-rounded" style="color:#34d399;">family_restroom</span> بوابة ولي الأمر</a>`
             }
           </div>
 
           <div class="hero-sakr-pills">
             <div class="hero-sakr-pill">
-              <span class="material-symbols-rounded">verified</span>
+              <span class="material-symbols-rounded" style="color:#fcd34d;">verified</span>
               <span>كيمياء عربي & Chemistry لغات</span>
             </div>
             <div class="hero-sakr-pill">
-              <span class="material-symbols-rounded">school</span>
+              <span class="material-symbols-rounded" style="color:#34d399;">school</span>
               <span>ابتدائي · إعدادي · ثانوي</span>
             </div>
             <div class="hero-sakr-pill">
-              <span class="material-symbols-rounded">family_restroom</span>
+              <span class="material-symbols-rounded" style="color:#fcd34d;">family_restroom</span>
               <span>بوابة متابعة فورية لولي الأمر</span>
             </div>
           </div>
@@ -91,7 +92,11 @@ export function renderLanding() {
     <!-- Section 1: Methodology Cards -->
     <section class="methodology-section reveal">
       <div class="section-container">
-        <div style="text-align: center; max-width: 650px; margin: 0 auto 30px;">
+        <div style="text-align: center; max-width: 680px; margin: 0 auto 36px;">
+          <div class="bd-subtle-kicker">
+            <span class="bd-nuqta-diamond"></span>
+            <span>نظام تعليمي متكامل</span>
+          </div>
           <h2 class="section-title"><span class="material-symbols-rounded">psychology</span> منهجية التعلم الذكية مع د/ زياد</h2>
           <p class="section-subtitle">طريقة تدريس مبتكرة ترتكز على الفهم والاستيعاب والتطبيق العملي لتقفيل المادة</p>
         </div>
@@ -223,7 +228,11 @@ export function renderLanding() {
     <!-- Section 3: Why Join Us -->
     <section class="sakr-why-section reveal" id="features">
       <div class="section-container">
-        <div style="text-align: center; max-width: 600px; margin: 0 auto 30px;">
+        <div style="text-align: center; max-width: 640px; margin: 0 auto 34px;">
+          <div class="bd-subtle-kicker">
+            <span class="bd-nuqta-diamond"></span>
+            <span>مميزات المنصة الحصرية</span>
+          </div>
           <h2 class="section-title"><span class="material-symbols-rounded">verified</span> ليه تشترك معانا؟</h2>
           <p class="section-subtitle">8 أسباب تجعل منصة كيمياوي اختيارك الأول للتفوق في الكيمياء</p>
         </div>
@@ -276,32 +285,39 @@ export function renderLanding() {
     <!-- Grades Levels -->
     <section class="grades-section reveal" id="grades">
       <div class="section-container">
+        <div class="bd-subtle-kicker" style="margin-bottom:10px;">
+          <span class="bd-nuqta-diamond"></span>
+          <span>اختر صفك الدراسي</span>
+        </div>
         <h2 class="section-title"><span class="material-symbols-rounded">school</span> المراحل الدراسية المتاحة (عام ولغات)</h2>
         <p class="section-subtitle">اختر مرحلتك الدراسية لاستعراض الكورسات المخصصة لصفك الدراسي مباشرة (كيمياء / علوم & Chemistry / Science)</p>
         <div class="grades-grid">
           <div class="grade-card grade-prep">
+            <div class="grade-stage-pill">٤ · ٥ · ٦ ابتدائي</div>
             <div class="grade-icon" style="display:flex; justify-content:center; margin-bottom:12px;">
               <span class="material-symbols-rounded" style="font-size:3.5rem; color:var(--accent);">Auto_Stories</span>
             </div>
-            <h3>المرحلة الابتدائية (٤، ٥، ٦ ابتدائي)</h3>
+            <h3>المرحلة الابتدائية (علوم & Science)</h3>
             <p>تأسيس ممتع ومبسط لمادة العلوم والـ Science (عام ولغات) للصفوف الرابع والخامس والسادس الابتدائي بالتجارب المصورة والأنشطة التفاعلية.</p>
-            <a href="/courses?stage=primary" class="btn btn-outline btn-sm">تصفح كورسات الابتدائي</a>
+            <a href="/courses?stage=primary" class="btn btn-outline btn-sm" style="width:100%; justify-content:center; font-weight:800;">تصفح كورسات الابتدائي <span class="material-symbols-rounded" style="font-size:1rem;">arrow_back</span></a>
           </div>
           <div class="grade-card grade-secondary">
+            <div class="grade-stage-pill">١ · ٢ · ٣ إعدادي</div>
             <div class="grade-icon" style="display:flex; justify-content:center; margin-bottom:12px;">
               <span class="material-symbols-rounded" style="font-size:3.5rem; color:var(--primary);">school</span>
             </div>
-            <h3>المرحلة الإعدادية (١، ٢، ٣ إعدادي)</h3>
+            <h3>المرحلة الإعدادية (علوم & Science)</h3>
             <p>شرح متكامل لدروس العلوم والـ Science والتفاعلات الكيميائية بطريقة تفاعلية وعملية مبسطة (الأول، الثاني، والثالث الإعدادي — عام ولغات).</p>
-            <a href="/courses?stage=prep" class="btn btn-outline btn-sm">تصفح كورسات الإعدادي</a>
+            <a href="/courses?stage=prep" class="btn btn-outline btn-sm" style="width:100%; justify-content:center; font-weight:800;">تصفح كورسات الإعدادي <span class="material-symbols-rounded" style="font-size:1rem;">arrow_back</span></a>
           </div>
-          <div class="grade-card grade-primary">
+          <div class="grade-card grade-primary" style="border-color:rgba(16,185,129,0.4); box-shadow:0 16px 36px rgba(5,150,105,0.12);">
+            <div class="grade-stage-pill featured">١ · ٢ · ٣ ثانوي</div>
             <div class="grade-icon" style="display:flex; justify-content:center; margin-bottom:12px;">
-              <span class="material-symbols-rounded" style="font-size:3.5rem; color:var(--info);">workspace_premium</span>
+              <span class="material-symbols-rounded" style="font-size:3.5rem; color:var(--primary);">workspace_premium</span>
             </div>
-            <h3>المرحلة الثانوية (١، ٢، ٣ ثانوي)</h3>
+            <h3>المرحلة الثانوية (كيمياء & Chemistry)</h3>
             <p>التحضير الشامل للكيمياء والـ Chemistry (عام ولغات) للصفوف الأول والثاني والثالث الثانوي مع حل آلاف الأفكار الوزارية والتجارب المعملية.</p>
-            <a href="/courses?stage=secondary" class="btn btn-primary btn-sm">تصفح كورسات الثانوي</a>
+            <a href="/courses?stage=secondary" class="btn btn-primary btn-sm" style="width:100%; justify-content:center; font-weight:800;">تصفح كورسات الثانوي <span class="material-symbols-rounded" style="font-size:1rem;">arrow_back</span></a>
           </div>
         </div>
       </div>

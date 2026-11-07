@@ -62,9 +62,16 @@ export function getGradeColor(grade) {
   return 'var(--text-muted)';
 }
 
-export function getInitials(name) {
-  if (!name) return '?';
-  return esc(String(name || '').split(' ').filter(Boolean).slice(0, 2).map(w => w[0]).join(''));
+export function getInitials(_name) {
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="68%" height="68%" shape-rendering="crispEdges" style="display:block;margin:auto;pointer-events:none;" aria-hidden="true">
+    <rect x="9" y="3" width="6" height="2" fill="currentColor"/>
+    <rect x="8" y="5" width="8" height="5" fill="currentColor"/>
+    <rect x="9" y="10" width="6" height="1" fill="currentColor"/>
+    <polygon points="12,11.8 14,13.8 12,15.8 10,13.8" fill="#E0A526" shape-rendering="geometricPrecision"/>
+    <rect x="5" y="14" width="4" height="2" fill="currentColor"/>
+    <rect x="15" y="14" width="4" height="2" fill="currentColor"/>
+    <rect x="4" y="16" width="16" height="4" fill="currentColor"/>
+  </svg>`;
 }
 
 const ESC_MAP = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;', '`': '&#96;' };

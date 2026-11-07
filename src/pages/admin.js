@@ -2,7 +2,7 @@ import { renderNavbar, initNavbar } from '../components/navbar.js';
 import { api } from '../utils/api.js';
 import { showToast } from '../components/toast.js';
 import { showModal, confirmModal } from '../components/modal.js';
-import { formatDate, gradesList, getCourseGrades, createPaginatedList, normalizeImageUrl, extractGoogleDriveId } from '../utils/helpers.js';
+import { formatDate, getInitials, gradesList, getCourseGrades, createPaginatedList, normalizeImageUrl, extractGoogleDriveId } from '../utils/helpers.js';
 import { exportToCSV } from '../utils/export.js';
 import { openImageCropperModal, compressImageFile, dataUrlToFile } from '../utils/imageProcessor.js';
 
@@ -10,7 +10,16 @@ export function renderAdmin() {
   return `<div class="app-layout">
     ${renderNavbar('admin')}
     <main class="main-content">
-      <div class="page-header"><h1 class="page-title"><span class="material-symbols-rounded" style="color:var(--primary)">dashboard</span> لوحة تحكم المعلم</h1><p class="page-subtitle">مرحباً د. زياد رمزي عياد</p></div>
+      <div class="page-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;">
+        <div>
+          <h1 class="page-title"><span class="material-symbols-rounded" style="color:var(--primary)">dashboard</span> لوحة تحكم المعلم</h1>
+          <p class="page-subtitle">مرحباً د. زياد رمزي عياد</p>
+        </div>
+        <a href="/admin/security" class="btn btn-sm" style="background:rgba(225,29,72,0.1);color:#e11d48;border:1px solid rgba(225,29,72,0.3);font-weight:800;gap:6px;">
+          <span class="material-symbols-rounded">gpp_maybe</span> تقارير المخالفات وحماية المحتوى
+        </a>
+      </div>
+      <div id="adminSecurityBanner" style="margin-bottom:18px;"></div>
       <div class="stats-grid" id="adminStats"><div class="loading-spinner"><div class="spinner"></div></div></div>
       <div class="card" id="adminPayments" style="margin-top:24px"></div>
       <div class="card" id="adminPaymentSettings" style="margin-top:24px"></div>
@@ -39,11 +48,35 @@ export async function initAdmin() {
     document.getElementById('recentStudents').innerHTML = `
       <div class="card-header"><h3 class="card-title"><span class="material-symbols-rounded" style="color:var(--primary)">person_add</span> آخر الطلاب المسجلين</h3></div>
       ${stats.recent_students.map(s => `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border-light)">
-        <div class="sidebar-user-avatar" style="width:34px;height:34px;font-size:0.75rem">${escA(s.name[0])}</div>
+        <div class="sidebar-user-avatar" style="width:34px;height:34px;font-size:0.75rem">${getInitials(s.name)}</div>
         <div style="flex:1"><div style="font-weight:600;font-size:0.85rem">${escA(s.name)}</div><div style="font-size:0.72rem;color:var(--text-muted)">${escA(s.grade || '')} · ${escA(s.phone)}</div></div>
         <span style="font-size:0.7rem;color:var(--text-muted)">${formatDate(s.created_at)}</span>
       </div>`).join('')}
     `;
+    api.getSecurityViolations({ limit: 5 }).then(sec => {
+      const bannerEl = document.getElementById('adminSecurityBanner');
+      if (!bannerEl || !sec?.stats?.total_violations) return;
+      bannerEl.innerHTML = `
+        <div class="card" style="padding:14px 18px; border:1.5px solid rgba(225,29,72,0.4); background:rgba(225,29,72,0.06); display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px;">
+          <div style="display:flex; align-items:center; gap:12px;">
+            <div style="width:42px; height:42px; border-radius:12px; background:rgba(225,29,72,0.15); color:#e11d48; display:flex; align-items:center; justify-content:center;">
+              <span class="material-symbols-rounded">gpp_bad</span>
+            </div>
+            <div>
+              <div style="font-weight:900; font-size:0.95rem; color:var(--text-primary);">
+                رصد نظام الحماية ${sec.stats.total_violations} محاولة مخالفة أمنية (${sec.stats.screenshots || 0} سكرين شوت • ${sec.stats.screen_records || 0} تسجيل شاشة • ${sec.stats.idm_downloads || 0} تحميل)
+              </div>
+              <div style="font-size:0.78rem; color:var(--text-secondary);">
+                يوجد ${sec.offenders?.length || 0} طلاب مسجلين في قائمة المخالفات (${sec.stats.blocked_students || 0} محظورين حالياً)
+              </div>
+            </div>
+          </div>
+          <a href="/admin/security" class="btn btn-sm" style="background:#e11d48; color:#fff; font-weight:800; gap:6px;">
+            <span class="material-symbols-rounded">visibility</span> مراجعة الطلاب المخالفين
+          </a>
+        </div>
+      `;
+    }).catch(() => {});
     document.getElementById('gradeChart').innerHTML = `
       <div class="card-header"><h3 class="card-title"><span class="material-symbols-rounded" style="color:var(--accent)">pie_chart</span> توزيع الطلاب</h3></div>
       ${stats.grade_distribution.map(g => `<div style="display:flex;align-items:center;gap:10px;padding:6px 0">
@@ -1436,3 +1469,310 @@ export async function initAdminNotifications() {
     } catch (err) { showToast(err.message, 'error'); }
   });
 }
+
+// ============================================================================
+// TEACHER SECURITY & ANTI-LEAK VIOLATIONS CENTER (/admin/security)
+// ============================================================================
+const VIOLATION_META = {
+  screenshot: { label: 'تصوير شاشة (Screenshot)', icon: 'screenshot_monitor', badge: 'badge-danger' },
+  screen_record: { label: 'تسجيل شاشة (Screen Record)', icon: 'videocam_off', badge: 'badge-danger' },
+  idm_download: { label: 'برنامج تحميل (IDM / Sniffer)', icon: 'cloud_off', badge: 'badge-warning' },
+  devtools: { label: 'أدوات فحص الكود (DevTools)', icon: 'code_off', badge: 'badge-warning' },
+  pdf_leak: { label: 'تصوير / طباعة مذكرة PDF', icon: 'picture_as_pdf', badge: 'badge-info' },
+  exam_leak: { label: 'تصوير / نسخ امتحان', icon: 'quiz', badge: 'badge-info' }
+};
+
+export function renderAdminSecurity() {
+  return `
+  <div class="app-layout">
+    ${renderNavbar('admin-security')}
+    <main class="main-content">
+      <div class="page-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;">
+        <div>
+          <h1 class="page-title">
+            <span class="material-symbols-rounded" style="color:#e11d48">gpp_maybe</span>
+            تقارير المخالفات وحماية المحتوى
+          </h1>
+          <p class="page-subtitle">متابعة الطلاب الذين حاولوا التقاط صور للشاشة (Screenshot)، أو تسجيل الفيديو (Screen Record)، أو استخدام برامج التحميل (IDM)</p>
+        </div>
+        <button class="btn btn-secondary btn-sm" id="refreshSecurityLogsBtn" style="gap:6px; font-weight:800;">
+          <span class="material-symbols-rounded">refresh</span> تحديث السجلات
+        </button>
+      </div>
+
+      <!-- Summary Stats Grid -->
+      <div class="stats-grid" id="securityStatsGrid" style="margin-bottom:24px;">
+        <div class="loading-spinner"><div class="spinner"></div></div>
+      </div>
+
+      <!-- Offending Students Card (سجل الطلاب المخالفين) -->
+      <div class="card" style="margin-bottom:24px; border:1.5px solid rgba(225,29,72,0.28);">
+        <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">
+          <h3 class="card-title" style="margin:0;display:flex;align-items:center;gap:8px;">
+            <span class="material-symbols-rounded" style="color:#e11d48">person_alert</span>
+            قائمة الطلاب المخالفين وإجراءات الحظر الفوري
+          </h3>
+          <span style="font-size:0.78rem;color:var(--text-muted);font-weight:700;">يتم حظر الطالب تلقائياً عند الوصول إلى 5 إنذارات أمنية</span>
+        </div>
+        <div id="securityOffendersList" style="margin-top:14px;">
+          <div class="loading-spinner"><div class="spinner"></div></div>
+        </div>
+      </div>
+
+      <!-- Chronological Violation Events Log -->
+      <div class="card">
+        <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:14px;">
+          <h3 class="card-title" style="margin:0;display:flex;align-items:center;gap:8px;">
+            <span class="material-symbols-rounded" style="color:var(--primary)">history</span>
+            السجل الزمني التفصيلي للمخالفات المرصودة
+          </h3>
+          <div class="tabs" id="secTypeTabs" style="margin:0;">
+            <div class="tab active" data-vtype="all">الكل</div>
+            <div class="tab" data-vtype="screenshot">سكرين شوت</div>
+            <div class="tab" data-vtype="screen_record">تسجيل شاشة</div>
+            <div class="tab" data-vtype="idm_download">برامج تحميل IDM</div>
+            <div class="tab" data-vtype="pdf_leak">مذكرات PDF</div>
+            <div class="tab" data-vtype="exam_leak">امتحانات</div>
+          </div>
+        </div>
+        <div id="securityTimelineList">
+          <div class="loading-spinner"><div class="spinner"></div></div>
+        </div>
+      </div>
+    </main>
+  </div>`;
+}
+
+export async function initAdminSecurity() {
+  initNavbar();
+  let currentFilter = 'all';
+
+  const formatToIntlPhone = (ph) => {
+    const clean = String(ph || '').replace(/\D/g, '');
+    if (!clean) return '';
+    return clean.startsWith('20') ? clean : clean.startsWith('0') ? `20${clean.slice(1)}` : `20${clean}`;
+  };
+
+  async function loadSecurityData() {
+    try {
+      const data = await api.getSecurityViolations({ type: currentFilter, limit: 150 });
+      const st = data.stats || {};
+      const offenders = data.offenders || [];
+      const violations = data.violations || [];
+
+      const statsEl = document.getElementById('securityStatsGrid');
+      if (statsEl) {
+        statsEl.innerHTML = `
+          <div class="stat-card">
+            <div class="stat-icon" style="background:rgba(225,29,72,0.12);color:#e11d48;"><span class="material-symbols-rounded">gpp_bad</span></div>
+            <div class="stat-info"><div class="stat-value">${st.total_violations || 0}</div><div class="stat-label">إجمالي المخالفات المرصودة</div></div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon gold"><span class="material-symbols-rounded">screenshot_monitor</span></div>
+            <div class="stat-info"><div class="stat-value">${st.screenshots || 0}</div><div class="stat-label">محاولات سكرين شوت</div></div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon purple"><span class="material-symbols-rounded">videocam_off</span></div>
+            <div class="stat-info"><div class="stat-value">${st.screen_records || 0}</div><div class="stat-label">محاولات تسجيل شاشة</div></div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon blue"><span class="material-symbols-rounded">cloud_off</span></div>
+            <div class="stat-info"><div class="stat-value">${(st.idm_downloads || 0) + (st.devtools_attempts || 0)}</div><div class="stat-label">محاولات تحميل IDM وفحص</div></div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon green"><span class="material-symbols-rounded">picture_as_pdf</span></div>
+            <div class="stat-info"><div class="stat-value">${(st.pdf_leaks || 0) + (st.exam_leaks || 0)}</div><div class="stat-label">مخالفات PDF وامتحانات</div></div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon" style="background:rgba(220,38,38,0.16);color:#dc2626;"><span class="material-symbols-rounded">block</span></div>
+            <div class="stat-info"><div class="stat-value">${st.blocked_students || 0}</div><div class="stat-label">طلاب محظورون</div></div>
+          </div>
+        `;
+      }
+
+      const offEl = document.getElementById('securityOffendersList');
+      if (offEl) {
+        if (offenders.length === 0) {
+          offEl.innerHTML = `
+            <div class="empty-state" style="padding:32px;">
+              <span class="material-symbols-rounded" style="color:var(--success);">verified_user</span>
+              <h3>سجل الأمان نظيف تماماً</h3>
+              <p>لم يتم رصد أي محاولات تصوير أو تسجيل شاشة أو تحميل غير مصرح به من الطلاب حتى الآن.</p>
+            </div>
+          `;
+        } else {
+          offEl.innerHTML = `
+            <div class="mobile-swipe-hint"><span class="material-symbols-rounded">swipe</span> اسحب أفقياً لعرض كافة تفاصيل المخالفات والإجراءات</div>
+            <div class="table-wrapper">
+              <table>
+                <thead>
+                  <tr>
+                    <th>الطالب</th>
+                    <th>أرقام التواصل</th>
+                    <th>المرحلة</th>
+                    <th>تفصيل المخالفات</th>
+                    <th>الإنذارات</th>
+                    <th>آخر مخالفة</th>
+                    <th>الحالة</th>
+                    <th>إجراءات المعلم</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${offenders.map(o => {
+                    const parentWa = formatToIntlPhone(o.parent_phone || o.phone);
+                    const waMsg = encodeURIComponent(
+                      `تنبيه أمني هام من منصة د. زياد رمزي عياد للكيمياء بخصوص الطالب/ة: ${o.name}\n` +
+                      `تم رصد ${o.violations_count} محاولات لتصوير أو تسجيل شاشة المحاضرات المحمية (${o.screenshot_count || 0} سكرين شوت، ${o.record_count || 0} تسجيل شاشة، ${o.idm_count || 0} برنامج تحميل).\n` +
+                      `يرجى التنبيه المشدد على الطالب لأن النظام يقوم بحظر الحساب وإيقاف الاشتراكات تلقائياً عند تكرار المحاولة.`
+                    );
+                    return `
+                      <tr>
+                        <td>
+                          <div style="display:flex;align-items:center;gap:10px;">
+                            <div class="sidebar-user-avatar" style="width:36px;height:36px;">${getInitials(o.name)}</div>
+                            <div>
+                              <div style="font-weight:800;color:var(--text-primary);">${escA(o.name)}</div>
+                              <div style="font-size:0.72rem;color:var(--text-muted);">ID: #${o.id}</div>
+                            </div>
+                          </div>
+                        </td>
+                        <td>
+                          <div dir="ltr" style="font-weight:700;font-size:0.82rem;">${escA(o.phone)}</div>
+                          <div dir="ltr" style="font-size:0.72rem;color:var(--text-muted);">ولي الأمر: ${escA(o.parent_phone || '-')}</div>
+                        </td>
+                        <td>
+                          <span style="font-size:0.8rem;font-weight:700;">${escA(o.grade || '-')}</span>
+                          <span class="badge badge-info" style="font-size:0.65rem;">${escA(o.study_track || 'عام')}</span>
+                        </td>
+                        <td>
+                          <div style="display:flex;gap:6px;flex-wrap:wrap;">
+                            ${o.screenshot_count ? `<span class="badge badge-warning" title="سكرين شوت">📸 ${o.screenshot_count} تصوير</span>` : ''}
+                            ${o.record_count ? `<span class="badge badge-danger" title="تسجيل شاشة">🎥 ${o.record_count} تسجيل</span>` : ''}
+                            ${o.idm_count ? `<span class="badge badge-danger" title="برامج تحميل IDM">⬇️ ${o.idm_count} تحميل</span>` : ''}
+                            ${o.leak_count ? `<span class="badge badge-info" title="ملفات وامتحانات">📄 ${o.leak_count} ملفات</span>` : ''}
+                          </div>
+                        </td>
+                        <td>
+                          <span class="badge ${(o.security_strikes || o.violations_count) >= 5 ? 'badge-danger' : 'badge-warning'}" style="font-weight:900;">
+                            ${o.security_strikes || o.violations_count} / 5
+                          </span>
+                        </td>
+                        <td style="font-size:0.76rem;color:var(--text-secondary);">${o.last_violation_at ? new Date(o.last_violation_at).toLocaleString('ar-EG') : '-'}</td>
+                        <td>
+                          ${o.is_blocked
+                            ? '<span class="badge badge-danger" style="font-weight:900;">محظور وموقوف</span>'
+                            : '<span class="badge badge-warning" style="font-weight:800;">تحت المراقبة</span>'
+                          }
+                        </td>
+                        <td>
+                          <div style="display:flex;gap:6px;flex-wrap:wrap;">
+                            ${o.is_blocked ? `
+                              <button type="button" class="btn btn-sm btn-primary sec-action-btn" data-uid="${o.id}" data-act="unblock" data-name="${escA(o.name)}" title="فك الحظر وتصفير الإنذارات">
+                                <span class="material-symbols-rounded" style="font-size:1rem;">lock_open</span> فك الحظر
+                              </button>
+                            ` : `
+                              <button type="button" class="btn btn-sm sec-action-btn" data-uid="${o.id}" data-act="block" data-name="${escA(o.name)}" style="background:#e11d48;color:#fff;border:none;font-weight:800;" title="حظر الطالب وإيقاف اشتراكاته فوراً">
+                                <span class="material-symbols-rounded" style="font-size:1rem;">block</span> حظر الطالب
+                              </button>
+                            `}
+                            ${parentWa ? `
+                              <a href="https://wa.me/${parentWa}?text=${waMsg}" target="_blank" rel="noopener" class="btn btn-sm btn-ghost" style="color:#16a34a;border:1px solid rgba(22,163,74,0.3);" title="إرسال تحذير أمني لولي الأمر عبر واتساب">
+                                <span class="material-symbols-rounded" style="font-size:1.05rem;">chat</span> واتساب ولي الأمر
+                              </a>
+                            ` : ''}
+                            <button type="button" class="btn btn-sm btn-ghost sec-action-btn" data-uid="${o.id}" data-act="clear" data-name="${escA(o.name)}" style="color:var(--text-muted);" title="مسح سجل مخالفات الطالب">
+                              <span class="material-symbols-rounded" style="font-size:1.05rem;">delete_sweep</span>
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    `;
+                  }).join('')}
+                </tbody>
+              </table>
+            </div>
+          `;
+
+          offEl.querySelectorAll('.sec-action-btn').forEach(btn => {
+            btn.addEventListener('click', async () => {
+              const uid = btn.dataset.uid;
+              const act = btn.dataset.act;
+              const stName = btn.dataset.name;
+              const confirmTitle = act === 'block' ? 'تأكيد حظر الطالب' : act === 'unblock' ? 'فك حظر الطالب' : 'مسح سجل المخالفات';
+              const confirmDesc = act === 'block'
+                ? `هل أنت متأكد من حظر الطالب "${stName}" وإيقاف جميع اشتراكاته فوراً؟`
+                : act === 'unblock'
+                ? `هل تريد فك الحظر عن الطالب "${stName}" وإعادة تفعيل اشتراكاته وتصفير إنذاراته؟`
+                : `هل تريد مسح سجل المخالفات والإنذارات الخاصة بالطالب "${stName}"؟`;
+
+              const ok = await confirmModal(confirmTitle, confirmDesc);
+              if (!ok) return;
+              try {
+                const res = await api.takeSecurityAction(uid, act);
+                showToast(res.message, 'success');
+                loadSecurityData();
+              } catch (err) {
+                showToast(err.message, 'error');
+              }
+            });
+          });
+        }
+      }
+
+      const timeEl = document.getElementById('securityTimelineList');
+      if (timeEl) {
+        if (violations.length === 0) {
+          timeEl.innerHTML = `<div style="text-align:center;padding:28px;color:var(--text-muted);font-weight:700;">لا توجد سجلات مطابقة لهذا التصنيف.</div>`;
+        } else {
+          timeEl.innerHTML = `
+            <div style="display:flex;flex-direction:column;gap:10px;">
+              ${violations.map(v => {
+                const meta = VIOLATION_META[v.violation_type] || VIOLATION_META.screenshot;
+                return `
+                  <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;padding:12px 16px;background:var(--bg-secondary);border-radius:12px;border-right:4px solid #e11d48;">
+                    <div style="display:flex;align-items:center;gap:12px;min-width:0;flex:1;">
+                      <div style="width:40px;height:40px;border-radius:10px;background:rgba(225,29,72,0.12);color:#e11d48;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                        <span class="material-symbols-rounded">${meta.icon}</span>
+                      </div>
+                      <div style="min-width:0;">
+                        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                          <strong style="font-size:0.9rem;color:var(--text-primary);">${escA(v.student_name)}</strong>
+                          <span dir="ltr" style="font-size:0.76rem;color:var(--text-muted);">${escA(v.student_phone)}</span>
+                          <span class="badge ${meta.badge}" style="font-size:0.7rem;">${meta.label}</span>
+                          ${v.is_blocked ? '<span class="badge badge-danger" style="font-size:0.68rem;">محظور</span>' : ''}
+                        </div>
+                        <div style="font-size:0.82rem;color:var(--text-secondary);margin-top:3px;">
+                          المحتوى: <strong>${escA(v.source_title || v.lesson_title || v.course_title || 'محتوى محمي')}</strong>
+                          ${v.details ? ` — <span style="color:var(--text-muted);">${escA(v.details)}</span>` : ''}
+                        </div>
+                      </div>
+                    </div>
+                    <div style="font-size:0.75rem;color:var(--text-muted);font-weight:700;display:flex;align-items:center;gap:4px;">
+                      <span class="material-symbols-rounded" style="font-size:0.95rem;">schedule</span>
+                      ${new Date(v.created_at).toLocaleString('ar-EG')}
+                    </div>
+                  </div>
+                `;
+              }).join('')}
+            </div>
+          `;
+        }
+      }
+    } catch (err) {
+      showToast(err.message || 'تعذر تحميل سجل المخالفات الأمنية', 'error');
+    }
+  }
+
+  document.getElementById('refreshSecurityLogsBtn')?.addEventListener('click', loadSecurityData);
+  document.querySelectorAll('#secTypeTabs .tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('#secTypeTabs .tab').forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      currentFilter = tab.dataset.vtype || 'all';
+      loadSecurityData();
+    });
+  });
+
+  loadSecurityData();
+}
+

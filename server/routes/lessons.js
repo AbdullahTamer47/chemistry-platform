@@ -27,6 +27,10 @@ function getCourseItems(courseId) {
 // Returns null if allowed, otherwise { status, body }.
 function checkLessonAccess(user, lesson, allItems) {
   if (isTeacher(user)) return null;
+  const uRow = db.prepare('SELECT COALESCE(is_blocked, 0) as is_blocked FROM users WHERE id = ?').get(user.id);
+  if (uRow?.is_blocked) {
+    return { status: 403, body: { error: 'تم إيقاف حسابك تلقائياً بسبب رصد محاولات تصوير الشاشة أو تحميل المحتوى المحمي. تواصل مع المعلم لفك الحظر.' } };
+  }
   if (!lesson.is_free && !canAccessCourse(user, lesson.course_id)) {
     return { status: 403, body: { error: 'يجب الاشتراك في الكورس أولاً' } };
   }
@@ -400,9 +404,20 @@ router.post('/:id/video-token', authMiddleware, async (req, res) => {
     const shortName = String(req.user.name || '').trim().split(/\s+/).slice(0, 2).join(' ');
     const wmText = `${shortName} • ${req.user.phone || ''}`;
 
-    // XOR-obfuscate stream payload using token prefix so plain URLs aren't trivially scraped
+    // Extract 11-char YouTube ID server-side if applicable so raw youtube.com URLs never travel in JSON
+    const rawVideoUrl = String(lesson.video_url || '').trim();
+    let ytId = '';
+    const ytMatch = rawVideoUrl.match(/(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?|shorts|live)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/);
+    if (ytMatch && ytMatch[1]) {
+      ytId = ytMatch[1];
+    } else if (/^[a-zA-Z0-9_-]{11}$/.test(rawVideoUrl)) {
+      ytId = rawVideoUrl;
+    }
+
+    // XOR-obfuscate stream payload using token prefix so plain URLs aren't scraped by IDM or network sniffers
     const rawPayload = JSON.stringify({
-      u: lesson.video_url || '',
+      y: ytId ? ytId.split('').reverse().join('') : '',
+      u: ytId ? '' : rawVideoUrl,
       s: lesson.video_source || 'custom_shield',
       v: lesson.vdocipher_id || ''
     });
@@ -444,9 +459,9 @@ router.post('/:id/video-token', authMiddleware, async (req, res) => {
       } catch (e) {}
     }
 
+    res.setHeader('Cache-Control', 'private, no-store, no-cache, must-revalidate');
     res.json({
       token,
-      video_url: lesson.video_url,
       video_source: lesson.video_source || 'custom_shield',
       vdocipher_id: lesson.vdocipher_id || null,
       vdocipher_otp: vdocipherOtp,
