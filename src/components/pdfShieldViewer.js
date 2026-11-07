@@ -210,13 +210,7 @@ export async function openProtectedPdfModal(lessonId, lessonTitle = 'مذكرة 
       const isAlt = e.altKey || k === 'Alt' || code.startsWith('Alt');
       const isPrtSc = k === 'PrintScreen' || code === 'PrintScreen' || keyCode === 44;
 
-      // <0.1ms synchronous blackout on 1st key (Meta / Alt / PrintScreen) before OS freezes pixels
-      if (isMeta || isAlt || isPrtSc) {
-        lastModKeyPressAt = Date.now();
-        instantPdfCurtainBlackout();
-      }
-
-      // Full lockout + silent teacher report on 2nd key (Win+Shift or Win+Alt) before Windows swallows 'S' or 'R'
+      // Full lockout + silent teacher report only on actual capture shortcuts (lone Win key does nothing!)
       if (
         isPrtSc ||
         k === 'F12' ||
@@ -229,6 +223,7 @@ export async function openProtectedPdfModal(lessonId, lessonTitle = 'مذكرة 
       ) {
         e.preventDefault();
         e.stopPropagation();
+        lastModKeyPressAt = Date.now();
         triggerBlackout(true, 'محاولة تصوير أو طباعة أو حفظ ملف PDF محمي');
         navigator.clipboard?.writeText?.('').catch(() => {});
       }
@@ -255,6 +250,16 @@ export async function openProtectedPdfModal(lessonId, lessonTitle = 'مذكرة 
         return;
       }
       instantPdfCurtainBlackout();
+      const now = Date.now();
+      if (!isTeacher() && now - lastPdfReport > 4000) {
+        lastPdfReport = now;
+        api.reportSecurityViolation({
+          violation_type: 'pdf_leak',
+          lesson_id: lessonId,
+          source_title: lessonTitle,
+          details: 'إخفاء المذكرة وتفعيل الستارة السوداء تلقائياً بسبب خروج التركيز أو فتح أداة خارجية'
+        }).catch(() => {});
+      }
     };
 
     const onPdfFocus = () => {
@@ -266,6 +271,16 @@ export async function openProtectedPdfModal(lessonId, lessonTitle = 'مذكرة 
     const onPdfVisibility = () => {
       if (document.hidden) {
         instantPdfCurtainBlackout();
+        const now = Date.now();
+        if (!isTeacher() && now - lastPdfReport > 4000) {
+          lastPdfReport = now;
+          api.reportSecurityViolation({
+            violation_type: 'pdf_leak',
+            lesson_id: lessonId,
+            source_title: lessonTitle,
+            details: 'تفعيل الستارة السوداء على المذكرة عند تبديل النافذة أو التطبيق'
+          }).catch(() => {});
+        }
       } else if (!isSecurityLocked) {
         clearBlackout();
       }
@@ -274,8 +289,6 @@ export async function openProtectedPdfModal(lessonId, lessonTitle = 'مذكرة 
     const pdfViewportEl = document.getElementById('pdfShieldViewport');
     const unmountPdfDrm = pdfViewportEl ? await mountHardwareDrmShield(pdfViewportEl) : () => {};
     const detachPdfMobileCapture = attachMobileAndDesktopAntiCapture({
-      containerEl: pdfViewportEl,
-      mode: 'pdf',
       isActiveGuard: () => Boolean(document.getElementById('kimyawyPdfShieldModal')),
       isPlayingGuard: () => !isSecurityLocked,
       onInstantBlackout: () => instantPdfCurtainBlackout(),

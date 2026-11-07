@@ -680,10 +680,17 @@ export async function initLesson(id) {
             }
           });
 
-          const togglePlay = () => {
+    const togglePlay = () => {
             try {
               if (document.getElementById('antiCaptureShield')?.style.display === 'flex' || document.hidden) {
                 return;
+              }
+              const blkCurtain = document.getElementById('instantBlackCurtain');
+              if (blkCurtain) blkCurtain.style.display = 'none';
+              if (vc) {
+                vc.style.display = 'block';
+                vc.style.visibility = 'visible';
+                vc.style.filter = 'none';
               }
               if (!ytPlayer || typeof ytPlayer.getPlayerState !== 'function') return;
               const st = ytPlayer.getPlayerState();
@@ -1011,7 +1018,6 @@ export async function initLesson(id) {
 
     // <0.1ms Synchronous Pitch-Black Curtain (Executes before OS Snipping Tool or Game Bar freezes screen pixels)
     let recordCooldownTimer = null;
-    let recordCooldownRemaining = 0;
 
     const instantBlackoutFrame = () => {
       if (curtainEl) {
@@ -1028,10 +1034,7 @@ export async function initLesson(id) {
     };
 
     const restoreFrameVisibility = () => {
-      if (isPermanentlyBlocked || recordCooldownRemaining > 0) return;
-      if (!document.hasFocus() || document.hidden) {
-        window.focus();
-      }
+      if (isPermanentlyBlocked) return;
       isSecurityLocked = false;
       if (curtainEl) {
         curtainEl.style.display = 'none';
@@ -1047,7 +1050,7 @@ export async function initLesson(id) {
       }
     };
 
-    const triggerSecurityLockout = (violationType, customTitle, customDesc, shouldReport = true, enforceCooldownSec = 0) => {
+    const triggerSecurityLockout = (violationType, customTitle, customDesc, shouldReport = true) => {
       if (isPermanentlyBlocked) return;
       isSecurityLocked = true;
       instantBlackoutFrame();
@@ -1057,30 +1060,7 @@ export async function initLesson(id) {
       if (shieldTitle && customTitle) shieldTitle.textContent = customTitle;
       if (shieldDesc && customDesc) shieldDesc.textContent = customDesc;
 
-      const waitSec = enforceCooldownSec || (violationType === 'screen_record' ? 8 : 0);
-      if (resumeBtn && waitSec > 0) {
-        if (recordCooldownTimer) clearInterval(recordCooldownTimer);
-        recordCooldownRemaining = waitSec;
-        resumeBtn.disabled = true;
-        resumeBtn.style.opacity = '0.6';
-        resumeBtn.style.cursor = 'not-allowed';
-        resumeBtn.textContent = `يرجى إغلاق أداة التسجيل أولاً (${recordCooldownRemaining} ث)...`;
-        recordCooldownTimer = setInterval(() => {
-          recordCooldownRemaining = Math.max(0, recordCooldownRemaining - 1);
-          if (recordCooldownRemaining <= 0) {
-            clearInterval(recordCooldownTimer);
-            recordCooldownTimer = null;
-            if (!isPermanentlyBlocked && resumeBtn) {
-              resumeBtn.disabled = false;
-              resumeBtn.style.opacity = '1';
-              resumeBtn.style.cursor = 'pointer';
-              resumeBtn.textContent = 'تحققت من إغلاق التسجيل — متابعة المشاهدة الآن';
-            }
-          } else if (!isPermanentlyBlocked && resumeBtn) {
-            resumeBtn.textContent = `يرجى إغلاق أداة التسجيل أولاً (${recordCooldownRemaining} ث)...`;
-          }
-        }, 1000);
-      } else if (resumeBtn && recordCooldownRemaining <= 0) {
+      if (resumeBtn) {
         resumeBtn.disabled = false;
         resumeBtn.style.opacity = '1';
         resumeBtn.style.cursor = 'pointer';
@@ -1094,7 +1074,7 @@ export async function initLesson(id) {
 
     resumeBtn?.addEventListener('click', (e) => {
       e.stopPropagation();
-      if (isPermanentlyBlocked || recordCooldownRemaining > 0) return;
+      if (isPermanentlyBlocked) return;
       window.focus();
       restoreFrameVisibility();
     });
@@ -1102,20 +1082,17 @@ export async function initLesson(id) {
     // Mount Hardware DRM Shield (W3C EME Widevine / PlayReady / FairPlay / ClearKey) inside #videoBox
     const unmountHardwareDrm = videoBox ? await mountHardwareDrmShield(videoBox) : () => {};
 
-    // Attach Mobile (Android & iPhone) Interactive Touch-Hold Shield + Multi-Touch & touchcancel Screenshot Sensor
+    // Attach Clean Mobile & Desktop Anti-Capture Sensors (No fingerprint overlay, no timers!)
     const detachMobileAntiCapture = attachMobileAndDesktopAntiCapture({
-      containerEl: videoBox,
-      mode: 'video',
       isActiveGuard: () => Boolean(document.getElementById('videoBox')),
       isPlayingGuard: () => isProtectedVideoPlaying(),
       onInstantBlackout: () => instantBlackoutFrame(),
-      onTriggerViolation: (reasonText, vType, enforceLock) => {
+      onTriggerViolation: (reasonText, vType) => {
         triggerSecurityLockout(
           vType || 'screenshot',
           'تم إيقاف البث مؤقتاً لحماية المحتوى',
-          'غير مسموح بالتقاط صور للشاشة أو تشغيل مسجل الشاشة على الهاتف أو الكمبيوتر أثناء مشاهدة المحاضرة.',
-          true,
-          enforceLock ? 6 : 0
+          reasonText || 'غير مسموح بالتقاط صور للشاشة أو تشغيل مسجل الشاشة أثناء مشاهدة المحاضرة.',
+          true
         );
       }
     });
@@ -1132,9 +1109,9 @@ export async function initLesson(id) {
       };
     }
 
-    // Zero-Latency Pre-emptive Keydown Protection:
-    // 1. Pressing a lone Meta (Win) or Alt key silently lowers #instantBlackCurtain in <0.1ms and pauses on the normal pause cover WITHOUT showing any false "tool detected" warning!
-    // 2. Pressing an actual capture chord (PrintScreen, Win+Shift+S, Win+Alt+R, Win+G, Alt+F9, Ctrl+Shift+S) triggers the security lockout + silent teacher report.
+    // Zero-Latency Keydown Protection:
+    // - Pressing lone Win (Meta) or Alt does NOTHING (no blackout, no pause, no warning!).
+    // - Pressing an actual capture chord (PrintScreen, Win+Shift+S, Win+Alt+R, Win+G, Alt+F9, Ctrl+Shift+S, F12) immediately blacks out and reports to admin!
     const onPreemptiveKeyDown = (e) => {
       const k = e.key || '';
       const code = e.code || '';
@@ -1143,11 +1120,6 @@ export async function initLesson(id) {
       const isMeta = e.metaKey || k === 'Meta' || k === 'OS' || k === 'Super' || code.startsWith('Meta');
       const isAlt = e.altKey || k === 'Alt' || code.startsWith('Alt');
       const isPrtSc = k === 'PrintScreen' || code === 'PrintScreen' || keyCode === 44;
-
-      if (isMeta || isAlt || isPrtSc) {
-        lastModKeyPressAt = Date.now();
-        instantBlackoutFrame();
-      }
 
       if (
         isPrtSc ||
@@ -1159,6 +1131,8 @@ export async function initLesson(id) {
       ) {
         e.preventDefault();
         e.stopPropagation();
+        lastModKeyPressAt = Date.now();
+        instantBlackoutFrame();
         navigator.clipboard?.writeText?.('محتوى محمي — منصة كيمياوي').catch(() => {});
         const isRecord = (isMeta && (e.altKey || k === 'Alt' || k === 'g' || k === 'G' || k === 'r' || k === 'R')) || (isAlt && (k === 'F9' || k === 'F10' || k === 'r' || k === 'R'));
         triggerSecurityLockout(
@@ -1166,7 +1140,8 @@ export async function initLesson(id) {
           'تم إيقاف البث مؤقتاً لحماية المحتوى',
           isRecord
             ? 'تم رصد محاولة تشغيل مسجل الشاشة (Screen Recorder) — لا يُسمح بتسجيل المحاضرات.'
-            : 'لا يُسمح بالتقاط صور للشاشة (Screenshot) أثناء مشاهدة المحاضرة.'
+            : 'لا يُسمح بالتقاط صور للشاشة (Screenshot) أثناء مشاهدة المحاضرة.',
+          true
         );
         return;
       }
@@ -1178,10 +1153,12 @@ export async function initLesson(id) {
       ) {
         e.preventDefault();
         e.stopPropagation();
+        instantBlackoutFrame();
         triggerSecurityLockout(
           'devtools',
           'تم إيقاف البث مؤقتاً لحماية المحتوى',
-          'يرجى إغلاق أدوات الفحص للمتابعة.'
+          'يرجى إغلاق أدوات الفحص للمتابعة.',
+          true
         );
       }
     };
@@ -1195,26 +1172,28 @@ export async function initLesson(id) {
         triggerSecurityLockout(
           'screenshot',
           'تم إيقاف البث مؤقتاً لحماية المحتوى',
-          'لا يُسمح بالتقاط صور للشاشة أثناء مشاهدة المحاضرة.'
+          'لا يُسمح بالتقاط صور للشاشة أثناء مشاهدة المحاضرة.',
+          true
         );
-        return;
-      }
-      // If user only tapped lone Win or Alt without triggering lockout, restore normal pause cover smoothly
-      if (!isSecurityLocked && !e.metaKey && !e.altKey) {
-        restoreFrameVisibility();
       }
     };
 
-    // Silent Blur & Visibility Protection:
-    // When window loses focus (e.g. pressing Win opens Start Menu, or user clicks taskbar / external app),
-    // immediately pause the video and cover with the normal pause screen + black curtain WITHOUT showing a false warning!
+    // Instant Blur & Visibility Protection:
+    // Whenever the curtain lowers while the video was actively playing, report it to admin and restore cleanly when focus returns or when Play/Resume is clicked.
     const onWindowBlur = () => {
       if (isTogglingFullscreen) return;
       if (document.activeElement && document.activeElement.tagName === 'IFRAME') {
         setTimeout(() => { try { window.focus(); } catch (_) {} }, 25);
         return;
       }
-      instantBlackoutFrame();
+      const wasPlaying = isProtectedVideoPlaying();
+      if (wasPlaying) {
+        instantBlackoutFrame();
+        silentReportToTeacher(
+          'screen_record',
+          'إيقاف البث وتفعيل الستارة السوداء تلقائياً بسبب خروج التركيز أو فتح أداة خارجية أثناء تشغيل المحاضرة'
+        );
+      }
     };
 
     const onWindowFocus = () => {
@@ -1225,7 +1204,14 @@ export async function initLesson(id) {
 
     const onVisibilityChange = () => {
       if (document.hidden) {
+        const wasPlaying = isProtectedVideoPlaying();
         instantBlackoutFrame();
+        if (wasPlaying) {
+          silentReportToTeacher(
+            'screen_record',
+            'إخفاء نافذة المحاضرة أو تبديل التطبيق أثناء تشغيل الفيديو'
+          );
+        }
       } else if (!isSecurityLocked && !isPermanentlyBlocked) {
         restoreFrameVisibility();
       }
